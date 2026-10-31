@@ -41,8 +41,13 @@ fi
 TAG=$(git log -1 --format=%h --abbrev=7 -- "$APP")
 
 # The Mac is arm64 and AldiServer is amd64.
-docker build --platform linux/amd64 -t "$IMAGE:$TAG" "$APP"
-docker push "$IMAGE:$TAG"
+# A tag always means one image, so an existing tag is never built again.
+if docker manifest inspect "$IMAGE:$TAG" >/dev/null 2>&1; then
+  echo "$IMAGE:$TAG already exists, skipping the build."
+else
+  docker build --platform linux/amd64 -t "$IMAGE:$TAG" "$APP"
+  docker push "$IMAGE:$TAG"
+fi
 
 # Quoted, because a tag made only of digits would otherwise be a YAML number.
 sed -i '' "s/^\( *newTag:\).*/\1 \"$TAG\"/" "$CONFIG_REPO/$KUSTOMIZATION"

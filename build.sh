@@ -1,14 +1,24 @@
 #!/usr/bin/env bash
-# Builds and pushes the image tagged with the current commit, then writes that tag
-# to the manifests in AldiDevOps, where ArgoCD picks it up.
+# Builds and pushes one application's image, tagged with the last commit that changed
+# its folder, then writes that tag to the manifests in AldiDevOps, where ArgoCD picks it up.
+# Usage: ./build.sh <application folder>
 set -euo pipefail
 
-IMAGE=ghcr.io/aldicovo/cv-aldi-lukito
+if [ $# -ne 1 ]; then
+  echo "Usage: ./build.sh <application folder>" >&2
+  exit 1
+fi
+APP=${1%/}
 CONFIG_REPO=${CONFIG_REPO:-$HOME/aldi/AldiDevOps}
-KUSTOMIZATION=CV_Aldi_Lukito/kustomization.yaml
+KUSTOMIZATION=apps/$APP/kustomization.yaml
+IMAGE=ghcr.io/aldicovo/$APP
 
 cd "$(dirname "$0")"
 
+if [ ! -f "$APP/Dockerfile" ]; then
+  echo "$APP/Dockerfile doesn't exist." >&2
+  exit 1
+fi
 if [ -n "$(git status --porcelain)" ]; then
   echo "Commit your changes first, so the tag matches what gets built." >&2
   exit 1
@@ -28,18 +38,18 @@ if ! grep -q 'newTag:' "$CONFIG_REPO/$KUSTOMIZATION"; then
   exit 1
 fi
 
-TAG=$(git rev-parse --short=7 HEAD)
+TAG=$(git log -1 --format=%h --abbrev=7 -- "$APP")
 
 # The Mac is arm64 and AldiServer is amd64.
-docker build --platform linux/amd64 -t "$IMAGE:$TAG" .
+docker build --platform linux/amd64 -t "$IMAGE:$TAG" "$APP"
 docker push "$IMAGE:$TAG"
 
 # Quoted, because a tag made only of digits would otherwise be a YAML number.
 sed -i '' "s/^\( *newTag:\).*/\1 \"$TAG\"/" "$CONFIG_REPO/$KUSTOMIZATION"
 if git -C "$CONFIG_REPO" diff --quiet; then
-  echo "$TAG is already deployed."
+  echo "$APP:$TAG is already deployed."
   exit 0
 fi
-git -C "$CONFIG_REPO" commit -q -m "Deploy CV image $TAG" "$KUSTOMIZATION"
+git -C "$CONFIG_REPO" commit -q -m "Deploy $APP image $TAG" "$KUSTOMIZATION"
 git -C "$CONFIG_REPO" push -q origin main
 echo "Deployed $IMAGE:$TAG"

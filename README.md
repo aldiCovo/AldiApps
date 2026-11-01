@@ -23,16 +23,25 @@ A new image is private on GHCR, and the cluster pulls without credentials. After
 
 | Request | Does |
 |---|---|
-| `GET /products?limit=20&offset=0` | Lists products |
-| `POST /products` | Creates one from `{"name", "description", "price", "stock"}`. `name` and `price` are required |
-| `GET /products/{id}` | Returns one |
-| `PUT /products/{id}` | Replaces `name`, `description` and `price` |
-| `PATCH /products/{id}/stock` | Adds `{"delta"}` to the stock. Answers 409 if the stock would go negative |
-| `DELETE /products/{id}` | Deletes one |
+| `GET /categories` | Lists categories by name |
+| `POST /categories` | Creates one from `{"name"}`. Answers 409 if the name exists, ignoring case |
+| `GET /categories/{id}` | Returns one |
+| `PUT /categories/{id}` | Replaces `name` |
+| `DELETE /categories/{id}` | Deletes one. Answers 409 if it still has products |
+| `GET /products?limit=20&offset=0&category_id=1` | Lists products with their variants. `category_id` is optional |
+| `POST /products` | Creates one from `{"category_id", "name", "description", "price"}`. `name` and `price` are required |
+| `GET /products/{id}` | Returns one with its variants |
+| `PUT /products/{id}` | Replaces `category_id`, `name`, `description` and `price`. Leaving out `category_id` clears it |
+| `DELETE /products/{id}` | Deletes one and its variants |
+| `POST /products/{id}/variants` | Creates a variant from `{"size", "color", "stock"}`. `size` and `color` are required. Answers 409 if the product already has that combination, ignoring case |
+| `GET /variants/{id}` | Returns one |
+| `PUT /variants/{id}` | Replaces `size` and `color` |
+| `PATCH /variants/{id}/stock` | Adds `{"delta"}` to the stock. Answers 409 if the stock would go negative |
+| `DELETE /variants/{id}` | Deletes one |
 
-Prices are in whole rupiah. Migrations in `migrations/` run when the service starts.
+Prices are in whole rupiah and belong to the product. Stock belongs to each variant. Migrations in `migrations/` run when the service starts.
 
-The tests need a throwaway PostgreSQL, because they empty the table:
+The tests need a throwaway PostgreSQL, because they reset the database:
 
 ```bash
 cd catalog-service

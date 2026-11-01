@@ -14,35 +14,73 @@ import (
 )
 
 const (
-	maxBodyBytes  = 1 << 20
-	maxNameLength = 200
-	defaultLimit  = 20
-	maxLimit      = 100
+	maxBodyBytes     = 1 << 20
+	maxNameLength    = 200
+	maxVariantLength = 50
+	defaultLimit     = 20
+	maxLimit         = 100
 )
 
+// cleanText trims a required text field and rejects what Postgres or the shop can't use.
+func cleanText(field, value string, maxLength int) (string, error) {
+	value = strings.TrimSpace(value)
+	switch {
+	case value == "":
+		return "", fmt.Errorf("%s is required", field)
+	case utf8.RuneCountInString(value) > maxLength:
+		return "", fmt.Errorf("%s must be at most %d characters", field, maxLength)
+	// Postgres text can't hold a NUL byte.
+	case strings.ContainsRune(value, 0):
+		return "", fmt.Errorf("%s must not contain NUL characters", field)
+	}
+	return value, nil
+}
+
+type categoryInput struct {
+	Name string `json:"name"`
+}
+
+func (in *categoryInput) validate() (err error) {
+	in.Name, err = cleanText("name", in.Name, maxNameLength)
+	return err
+}
+
 type productInput struct {
+	CategoryID  *int64 `json:"category_id"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Price       *int64 `json:"price"`
-	Stock       *int32 `json:"stock"`
 }
 
-func (in *productInput) validate() error {
-	in.Name = strings.TrimSpace(in.Name)
+func (in *productInput) validate() (err error) {
+	if in.Name, err = cleanText("name", in.Name, maxNameLength); err != nil {
+		return err
+	}
 	switch {
-	case in.Name == "":
-		return errors.New("name is required")
-	case utf8.RuneCountInString(in.Name) > maxNameLength:
-		return fmt.Errorf("name must be at most %d characters", maxNameLength)
-	// Postgres text can't hold a NUL byte.
-	case strings.ContainsRune(in.Name+in.Description, 0):
-		return errors.New("name and description must not contain NUL characters")
+	case strings.ContainsRune(in.Description, 0):
+		return errors.New("description must not contain NUL characters")
+	case in.CategoryID != nil && *in.CategoryID <= 0:
+		return errors.New("category_id must be a positive integer")
 	case in.Price == nil:
 		return errors.New("price is required")
 	case *in.Price < 0:
 		return errors.New("price must not be negative")
 	}
 	return nil
+}
+
+type variantInput struct {
+	Size  string `json:"size"`
+	Color string `json:"color"`
+	Stock *int32 `json:"stock"`
+}
+
+func (in *variantInput) validate() (err error) {
+	if in.Size, err = cleanText("size", in.Size, maxVariantLength); err != nil {
+		return err
+	}
+	in.Color, err = cleanText("color", in.Color, maxVariantLength)
+	return err
 }
 
 func newHandler(store *Store) http.Handler {
@@ -62,6 +100,79 @@ func newHandler(store *Store) http.Handler {
 		w.WriteHeader(http.StatusOK)
 	})
 
+	mux.HandleFunc("GET /categories", func(w http.ResponseWriter, r *http.Request) {
+		categories, err := store.ListCategories(r.Context())
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"categories": categories})
+	})
+
+	mux.HandleFunc("POST /categories", func(w http.ResponseWriter, r *http.Request) {
+		var in categoryInput
+		if !readJSON(w, r, &in) {
+			return
+		}
+		if err := in.validate(); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		c, err := store.CreateCategory(r.Context(), in.Name)
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		w.Header().Set("Location", fmt.Sprintf("/categories/%d", c.ID))
+		writeJSON(w, http.StatusCreated, c)
+	})
+
+	mux.HandleFunc("GET /categories/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		c, err := store.GetCategory(r.Context(), id)
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, c)
+	})
+
+	mux.HandleFunc("PUT /categories/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		var in categoryInput
+		if !readJSON(w, r, &in) {
+			return
+		}
+		if err := in.validate(); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		c, err := store.UpdateCategory(r.Context(), id, in.Name)
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, c)
+	})
+
+	mux.HandleFunc("DELETE /categories/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		if err := store.DeleteCategory(r.Context(), id); err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+
 	mux.HandleFunc("GET /products", func(w http.ResponseWriter, r *http.Request) {
 		limit, err := queryInt(r, "limit", defaultLimit, 1, maxLimit)
 		if err != nil {
@@ -73,7 +184,16 @@ func newHandler(store *Store) http.Handler {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		products, err := store.List(r.Context(), limit, offset)
+		var categoryID *int64
+		if raw := r.URL.Query().Get("category_id"); raw != "" {
+			id, err := strconv.ParseInt(raw, 10, 64)
+			if err != nil || id <= 0 {
+				writeError(w, http.StatusBadRequest, "category_id must be a positive integer")
+				return
+			}
+			categoryID = &id
+		}
+		products, err := store.List(r.Context(), categoryID, limit, offset)
 		if err != nil {
 			writeStoreError(w, err)
 			return
@@ -90,15 +210,7 @@ func newHandler(store *Store) http.Handler {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		var stock int32
-		if in.Stock != nil {
-			stock = *in.Stock
-		}
-		if stock < 0 || stock > maxStock {
-			writeError(w, http.StatusBadRequest, fmt.Sprintf("stock must be between 0 and %d", maxStock))
-			return
-		}
-		p, err := store.Create(r.Context(), in.Name, in.Description, *in.Price, stock)
+		p, err := store.Create(r.Context(), in.CategoryID, in.Name, in.Description, *in.Price)
 		if err != nil {
 			writeStoreError(w, err)
 			return
@@ -129,15 +241,11 @@ func newHandler(store *Store) http.Handler {
 		if !readJSON(w, r, &in) {
 			return
 		}
-		if in.Stock != nil {
-			writeError(w, http.StatusBadRequest, "change stock through PATCH /products/{id}/stock")
-			return
-		}
 		if err := in.validate(); err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		p, err := store.Update(r.Context(), id, in.Name, in.Description, *in.Price)
+		p, err := store.Update(r.Context(), id, in.CategoryID, in.Name, in.Description, *in.Price)
 		if err != nil {
 			writeStoreError(w, err)
 			return
@@ -157,7 +265,87 @@ func newHandler(store *Store) http.Handler {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	mux.HandleFunc("PATCH /products/{id}/stock", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /products/{id}/variants", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		var in variantInput
+		if !readJSON(w, r, &in) {
+			return
+		}
+		if err := in.validate(); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		var stock int32
+		if in.Stock != nil {
+			stock = *in.Stock
+		}
+		if stock < 0 || stock > maxStock {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("stock must be between 0 and %d", maxStock))
+			return
+		}
+		v, err := store.CreateVariant(r.Context(), id, in.Size, in.Color, stock)
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		w.Header().Set("Location", fmt.Sprintf("/variants/%d", v.ID))
+		writeJSON(w, http.StatusCreated, v)
+	})
+
+	mux.HandleFunc("GET /variants/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		v, err := store.GetVariant(r.Context(), id)
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, v)
+	})
+
+	mux.HandleFunc("PUT /variants/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		var in variantInput
+		if !readJSON(w, r, &in) {
+			return
+		}
+		if in.Stock != nil {
+			writeError(w, http.StatusBadRequest, "change stock through PATCH /variants/{id}/stock")
+			return
+		}
+		if err := in.validate(); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		v, err := store.UpdateVariant(r.Context(), id, in.Size, in.Color)
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, v)
+	})
+
+	mux.HandleFunc("DELETE /variants/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		if err := store.DeleteVariant(r.Context(), id); err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	mux.HandleFunc("PATCH /variants/{id}/stock", func(w http.ResponseWriter, r *http.Request) {
 		id, ok := pathID(w, r)
 		if !ok {
 			return
@@ -172,12 +360,12 @@ func newHandler(store *Store) http.Handler {
 			writeError(w, http.StatusBadRequest, fmt.Sprintf("delta must be non-zero and between -%d and %d", maxStock, maxStock))
 			return
 		}
-		p, err := store.AdjustStock(r.Context(), id, in.Delta)
+		v, err := store.AdjustStock(r.Context(), id, in.Delta)
 		if err != nil {
 			writeStoreError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, p)
+		writeJSON(w, http.StatusOK, v)
 	})
 
 	return mux
@@ -221,9 +409,12 @@ func readJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 
 func writeStoreError(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, errNotFound):
+	case errors.Is(err, errNotFound), errors.Is(err, errCategoryNotFound), errors.Is(err, errVariantNotFound):
 		writeError(w, http.StatusNotFound, err.Error())
-	case errors.Is(err, errStockOutOfRange):
+	case errors.Is(err, errUnknownCategory):
+		writeError(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, errStockOutOfRange), errors.Is(err, errCategoryExists),
+		errors.Is(err, errCategoryInUse), errors.Is(err, errVariantExists):
 		writeError(w, http.StatusConflict, err.Error())
 	default:
 		slog.Error("database request failed", "error", err)

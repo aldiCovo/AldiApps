@@ -7,6 +7,7 @@ Application source code, one folder per application. Each folder has its own `Do
 | [`cvaldi/`](cvaldi/) | Online CV (English / Indonesian), live at **https://aldilukito.aldiab.ai.id** |
 | [`ecommerce/catalog-service/`](ecommerce/catalog-service/) | Go API for the shop's products and stock, using PostgreSQL. Only reachable inside the cluster |
 | [`ecommerce/search-service/`](ecommerce/search-service/) | Go API that searches the shop's products, using Elasticsearch. Only reachable inside the cluster |
+| [`ecommerce/user-service/`](ecommerce/user-service/) | Go API for the shop's accounts and login, using PostgreSQL. Only reachable inside the cluster |
 
 ## Deploy
 
@@ -94,4 +95,26 @@ The tests need a throwaway Elasticsearch and RabbitMQ, because they delete their
 cd ecommerce/search-service
 TEST_ELASTICSEARCH_URL='http://elastic:test@127.0.0.1:9200' \
 TEST_RABBITMQ_URL='amqp://guest:guest@127.0.0.1:5672/' go test -race ./...
+```
+
+## user-service
+
+| Request | Does |
+|---|---|
+| `POST /register` | Creates a customer from `{"email", "name", "password"}`. The password has 8 to 128 characters. Answers 409 if the email exists, ignoring case |
+| `POST /login` | Checks `{"email", "password"}` and answers `{"token", "token_type", "expires_in", "user"}`, or 401 |
+| `GET /me` | Returns the user that the `Authorization: Bearer <token>` header belongs to |
+| `GET /.well-known/jwks.json` | Returns the public key that checks tokens |
+
+Passwords are stored as Argon2id hashes. Only 3 are computed at once, which keeps a burst of logins inside the memory limit, and a request that waits over 5 seconds gets 503.
+
+Tokens are JWTs signed with Ed25519 and last one hour. Their claims are `sub` (the user id), `role` (`customer` or `admin`), `iss` (`user-service`), `aud` (`shop`), `iat` and `exp`. Another service checks them with the public key, so it doesn't need a secret and can't create tokens. It must check the signature, `iss`, `aud` and `exp`, and only accept the `EdDSA` algorithm.
+
+A token can't be cancelled, so it keeps working until it expires, even after a logout or a role change. `/me` reads the database, so it does notice a deleted account. There are no refresh tokens yet, so users log in again after an hour.
+
+The tests need a throwaway PostgreSQL, because they empty the table:
+
+```bash
+cd ecommerce/user-service
+TEST_DATABASE_URL='postgres://postgres:test@127.0.0.1:5432/users?sslmode=disable' go test -race ./...
 ```

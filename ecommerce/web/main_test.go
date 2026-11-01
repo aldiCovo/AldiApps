@@ -72,7 +72,7 @@ func newTestGateway(t *testing.T) (*httptest.Server, *fakeServices) {
 		}
 		io.WriteString(w, `{"ok":true}`)
 	}
-	server := httptest.NewServer(newHandler(f.start(t, "catalog", ok), f.start(t, "search", ok), f.start(t, "user", users), f.start(t, "order", orders)))
+	server := httptest.NewServer(newHandler(f.start(t, "catalog", ok), f.start(t, "search", ok), f.start(t, "user", users), f.start(t, "order", orders), f.start(t, "realtime", ok)))
 	t.Cleanup(server.Close)
 	return server, f
 }
@@ -275,7 +275,7 @@ func TestDownServiceAnswers502WithoutDetails(t *testing.T) {
 	down := httptest.NewServer(http.NotFoundHandler())
 	url := down.URL
 	down.Close()
-	server := httptest.NewServer(newHandler(url, url, url, url))
+	server := httptest.NewServer(newHandler(url, url, url, url, url))
 	defer server.Close()
 	for _, c := range []struct{ method, path string }{{"GET", "/api/search"}, {"POST", "/api/login"}} {
 		resp, body := do(t, c.method, server.URL+c.path, "application/json", "{}")

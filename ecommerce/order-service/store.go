@@ -88,6 +88,29 @@ func scanOrder(row pgx.Row) (Order, error) {
 type Store struct {
 	pool          *pgxpool.Pool
 	paymentWindow time.Duration
+	// notify runs after a status change has committed. It may be nil.
+	notify func(userID, orderID int64, status string)
+}
+
+func (s *Store) changed(userID, orderID int64, status string) {
+	if s.notify != nil {
+		s.notify(userID, orderID, status)
+	}
+}
+
+// mark runs an update that returns the owner, and tells them only if a row changed. A
+// repeated event changes nothing, so it sends no signal.
+func (s *Store) mark(ctx context.Context, id int64, status, sql string, args ...any) error {
+	var userID int64
+	err := s.pool.QueryRow(ctx, sql, args...).Scan(&userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	s.changed(userID, id, status)
+	return nil
 }
 
 type querier interface {
@@ -159,7 +182,11 @@ func (s *Store) Create(ctx context.Context, userID int64, items []OrderItem) (o 
 		o.Items = items
 		return addEvent(ctx, tx, eventOrderCreated, orderCreatedEvent{OrderID: o.ID, Items: reserve})
 	})
-	return o, err
+	if err != nil {
+		return Order{}, err
+	}
+	s.changed(userID, o.ID, statusPending)
+	return o, nil
 }
 
 // Get only finds the user's own orders, so another user's id looks like it doesn't exist.
@@ -215,6 +242,7 @@ func (s *Store) Pay(ctx context.Context, userID, id int64, outcome string) (o Or
 	if err != nil {
 		return Order{}, err
 	}
+	s.changed(userID, o.ID, statusPaying)
 	orders := []Order{o}
 	if err := attachItems(ctx, s.pool, orders); err != nil {
 		return Order{}, err
@@ -223,63 +251,78 @@ func (s *Store) Pay(ctx context.Context, userID, id int64, outcome string) (o Or
 }
 
 func (s *Store) MarkReserved(ctx context.Context, id int64) error {
-	_, err := s.pool.Exec(ctx,
+	return s.mark(ctx, id, statusAwaitingPayment,
 		`UPDATE orders SET status = 'awaiting_payment', expires_at = now() + $2::interval, updated_at = now()
-		 WHERE id = $1 AND status = 'pending'`, id, s.paymentWindow.String())
-	return err
+		 WHERE id = $1 AND status = 'pending' RETURNING user_id`, id, s.paymentWindow.String())
 }
 
 func (s *Store) MarkRejected(ctx context.Context, id int64, reason string) error {
-	_, err := s.pool.Exec(ctx,
-		`UPDATE orders SET status = 'rejected', reason = $2, updated_at = now() WHERE id = $1 AND status = 'pending'`, id, reason)
-	return err
+	return s.mark(ctx, id, statusRejected,
+		`UPDATE orders SET status = 'rejected', reason = $2, updated_at = now() WHERE id = $1 AND status = 'pending' RETURNING user_id`, id, reason)
 }
 
 func (s *Store) MarkPaid(ctx context.Context, id int64) error {
-	_, err := s.pool.Exec(ctx,
-		`UPDATE orders SET status = 'paid', updated_at = now() WHERE id = $1 AND status = 'paying'`, id)
-	return err
+	return s.mark(ctx, id, statusPaid,
+		`UPDATE orders SET status = 'paid', updated_at = now() WHERE id = $1 AND status = 'paying' RETURNING user_id`, id)
 }
 
 // CancelPaying is the saga's compensation: the failed payment's stock goes back on sale.
 func (s *Store) CancelPaying(ctx context.Context, id int64) error {
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx,
-			`UPDATE orders SET status = 'cancelled', reason = $2, updated_at = now() WHERE id = $1 AND status = 'paying'`,
-			id, reasonPaymentFailed)
-		if err != nil || tag.RowsAffected() == 0 {
+	var userID int64
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx,
+			`UPDATE orders SET status = 'cancelled', reason = $2, updated_at = now() WHERE id = $1 AND status = 'paying' RETURNING user_id`,
+			id, reasonPaymentFailed).Scan(&userID)
+		if err != nil {
 			return err
 		}
 		return addEvent(ctx, tx, eventOrderCancelled, orderCancelledEvent{OrderID: id, Reason: reasonPaymentFailed})
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	s.changed(userID, id, statusCancelled)
+	return nil
+}
+
+type expiredOrder struct {
+	ID, UserID int64
 }
 
 // ExpireUnpaid cancels orders whose payment window has passed, so they stop holding stock.
 func (s *Store) ExpireUnpaid(ctx context.Context) (int, error) {
-	expired := 0
+	var expired []expiredOrder
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
 			`UPDATE orders SET status = 'cancelled', reason = $1, expires_at = NULL, updated_at = now()
 			 WHERE id IN (
 			     SELECT id FROM orders WHERE status = 'awaiting_payment' AND expires_at <= now()
 			     ORDER BY expires_at LIMIT $2 FOR UPDATE SKIP LOCKED
-			 ) RETURNING id`, reasonExpired, expireBatch)
+			 ) RETURNING id, user_id`, reasonExpired, expireBatch)
 		if err != nil {
 			return err
 		}
-		ids, err := pgx.CollectRows(rows, pgx.RowTo[int64])
+		expired, err = pgx.CollectRows(rows, pgx.RowToStructByPos[expiredOrder])
 		if err != nil {
 			return err
 		}
-		for _, id := range ids {
-			if err := addEvent(ctx, tx, eventOrderCancelled, orderCancelledEvent{OrderID: id, Reason: reasonExpired}); err != nil {
+		for _, order := range expired {
+			if err := addEvent(ctx, tx, eventOrderCancelled, orderCancelledEvent{OrderID: order.ID, Reason: reasonExpired}); err != nil {
 				return err
 			}
 		}
-		expired = len(ids)
 		return nil
 	})
-	return expired, err
+	if err != nil {
+		return 0, err
+	}
+	for _, order := range expired {
+		s.changed(order.UserID, order.ID, statusCancelled)
+	}
+	return len(expired), nil
 }
 
 // RunExpiry checks for unpaid orders until ctx is cancelled.

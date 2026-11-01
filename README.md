@@ -10,6 +10,7 @@ Application source code, one folder per application. Each folder has its own `Do
 | [`ecommerce/user-service/`](ecommerce/user-service/) | Go API for the shop's accounts and login, using PostgreSQL. Only reachable inside the cluster |
 | [`ecommerce/order-service/`](ecommerce/order-service/) | Go API for the shop's orders, which runs the order saga, using PostgreSQL. Only reachable inside the cluster |
 | [`ecommerce/payment-service/`](ecommerce/payment-service/) | Go worker that simulates payments, using PostgreSQL. It has no public API and moves no money |
+| [`ecommerce/realtime-service/`](ecommerce/realtime-service/) | Go service that tells browsers when an order changes, over WebSockets. Only reachable through web |
 | [`ecommerce/web/`](ecommerce/web/) | The shop's pages, and the only part the internet reaches, at **https://prastika.aldiab.ai.id** |
 
 ## Deploy
@@ -163,6 +164,8 @@ No service reads another's database. Each step commits its change and its event 
 
 A loop checks every 5 seconds for orders past `expires_at`, cancels them and sends `order.cancelled`.
 
+After every status change commits, it publishes `{"order_id", "status"}` to `orders.<user id>` on NATS, for realtime-service. These signals may be lost, so a NATS outage never stops an order, and a repeated event sends nothing.
+
 | Event | Exchange | `data` |
 |---|---|---|
 | `order.created` | `order.events` | `{"order_id", "items": [{"variant_id", "quantity"}]}` |
@@ -196,6 +199,25 @@ cd ecommerce/payment-service
 TEST_DATABASE_URL='postgres://postgres:test@127.0.0.1:5432/payments?sslmode=disable' go test -race ./...
 ```
 
+## realtime-service
+
+| Request | Does |
+|---|---|
+| `GET /ws` | Opens a WebSocket for the user in the `Authorization: Bearer <token>` header. Answers 401 without a valid token, 429 above 5 connections per user, and 503 above 500 in total |
+
+It subscribes to `orders.*` on NATS and sends each signal only to its owner's connections, as `{"order_id", "status"}`. It has no database, and a signal only says that something changed, so the browser reads the order from order-service.
+
+Core NATS keeps nothing, so a signal is lost if nobody is connected. The browser handles that by reloading open orders whenever the socket opens, and by polling unfinished orders: every 15 seconds while connected, and every 1.5 seconds while not.
+
+A connection closes when its token expires, and also if it falls 16 signals behind, because reconnecting catches up. It sends a ping every 30 seconds, which keeps quiet connections open through Cloudflare and Traefik.
+
+`/readyz` answers 503 while NATS is disconnected. The tests use a fake token check. The test that sends through NATS is skipped without `TEST_NATS_URL`:
+
+```bash
+cd ecommerce/realtime-service
+TEST_NATS_URL='nats://127.0.0.1:4222' go test -race ./...
+```
+
 ## web
 
 Serves the pages in `static/`, and passes on only these requests:
@@ -206,13 +228,14 @@ Serves the pages in `static/`, and passes on only these requests:
 | `GET /api/search` | search-service |
 | `POST /api/register`, `POST /api/login`, `GET /api/me` | user-service |
 | `POST /api/logout` | Handled here. It only clears the cookie |
+| `GET /api/events` | realtime-service, as a WebSocket with the token from the cookie. Answers 403 if `Origin` isn't this site |
 | `POST /api/orders`, `GET /api/orders`, `GET /api/orders/{id}`, `POST /api/orders/{id}/pay` | order-service, with the token from the cookie |
 
 Anything else answers 404, so the other services' write endpoints stay inside the cluster, and a new endpoint stays private until it's added here.
 
-Login keeps the token in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie, so page scripts can't read it. Because of `Secure`, browsers only keep it on HTTPS and `localhost`. `POST` requests must be `application/json`, which a form on another site can't send without asking.
+Login keeps the token in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie, so page scripts can't read it. Because of `Secure`, browsers only keep it on HTTPS and `localhost`. `POST` requests must be `application/json`, which a form on another site can't send without asking. A WebSocket handshake carries the cookie without asking, so `/api/events` checks `Origin` instead.
 
-It needs `CATALOG_URL`, `SEARCH_URL`, `USER_URL` and `ORDER_URL`, and won't start without them.
+It needs `CATALOG_URL`, `SEARCH_URL`, `USER_URL`, `ORDER_URL` and `REALTIME_URL`, and won't start without them.
 
 The tests use fake services, so they need nothing running:
 

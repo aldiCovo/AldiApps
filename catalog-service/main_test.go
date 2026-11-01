@@ -38,7 +38,7 @@ func newTestServer(t *testing.T) *httptest.Server {
 	if err := migrate(ctx, pool); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, "TRUNCATE categories, products, product_variants RESTART IDENTITY"); err != nil {
+	if _, err := pool.Exec(ctx, "TRUNCATE categories, products, product_variants, outbox_events RESTART IDENTITY"); err != nil {
 		t.Fatal(err)
 	}
 	server := httptest.NewServer(newHandler(&Store{pool: pool}))

@@ -63,6 +63,12 @@ const (
 	variantColumns  = "id, product_id, size, color, stock, created_at, updated_at"
 )
 
+// querier is what both the pool and a transaction can do.
+type querier interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
 type Store struct {
 	pool *pgxpool.Pool
 }
@@ -84,9 +90,16 @@ func scanCategory(row pgx.Row) (Category, error) {
 	return c, err
 }
 
-func (s *Store) CreateCategory(ctx context.Context, name string) (Category, error) {
-	return scanCategory(s.pool.QueryRow(ctx,
-		`INSERT INTO categories (name) VALUES ($1) RETURNING `+categoryColumns, name))
+func (s *Store) CreateCategory(ctx context.Context, name string) (c Category, err error) {
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		c, err = scanCategory(tx.QueryRow(ctx,
+			`INSERT INTO categories (name) VALUES ($1) RETURNING `+categoryColumns, name))
+		if err != nil {
+			return err
+		}
+		return addEvent(ctx, tx, eventCategoryCreated, c)
+	})
+	return c, err
 }
 
 func (s *Store) GetCategory(ctx context.Context, id int64) (Category, error) {
@@ -112,24 +125,33 @@ func (s *Store) ListCategories(ctx context.Context) ([]Category, error) {
 	return categories, rows.Err()
 }
 
-func (s *Store) UpdateCategory(ctx context.Context, id int64, name string) (Category, error) {
-	return scanCategory(s.pool.QueryRow(ctx,
-		`UPDATE categories SET name = $2, updated_at = now() WHERE id = $1 RETURNING `+categoryColumns,
-		id, name))
+func (s *Store) UpdateCategory(ctx context.Context, id int64, name string) (c Category, err error) {
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		c, err = scanCategory(tx.QueryRow(ctx,
+			`UPDATE categories SET name = $2, updated_at = now() WHERE id = $1 RETURNING `+categoryColumns,
+			id, name))
+		if err != nil {
+			return err
+		}
+		return addEvent(ctx, tx, eventCategoryUpdated, c)
+	})
+	return c, err
 }
 
 func (s *Store) DeleteCategory(ctx context.Context, id int64) error {
-	tag, err := s.pool.Exec(ctx, `DELETE FROM categories WHERE id = $1`, id)
-	if hasPgCode(err, pgForeignKeyViolation) {
-		return errCategoryInUse
-	}
-	if err != nil {
-		return err
-	}
-	if tag.RowsAffected() == 0 {
-		return errCategoryNotFound
-	}
-	return nil
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `DELETE FROM categories WHERE id = $1`, id)
+		if hasPgCode(err, pgForeignKeyViolation) {
+			return errCategoryInUse
+		}
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return errCategoryNotFound
+		}
+		return addEvent(ctx, tx, eventCategoryDeleted, deletedEvent{ID: id})
+	})
 }
 
 func scanProduct(row pgx.Row) (Product, error) {
@@ -145,14 +167,14 @@ func scanProduct(row pgx.Row) (Product, error) {
 }
 
 // attachVariants loads the variants of all products in one query.
-func (s *Store) attachVariants(ctx context.Context, products []Product) error {
+func attachVariants(ctx context.Context, q querier, products []Product) error {
 	ids := make([]int64, len(products))
 	byID := make(map[int64]*Product, len(products))
 	for i := range products {
 		ids[i] = products[i].ID
 		byID[products[i].ID] = &products[i]
 	}
-	rows, err := s.pool.Query(ctx,
+	rows, err := q.Query(ctx,
 		`SELECT `+variantColumns+` FROM product_variants WHERE product_id = ANY($1) ORDER BY id`, ids)
 	if err != nil {
 		return err
@@ -170,29 +192,74 @@ func (s *Store) attachVariants(ctx context.Context, products []Product) error {
 	return rows.Err()
 }
 
-func (s *Store) withVariants(ctx context.Context, p Product, err error) (Product, error) {
+func getProduct(ctx context.Context, q querier, id int64) (Product, error) {
+	p, err := scanProduct(q.QueryRow(ctx,
+		`SELECT `+productColumns+` FROM products WHERE id = $1`, id))
 	if err != nil {
 		return Product{}, err
 	}
 	products := []Product{p}
-	if err := s.attachVariants(ctx, products); err != nil {
+	if err := attachVariants(ctx, q, products); err != nil {
 		return Product{}, err
 	}
 	return products[0], nil
 }
 
-func (s *Store) Create(ctx context.Context, categoryID *int64, name, description string, price int64) (Product, error) {
-	return scanProduct(s.pool.QueryRow(ctx,
-		`INSERT INTO products (category_id, name, description, price)
-		 VALUES ($1, $2, $3, $4)
-		 RETURNING `+productColumns,
-		categoryID, name, description, price))
+// lockProduct makes changes to one product wait for each other. Without it, two concurrent
+// variant changes couldn't see each other, and each event would miss the other's change.
+func lockProduct(ctx context.Context, tx pgx.Tx, id int64) error {
+	err := tx.QueryRow(ctx, `SELECT id FROM products WHERE id = $1 FOR UPDATE`, id).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return errNotFound
+	}
+	return err
+}
+
+// lockProductOfVariant returns errVariantNotFound if the variant or its product is gone.
+func lockProductOfVariant(ctx context.Context, tx pgx.Tx, variantID int64) (int64, error) {
+	var productID int64
+	err := tx.QueryRow(ctx, `SELECT product_id FROM product_variants WHERE id = $1`, variantID).Scan(&productID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, errVariantNotFound
+	}
+	if err != nil {
+		return 0, err
+	}
+	if err := lockProduct(ctx, tx, productID); err != nil {
+		if errors.Is(err, errNotFound) {
+			return 0, errVariantNotFound
+		}
+		return 0, err
+	}
+	return productID, nil
+}
+
+// addProductUpdated sends the whole product, so a consumer never has to ask for the rest.
+func addProductUpdated(ctx context.Context, tx pgx.Tx, productID int64) error {
+	p, err := getProduct(ctx, tx, productID)
+	if err != nil {
+		return err
+	}
+	return addEvent(ctx, tx, eventProductUpdated, p)
+}
+
+func (s *Store) Create(ctx context.Context, categoryID *int64, name, description string, price int64) (p Product, err error) {
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		p, err = scanProduct(tx.QueryRow(ctx,
+			`INSERT INTO products (category_id, name, description, price)
+			 VALUES ($1, $2, $3, $4)
+			 RETURNING `+productColumns,
+			categoryID, name, description, price))
+		if err != nil {
+			return err
+		}
+		return addEvent(ctx, tx, eventProductCreated, p)
+	})
+	return p, err
 }
 
 func (s *Store) Get(ctx context.Context, id int64) (Product, error) {
-	p, err := scanProduct(s.pool.QueryRow(ctx,
-		`SELECT `+productColumns+` FROM products WHERE id = $1`, id))
-	return s.withVariants(ctx, p, err)
+	return getProduct(ctx, s.pool, id)
 }
 
 // List returns all products, or only one category's when categoryID is set.
@@ -218,31 +285,46 @@ func (s *Store) List(ctx context.Context, categoryID *int64, limit, offset int) 
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	if err := s.attachVariants(ctx, products); err != nil {
+	if err := attachVariants(ctx, s.pool, products); err != nil {
 		return nil, err
 	}
 	return products, nil
 }
 
-func (s *Store) Update(ctx context.Context, id int64, categoryID *int64, name, description string, price int64) (Product, error) {
-	p, err := scanProduct(s.pool.QueryRow(ctx,
-		`UPDATE products SET category_id = $2, name = $3, description = $4, price = $5, updated_at = now()
-		 WHERE id = $1
-		 RETURNING `+productColumns,
-		id, categoryID, name, description, price))
-	return s.withVariants(ctx, p, err)
+func (s *Store) Update(ctx context.Context, id int64, categoryID *int64, name, description string, price int64) (p Product, err error) {
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := lockProduct(ctx, tx, id); err != nil {
+			return err
+		}
+		_, err := scanProduct(tx.QueryRow(ctx,
+			`UPDATE products SET category_id = $2, name = $3, description = $4, price = $5, updated_at = now()
+			 WHERE id = $1
+			 RETURNING `+productColumns,
+			id, categoryID, name, description, price))
+		if err != nil {
+			return err
+		}
+		p, err = getProduct(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		return addEvent(ctx, tx, eventProductUpdated, p)
+	})
+	return p, err
 }
 
 // Delete also removes the product's variants, through ON DELETE CASCADE.
 func (s *Store) Delete(ctx context.Context, id int64) error {
-	tag, err := s.pool.Exec(ctx, `DELETE FROM products WHERE id = $1`, id)
-	if err != nil {
-		return err
-	}
-	if tag.RowsAffected() == 0 {
-		return errNotFound
-	}
-	return nil
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `DELETE FROM products WHERE id = $1`, id)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return errNotFound
+		}
+		return addEvent(ctx, tx, eventProductDeleted, deletedEvent{ID: id})
+	})
 }
 
 func scanVariant(row pgx.Row) (Variant, error) {
@@ -253,18 +335,26 @@ func scanVariant(row pgx.Row) (Variant, error) {
 		return Variant{}, errVariantNotFound
 	case hasPgCode(err, pgUniqueViolation):
 		return Variant{}, errVariantExists
-	case hasPgCode(err, pgForeignKeyViolation):
-		return Variant{}, errNotFound
 	}
 	return v, err
 }
 
-func (s *Store) CreateVariant(ctx context.Context, productID int64, size, color string, stock int32) (Variant, error) {
-	return scanVariant(s.pool.QueryRow(ctx,
-		`INSERT INTO product_variants (product_id, size, color, stock)
-		 VALUES ($1, $2, $3, $4)
-		 RETURNING `+variantColumns,
-		productID, size, color, stock))
+func (s *Store) CreateVariant(ctx context.Context, productID int64, size, color string, stock int32) (v Variant, err error) {
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := lockProduct(ctx, tx, productID); err != nil {
+			return err
+		}
+		v, err = scanVariant(tx.QueryRow(ctx,
+			`INSERT INTO product_variants (product_id, size, color, stock)
+			 VALUES ($1, $2, $3, $4)
+			 RETURNING `+variantColumns,
+			productID, size, color, stock))
+		if err != nil {
+			return err
+		}
+		return addProductUpdated(ctx, tx, productID)
+	})
+	return v, err
 }
 
 func (s *Store) GetVariant(ctx context.Context, id int64) (Variant, error) {
@@ -273,38 +363,66 @@ func (s *Store) GetVariant(ctx context.Context, id int64) (Variant, error) {
 }
 
 // UpdateVariant leaves stock alone, so a stale edit can't overwrite a concurrent stock change.
-func (s *Store) UpdateVariant(ctx context.Context, id int64, size, color string) (Variant, error) {
-	return scanVariant(s.pool.QueryRow(ctx,
-		`UPDATE product_variants SET size = $2, color = $3, updated_at = now()
-		 WHERE id = $1
-		 RETURNING `+variantColumns,
-		id, size, color))
+func (s *Store) UpdateVariant(ctx context.Context, id int64, size, color string) (v Variant, err error) {
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		productID, err := lockProductOfVariant(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		v, err = scanVariant(tx.QueryRow(ctx,
+			`UPDATE product_variants SET size = $2, color = $3, updated_at = now()
+			 WHERE id = $1
+			 RETURNING `+variantColumns,
+			id, size, color))
+		if err != nil {
+			return err
+		}
+		return addProductUpdated(ctx, tx, productID)
+	})
+	return v, err
 }
 
 func (s *Store) DeleteVariant(ctx context.Context, id int64) error {
-	tag, err := s.pool.Exec(ctx, `DELETE FROM product_variants WHERE id = $1`, id)
-	if err != nil {
-		return err
-	}
-	if tag.RowsAffected() == 0 {
-		return errVariantNotFound
-	}
-	return nil
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		productID, err := lockProductOfVariant(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		tag, err := tx.Exec(ctx, `DELETE FROM product_variants WHERE id = $1`, id)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return errVariantNotFound
+		}
+		return addProductUpdated(ctx, tx, productID)
+	})
 }
 
 // AdjustStock applies delta in one statement, so concurrent orders can't oversell.
-func (s *Store) AdjustStock(ctx context.Context, id int64, delta int32) (Variant, error) {
-	v, err := scanVariant(s.pool.QueryRow(ctx,
-		`UPDATE product_variants SET stock = stock + $2, updated_at = now()
-		 WHERE id = $1 AND stock + $2 BETWEEN 0 AND $3
-		 RETURNING `+variantColumns,
-		id, delta, maxStock))
-	if !errors.Is(err, errVariantNotFound) {
-		return v, err
-	}
-	// No row changed: either the variant is missing or the new stock is out of range.
-	if _, err := s.GetVariant(ctx, id); err != nil {
-		return Variant{}, err
-	}
-	return Variant{}, errStockOutOfRange
+func (s *Store) AdjustStock(ctx context.Context, id int64, delta int32) (v Variant, err error) {
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		productID, err := lockProductOfVariant(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		v, err = scanVariant(tx.QueryRow(ctx,
+			`UPDATE product_variants SET stock = stock + $2, updated_at = now()
+			 WHERE id = $1 AND stock + $2 BETWEEN 0 AND $3
+			 RETURNING `+variantColumns,
+			id, delta, maxStock))
+		if errors.Is(err, errVariantNotFound) {
+			// No row changed: either the variant just went away or the new stock is out of range.
+			if _, err := scanVariant(tx.QueryRow(ctx,
+				`SELECT `+variantColumns+` FROM product_variants WHERE id = $1`, id)); err != nil {
+				return err
+			}
+			return errStockOutOfRange
+		}
+		if err != nil {
+			return err
+		}
+		return addProductUpdated(ctx, tx, productID)
+	})
+	return v, err
 }

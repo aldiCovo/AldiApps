@@ -5,8 +5,8 @@ Application source code, one folder per application. Each folder has its own `Do
 | Folder | Application |
 |---|---|
 | [`cvaldi/`](cvaldi/) | Online CV (English / Indonesian), live at **https://aldilukito.aldiab.ai.id** |
-| [`catalog-service/`](catalog-service/) | Go API for the shop's products and stock, using PostgreSQL. Only reachable inside the cluster |
-| [`search-service/`](search-service/) | Go API that searches the shop's products, using Elasticsearch. Only reachable inside the cluster |
+| [`ecommerce/catalog-service/`](ecommerce/catalog-service/) | Go API for the shop's products and stock, using PostgreSQL. Only reachable inside the cluster |
+| [`ecommerce/search-service/`](ecommerce/search-service/) | Go API that searches the shop's products, using Elasticsearch. Only reachable inside the cluster |
 
 ## Deploy
 
@@ -14,9 +14,10 @@ Merge or push to `main`, then run this on a machine with Docker:
 
 ```bash
 ./build.sh cvaldi
+./build.sh ecommerce/catalog-service
 ```
 
-It pushes `ghcr.io/aldicovo/cvaldi:<commit>`, using the last commit that changed the folder, and writes that tag to the manifests. ArgoCD then deploys it.
+It pushes `ghcr.io/aldicovo/<folder name>:<commit>`, using the last commit that changed the folder, and writes that tag to the manifests. ArgoCD then deploys it.
 
 A new image is private on GHCR, and the cluster pulls without credentials. After an application's first build, set its package to public in the package settings on GitHub.
 
@@ -67,7 +68,7 @@ Consumers must handle these:
 The tests need a throwaway PostgreSQL, because they reset the database. The publisher's delivery test also needs RabbitMQ, and is skipped without `TEST_RABBITMQ_URL`:
 
 ```bash
-cd catalog-service
+cd ecommerce/catalog-service
 TEST_DATABASE_URL='postgres://postgres:test@127.0.0.1:5432/catalog?sslmode=disable' \
 TEST_RABBITMQ_URL='amqp://guest:guest@127.0.0.1:5672/' go test -race ./...
 ```
@@ -90,7 +91,7 @@ Category names aren't searchable, because the index only keeps `category_id`.
 The tests need a throwaway Elasticsearch and RabbitMQ, because they delete their index and queue:
 
 ```bash
-cd search-service
+cd ecommerce/search-service
 TEST_ELASTICSEARCH_URL='http://elastic:test@127.0.0.1:9200' \
 TEST_RABBITMQ_URL='amqp://guest:guest@127.0.0.1:5672/' go test -race ./...
 ```

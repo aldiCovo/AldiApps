@@ -1,4 +1,4 @@
-module github.com/aldiCovo/AldiApps/catalog-service
+module github.com/aldiCovo/AldiApps/ecommerce/catalog-service
 
 go 1.27.3
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds and pushes one application's image, tagged with the last commit that changed
 # its folder, then writes that tag to the manifests in AldiDevOps, where ArgoCD picks it up.
-# Usage: ./build.sh <application folder>
+# Usage: ./build.sh <application folder>, for example ./build.sh ecommerce/catalog-service
 set -euo pipefail
 
 if [ $# -ne 1 ]; then
@@ -11,7 +11,8 @@ fi
 APP=${1%/}
 CONFIG_REPO=${CONFIG_REPO:-$HOME/aldi/AldiDevOps}
 KUSTOMIZATION=apps/$APP/kustomization.yaml
-IMAGE=ghcr.io/aldicovo/$APP
+NAME=$(basename "$APP")
+IMAGE=ghcr.io/aldicovo/$NAME
 
 cd "$(dirname "$0")"
 
@@ -47,9 +48,9 @@ docker push "$IMAGE:$TAG"
 # Quoted, because a tag made only of digits would otherwise be a YAML number.
 sed -i '' "s/^\( *newTag:\).*/\1 \"$TAG\"/" "$CONFIG_REPO/$KUSTOMIZATION"
 if git -C "$CONFIG_REPO" diff --quiet; then
-  echo "$APP:$TAG is already deployed."
+  echo "$NAME:$TAG is already deployed."
   exit 0
 fi
-git -C "$CONFIG_REPO" commit -q -m "Deploy $APP image $TAG" "$KUSTOMIZATION"
+git -C "$CONFIG_REPO" commit -q -m "Deploy $NAME image $TAG" "$KUSTOMIZATION"
 git -C "$CONFIG_REPO" push -q origin main
 echo "Deployed $IMAGE:$TAG"

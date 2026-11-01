@@ -71,9 +71,21 @@ func run() error {
 		<-publisherDone
 	}()
 
+	store := &Store{pool: pool}
+	consumer := &ReservationConsumer{store: store, url: rabbitmqURL}
+	consumerDone := make(chan struct{})
+	go func() {
+		defer close(consumerDone)
+		consumer.Run(ctx)
+	}()
+	defer func() {
+		stop()
+		<-consumerDone
+	}()
+
 	server := &http.Server{
 		Addr:              ":" + port,
-		Handler:           newHandler(&Store{pool: pool}),
+		Handler:           newHandler(store),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,

@@ -8,6 +8,8 @@ Application source code, one folder per application. Each folder has its own `Do
 | [`ecommerce/catalog-service/`](ecommerce/catalog-service/) | Go API for the shop's products and stock, using PostgreSQL. Only reachable inside the cluster |
 | [`ecommerce/search-service/`](ecommerce/search-service/) | Go API that searches the shop's products, using Elasticsearch. Only reachable inside the cluster |
 | [`ecommerce/user-service/`](ecommerce/user-service/) | Go API for the shop's accounts and login, using PostgreSQL. Only reachable inside the cluster |
+| [`ecommerce/order-service/`](ecommerce/order-service/) | Go API for the shop's orders, which runs the order saga, using PostgreSQL. Only reachable inside the cluster |
+| [`ecommerce/payment-service/`](ecommerce/payment-service/) | Go worker that simulates payments, using PostgreSQL. It has no public API and moves no money |
 | [`ecommerce/web/`](ecommerce/web/) | The shop's pages, and the only part the internet reaches, at **https://prastika.aldiab.ai.id** |
 
 ## Deploy
@@ -55,6 +57,8 @@ Every change is published to the `catalog.events` topic exchange on RabbitMQ, wi
 | `category.deleted` | `{"id"}` |
 | `product.created`, `product.updated` | The whole product with its variants. Variant and stock changes send `product.updated` |
 | `product.deleted` | `{"id"}` |
+| `stock.reserved` | `{"order_id"}` |
+| `stock.rejected` | `{"order_id", "reason"}`. `reason` is `out_of_stock` |
 
 The message body is `{"id", "type", "occurred_at", "data"}`.
 
@@ -64,6 +68,10 @@ Consumers must handle these:
 
 - An event can arrive twice. `id` grows with every event, so compare it to ignore duplicates and anything older than what was already applied to the same product
 - RabbitMQ drops events that no queue is bound for, including all events from before a consumer's queue existed. A new consumer must load the current state from the API first
+
+### Stock reservations
+
+catalog-service reads `order.created` and `order.cancelled` from `order.events`, through the `catalog-service.orders` queue. An order reserves all its items or none. Products are locked in id order, so two orders can't deadlock, and each `order_id` is only reserved once, so a repeated event changes nothing. `order.cancelled` returns the stock. Reserving or returning stock also sends `product.updated`, which keeps search current.
 
 ### Tests
 
@@ -120,6 +128,74 @@ cd ecommerce/user-service
 TEST_DATABASE_URL='postgres://postgres:test@127.0.0.1:5432/users?sslmode=disable' go test -race ./...
 ```
 
+## order-service
+
+Every request needs the `Authorization: Bearer <token>` header from user-service, and a user only sees their own orders. Another user's order answers 404.
+
+| Request | Does |
+|---|---|
+| `POST /orders` | Creates an order from `{"items": [{"variant_id", "quantity"}]}`, with 1 to 20 different variants and a quantity of 1 to 20 each. Answers 409 if the user already has 5 open orders, and 503 while catalog-service is down |
+| `GET /orders?limit=20&offset=0` | Lists the user's orders, newest first |
+| `GET /orders/{id}` | Returns one |
+| `POST /orders/{id}/pay` | Asks for a simulated payment with `{"simulate": "success"}` or `{"simulate": "failure"}`. Answers 202, or 409 if the order isn't waiting for payment |
+
+Prices and names are copied from catalog-service when the order is created, so later catalog changes don't touch it.
+
+| Status | Means |
+|---|---|
+| `pending` | Waiting for catalog-service to reserve the stock |
+| `awaiting_payment` | Stock is held until `expires_at`, which is `PAYMENT_WINDOW` (default `15m`) after the reservation |
+| `paying` | Waiting for payment-service. It can no longer expire, so a slow payment-service can't cancel an order that is being paid |
+| `paid` | Finished |
+| `rejected` | Not enough stock. `reason` is `out_of_stock` |
+| `cancelled` | Stock was returned. `reason` is `payment_failed` or `expired` |
+
+### The order saga
+
+No service reads another's database. Each step commits its change and its event in one transaction, using the same outbox as catalog-service:
+
+1. order-service saves a `pending` order and sends `order.created`
+2. catalog-service reserves every item or none, and sends `stock.reserved` or `stock.rejected`
+3. order-service moves to `awaiting_payment` or `rejected`
+4. `POST /orders/{id}/pay` moves to `paying` and sends `payment.requested`
+5. payment-service records the result and sends `payment.succeeded` or `payment.failed`
+6. order-service moves to `paid`. On a failure it moves to `cancelled` and sends `order.cancelled`, and catalog-service returns the stock
+
+A loop checks every 5 seconds for orders past `expires_at`, cancels them and sends `order.cancelled`.
+
+| Event | Exchange | `data` |
+|---|---|---|
+| `order.created` | `order.events` | `{"order_id", "items": [{"variant_id", "quantity"}]}` |
+| `order.cancelled` | `order.events` | `{"order_id", "reason"}` |
+| `payment.requested` | `order.events` | `{"order_id", "amount", "outcome"}` |
+
+Consumers ignore an event that doesn't match the order's current status, so a duplicate changes nothing.
+
+It reads the public key from user-service's JWKS, and keeps it in memory.
+
+The tests need a throwaway PostgreSQL, because they reset the database:
+
+```bash
+cd ecommerce/order-service
+TEST_DATABASE_URL='postgres://postgres:test@127.0.0.1:5432/orders?sslmode=disable' go test -race ./...
+```
+
+## payment-service
+
+It has no public API, and no money moves. It takes `payment.requested` from `order.events`, stores one row per `order_id` in `payments`, and sends the outcome that the order asked for to `payment.events`. The unique `order_id` makes a repeated request send nothing new.
+
+| Event | `data` |
+|---|---|
+| `payment.succeeded` | `{"order_id"}` |
+| `payment.failed` | `{"order_id", "reason"}` |
+
+The tests need a throwaway PostgreSQL, because they reset the database:
+
+```bash
+cd ecommerce/payment-service
+TEST_DATABASE_URL='postgres://postgres:test@127.0.0.1:5432/payments?sslmode=disable' go test -race ./...
+```
+
 ## web
 
 Serves the pages in `static/`, and passes on only these requests:
@@ -130,10 +206,13 @@ Serves the pages in `static/`, and passes on only these requests:
 | `GET /api/search` | search-service |
 | `POST /api/register`, `POST /api/login`, `GET /api/me` | user-service |
 | `POST /api/logout` | Handled here. It only clears the cookie |
+| `POST /api/orders`, `GET /api/orders`, `GET /api/orders/{id}`, `POST /api/orders/{id}/pay` | order-service, with the token from the cookie |
 
 Anything else answers 404, so the other services' write endpoints stay inside the cluster, and a new endpoint stays private until it's added here.
 
 Login keeps the token in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie, so page scripts can't read it. Because of `Secure`, browsers only keep it on HTTPS and `localhost`. `POST` requests must be `application/json`, which a form on another site can't send without asking.
+
+It needs `CATALOG_URL`, `SEARCH_URL`, `USER_URL` and `ORDER_URL`, and won't start without them.
 
 The tests use fake services, so they need nothing running:
 

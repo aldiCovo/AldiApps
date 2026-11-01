@@ -43,6 +43,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	orderURL, err := requireEnv("ORDER_URL")
+	if err != nil {
+		return err
+	}
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -53,7 +57,7 @@ func run() error {
 
 	server := &http.Server{
 		Addr:              ":" + port,
-		Handler:           newHandler(catalogURL, searchURL, userURL),
+		Handler:           newHandler(catalogURL, searchURL, userURL, orderURL),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      20 * time.Second,

@@ -39,7 +39,7 @@
     <div class="more"><button id="more" class="secondary" type="button" hidden>Muat lebih banyak</button></div>
   </main>
 
-  <footer class="site-footer">Prastika · Pemesanan online segera hadir.</footer>
+  <footer class="site-footer">Prastika · Pembayaran masih simulasi. Tidak ada uang yang ditarik dan tidak ada barang yang dikirim.</footer>
 
   <dialog id="product-dialog" class="sheet" aria-labelledby="product-title">
     <button class="close" type="button" data-close aria-label="Tutup">×</button>
@@ -47,9 +47,25 @@
     <h2 id="product-title"></h2>
     <p id="product-price" class="price"></p>
     <p id="product-description"></p>
-    <h3>Ukuran dan warna</h3>
-    <ul id="product-variants" class="variants"></ul>
-    <p class="note">Pemesanan online segera hadir.</p>
+    <form id="order-form">
+      <fieldset>
+        <legend>Pilih ukuran dan warna</legend>
+        <div id="product-variants" class="variants"></div>
+      </fieldset>
+      <div class="order-row">
+        <label>Jumlah <input id="order-quantity" type="number" min="1" max="20" value="1" required></label>
+        <button id="order-submit" class="primary" type="submit">Pesan</button>
+      </div>
+      <p id="order-error" class="error" role="alert" hidden></p>
+    </form>
+  </dialog>
+
+  <dialog id="orders-dialog" class="sheet" aria-labelledby="orders-title">
+    <button class="close" type="button" data-close aria-label="Tutup">×</button>
+    <h2 id="orders-title">Pesanan saya</h2>
+    <p class="demo-note">Pembayaran masih simulasi. Tidak ada uang yang ditarik dan tidak ada barang yang dikirim.</p>
+    <p id="orders-status" class="status" role="status" aria-live="polite"></p>
+    <div id="orders-list" class="orders"></div>
   </dialog>
 
   <dialog id="auth-dialog" class="sheet narrow" aria-labelledby="auth-title">

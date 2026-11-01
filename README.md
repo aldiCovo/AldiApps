@@ -8,6 +8,7 @@ Application source code, one folder per application. Each folder has its own `Do
 | [`ecommerce/catalog-service/`](ecommerce/catalog-service/) | Go API for the shop's products and stock, using PostgreSQL. Only reachable inside the cluster |
 | [`ecommerce/search-service/`](ecommerce/search-service/) | Go API that searches the shop's products, using Elasticsearch. Only reachable inside the cluster |
 | [`ecommerce/user-service/`](ecommerce/user-service/) | Go API for the shop's accounts and login, using PostgreSQL. Only reachable inside the cluster |
+| [`ecommerce/web/`](ecommerce/web/) | The shop's pages, and the only part the internet reaches, at **https://prastika.aldiab.ai.id** |
 
 ## Deploy
 
@@ -117,4 +118,26 @@ The tests need a throwaway PostgreSQL, because they empty the table:
 ```bash
 cd ecommerce/user-service
 TEST_DATABASE_URL='postgres://postgres:test@127.0.0.1:5432/users?sslmode=disable' go test -race ./...
+```
+
+## web
+
+Serves the pages in `static/`, and passes on only these requests:
+
+| Request | Goes to |
+|---|---|
+| `GET /api/categories`, `GET /api/products/{id}` | catalog-service |
+| `GET /api/search` | search-service |
+| `POST /api/register`, `POST /api/login`, `GET /api/me` | user-service |
+| `POST /api/logout` | Handled here. It only clears the cookie |
+
+Anything else answers 404, so the other services' write endpoints stay inside the cluster, and a new endpoint stays private until it's added here.
+
+Login keeps the token in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie, so page scripts can't read it. Because of `Secure`, browsers only keep it on HTTPS and `localhost`. `POST` requests must be `application/json`, which a form on another site can't send without asking.
+
+The tests use fake services, so they need nothing running:
+
+```bash
+cd ecommerce/web
+go test -race ./...
 ```

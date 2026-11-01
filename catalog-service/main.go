@@ -37,6 +37,10 @@ func run() error {
 	if databaseURL == "" {
 		return errors.New("DATABASE_URL is required")
 	}
+	rabbitmqURL := os.Getenv("RABBITMQ_URL")
+	if rabbitmqURL == "" {
+		return errors.New("RABBITMQ_URL is required")
+	}
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -54,6 +58,18 @@ func run() error {
 	if err := migrate(ctx, pool); err != nil {
 		return fmt.Errorf("migrating database: %w", err)
 	}
+
+	publisher := &Publisher{pool: pool, url: rabbitmqURL}
+	publisherDone := make(chan struct{})
+	go func() {
+		defer close(publisherDone)
+		publisher.Run(ctx)
+	}()
+	// The pool must stay open until the publisher has stopped using it.
+	defer func() {
+		stop()
+		<-publisherDone
+	}()
 
 	server := &http.Server{
 		Addr:              ":" + port,

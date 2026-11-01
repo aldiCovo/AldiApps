@@ -41,9 +41,32 @@ A new image is private on GHCR, and the cluster pulls without credentials. After
 
 Prices are in whole rupiah and belong to the product. Stock belongs to each variant. Migrations in `migrations/` run when the service starts.
 
-The tests need a throwaway PostgreSQL, because they reset the database:
+### Events
+
+Every change is published to the `catalog.events` topic exchange on RabbitMQ, with the event type as the routing key:
+
+| Type | `data` |
+|---|---|
+| `category.created`, `category.updated` | The category |
+| `category.deleted` | `{"id"}` |
+| `product.created`, `product.updated` | The whole product with its variants. Variant and stock changes send `product.updated` |
+| `product.deleted` | `{"id"}` |
+
+The message body is `{"id", "type", "occurred_at", "data"}`.
+
+A change and its event commit in one transaction to the `outbox_events` table, and a background publisher sends them on and deletes them once RabbitMQ confirms. So the API keeps working while RabbitMQ is down, and the events follow when it returns.
+
+Consumers must handle these:
+
+- An event can arrive twice. `id` grows with every event, so compare it to ignore duplicates and anything older than what was already applied to the same product
+- RabbitMQ drops events that no queue is bound for, including all events from before a consumer's queue existed. A new consumer must load the current state from the API first
+
+### Tests
+
+The tests need a throwaway PostgreSQL, because they reset the database. The publisher's delivery test also needs RabbitMQ, and is skipped without `TEST_RABBITMQ_URL`:
 
 ```bash
 cd catalog-service
-TEST_DATABASE_URL='postgres://postgres:test@127.0.0.1:5432/catalog?sslmode=disable' go test -race ./...
+TEST_DATABASE_URL='postgres://postgres:test@127.0.0.1:5432/catalog?sslmode=disable' \
+TEST_RABBITMQ_URL='amqp://guest:guest@127.0.0.1:5672/' go test -race ./...
 ```

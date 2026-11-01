@@ -1,8 +1,9 @@
-// catalog-service owns the products of the shop and their stock.
+// catalog-service owns the shop's categories, products, variants, and stock.
 package main
 
 import (
 	"context"
+	"database/sql"
 	"embed"
 	"errors"
 	"fmt"
@@ -80,23 +81,27 @@ func run() error {
 	return server.Shutdown(shutdownCtx)
 }
 
-// migrate takes a Postgres lock, so two Pods starting during a rollout can't race.
 func migrate(ctx context.Context, pool *pgxpool.Pool) error {
-	files, err := fs.Sub(migrations, "migrations")
-	if err != nil {
-		return err
-	}
-	locker, err := lock.NewPostgresSessionLocker()
-	if err != nil {
-		return err
-	}
 	db := stdlib.OpenDBFromPool(pool)
 	defer db.Close()
 
-	provider, err := goose.NewProvider(goose.DialectPostgres, db, files, goose.WithSessionLocker(locker))
+	provider, err := newMigrationProvider(db)
 	if err != nil {
 		return err
 	}
 	_, err = provider.Up(ctx)
 	return err
+}
+
+// newMigrationProvider takes a Postgres lock, so two Pods starting during a rollout can't race.
+func newMigrationProvider(db *sql.DB) (*goose.Provider, error) {
+	files, err := fs.Sub(migrations, "migrations")
+	if err != nil {
+		return nil, err
+	}
+	locker, err := lock.NewPostgresSessionLocker()
+	if err != nil {
+		return nil, err
+	}
+	return goose.NewProvider(goose.DialectPostgres, db, files, goose.WithSessionLocker(locker))
 }

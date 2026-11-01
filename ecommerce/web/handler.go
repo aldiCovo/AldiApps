@@ -10,6 +10,8 @@ import (
 	"log/slog"
 	"mime"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"regexp"
 	"time"
 )
@@ -29,9 +31,10 @@ var numericID = regexp.MustCompile(`^[0-9]{1,18}$`)
 type gateway struct {
 	catalogURL, searchURL, userURL, orderURL string
 	client                                   *http.Client
+	events                                   http.Handler
 }
 
-func newHandler(catalogURL, searchURL, userURL, orderURL string) http.Handler {
+func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL string) http.Handler {
 	g := &gateway{
 		catalogURL: catalogURL,
 		searchURL:  searchURL,
@@ -42,6 +45,7 @@ func newHandler(catalogURL, searchURL, userURL, orderURL string) http.Handler {
 			// Redirects from a service stay inside the cluster, so they must not reach the browser.
 			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		},
+		events: newEventsProxy(realtimeURL),
 	}
 	mux := http.NewServeMux()
 
@@ -101,6 +105,7 @@ func newHandler(catalogURL, searchURL, userURL, orderURL string) http.Handler {
 			g.withSession(w, r, g.orderURL+"/orders/"+id+"/pay", body)
 		}
 	})
+	mux.HandleFunc("GET /api/events", g.openEvents)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 	})
@@ -260,6 +265,58 @@ func (g *gateway) withSession(w http.ResponseWriter, r *http.Request, url string
 		setSession(w, "", -1)
 	}
 	writeRaw(w, resp, data)
+}
+
+// passedEventHeaders are all that realtime-service needs from the browser's handshake.
+var passedEventHeaders = map[string]bool{
+	"Connection":               true,
+	"Upgrade":                  true,
+	"Sec-Websocket-Key":        true,
+	"Sec-Websocket-Version":    true,
+	"Sec-Websocket-Extensions": true,
+	"Sec-Websocket-Protocol":   true,
+}
+
+func newEventsProxy(realtimeURL string) http.Handler {
+	target, err := url.Parse(realtimeURL)
+	if err != nil {
+		panic(err)
+	}
+	return &httputil.ReverseProxy{
+		Rewrite: func(p *httputil.ProxyRequest) {
+			p.SetURL(target)
+			p.Out.URL.Path, p.Out.URL.RawPath, p.Out.URL.RawQuery = "/ws", "", ""
+			for name := range p.Out.Header {
+				if !passedEventHeaders[name] {
+					p.Out.Header.Del(name)
+				}
+			}
+			// openEvents has already checked that the cookie exists.
+			if cookie, err := p.In.Cookie(sessionCookie); err == nil {
+				p.Out.Header.Set("Authorization", "Bearer "+cookie.Value)
+			}
+		},
+		Transport: &http.Transport{ResponseHeaderTimeout: upstreamTimeout},
+		ErrorHandler: func(w http.ResponseWriter, _ *http.Request, err error) {
+			writeUpstreamError(w, err)
+		},
+	}
+}
+
+// openEvents checks Origin because a WebSocket handshake carries cookies but, unlike a JSON
+// request, doesn't ask permission first. Another site could otherwise listen as the visitor.
+func (g *gateway) openEvents(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	origin, err := url.Parse(r.Header.Get("Origin"))
+	if err != nil || origin.Host != r.Host {
+		writeError(w, http.StatusForbidden, "this origin may not connect")
+		return
+	}
+	if _, err := r.Cookie(sessionCookie); err != nil {
+		writeError(w, http.StatusUnauthorized, "not logged in")
+		return
+	}
+	g.events.ServeHTTP(w, r)
 }
 
 func setSession(w http.ResponseWriter, token string, maxAge int) {

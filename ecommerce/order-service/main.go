@@ -39,7 +39,7 @@ func requireEnv(name string) (string, error) {
 
 func run() error {
 	values := map[string]string{}
-	for _, name := range []string{"DATABASE_URL", "RABBITMQ_URL", "CATALOG_URL", "USER_URL"} {
+	for _, name := range []string{"DATABASE_URL", "RABBITMQ_URL", "NATS_URL", "CATALOG_URL", "USER_URL"} {
 		value, err := requireEnv(name)
 		if err != nil {
 			return err
@@ -70,7 +70,13 @@ func run() error {
 		return fmt.Errorf("migrating database: %w", err)
 	}
 
-	store := &Store{pool: pool, paymentWindow: paymentWindow}
+	notifier, err := newNotifier(values["NATS_URL"])
+	if err != nil {
+		return fmt.Errorf("connecting to NATS: %w", err)
+	}
+	defer notifier.Close()
+
+	store := &Store{pool: pool, paymentWindow: paymentWindow, notify: notifier.Changed}
 	var background sync.WaitGroup
 	// The pool must stay open until these have stopped using it.
 	defer func() {

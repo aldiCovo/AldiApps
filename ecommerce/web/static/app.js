@@ -267,8 +267,18 @@ const orderStates = {
   rejected: ["Ditolak: stok tidak cukup", "bad"],
 };
 const pollEvery = 1500;
+// Signals may be lost, so a slow poll still runs while the connection is open.
+const pollEveryWhileLive = 15000;
+const liveRetryMax = 30000;
 const unsettled = new Set(["pending", "paying"]);
+const openStatuses = new Set(["pending", "awaiting_payment", "paying"]);
 let pollTimer = null;
+let shownOrders = [];
+let liveSocket = null;
+let liveTimer = null;
+let liveRetry = 1000;
+
+const isLive = () => liveSocket !== null && liveSocket.readyState === WebSocket.OPEN;
 
 function orderState(order) {
   if (order.status === "cancelled") {
@@ -315,7 +325,7 @@ function orderCard(order) {
   return card;
 }
 
-// Polls one order at a time, because the order list has a rate limit and these don't.
+// Updates fetch one order at a time, because the order list has a rate limit and these don't.
 async function refreshOrders() {
   clearTimeout(pollTimer);
   try {
@@ -333,20 +343,68 @@ async function refreshOrders() {
 }
 
 function renderOrders(orders) {
+  shownOrders = orders;
+  clearTimeout(pollTimer);
   $("orders-list").replaceChildren(...orders.map(orderCard));
   if (orders.length === 0) $("orders-status").textContent = "Belum ada pesanan.";
+  if (!$("orders-dialog").open) return;
+  if (orders.some((order) => openStatuses.has(order.status))) connectLive();
   const waiting = orders.filter((order) => unsettled.has(order.status));
-  if (waiting.length > 0 && $("orders-dialog").open) pollTimer = setTimeout(() => pollOrders(orders, waiting), pollEvery);
+  if (waiting.length > 0) pollTimer = setTimeout(() => updateOrders(waiting.map((order) => order.id)), isLive() ? pollEveryWhileLive : pollEvery);
 }
 
-async function pollOrders(orders, waiting) {
+// Replaces the given orders with their current state. An answer that arrives late can't
+// overwrite a newer one, and an order from another tab is added to the top.
+async function updateOrders(ids) {
   try {
-    const updated = await Promise.all(waiting.map((order) => api(`/orders/${order.id}`)));
-    const byId = new Map(updated.map((order) => [order.id, order]));
-    renderOrders(orders.map((order) => byId.get(order.id) || order));
+    const updated = await Promise.all(ids.map((id) => api(`/orders/${id}`)));
+    if (!$("orders-dialog").open) return;
+    let orders = shownOrders;
+    for (const order of updated) {
+      const shown = orders.find((item) => item.id === order.id);
+      if (!shown) orders = [order, ...orders];
+      else if (order.updated_at >= shown.updated_at) orders = orders.map((item) => (item.id === order.id ? order : item));
+    }
+    renderOrders(orders);
   } catch {
-    if ($("orders-dialog").open) pollTimer = setTimeout(() => pollOrders(orders, waiting), pollEvery * 2);
+    if ($("orders-dialog").open) renderOrders(shownOrders);
   }
+}
+
+function connectLive() {
+  if (liveSocket !== null) return;
+  clearTimeout(liveTimer);
+  const scheme = location.protocol === "https:" ? "wss" : "ws";
+  const socket = new WebSocket(`${scheme}://${location.host}/api/events`);
+  liveSocket = socket;
+  socket.addEventListener("open", () => {
+    liveRetry = 1000;
+    // Anything that changed before the connection opened sent its signal to nobody.
+    const missed = shownOrders.filter((order) => openStatuses.has(order.status)).map((order) => order.id);
+    if (missed.length > 0) updateOrders(missed);
+  });
+  socket.addEventListener("message", (event) => {
+    try {
+      updateOrders([JSON.parse(event.data).order_id]);
+    } catch {
+      // The next poll or signal still brings the status.
+    }
+  });
+  socket.addEventListener("close", () => {
+    if (liveSocket !== socket) return;
+    liveSocket = null;
+    if (!$("orders-dialog").open) return;
+    liveTimer = setTimeout(connectLive, liveRetry);
+    liveRetry = Math.min(liveRetry * 2, liveRetryMax);
+    renderOrders(shownOrders);
+  });
+}
+
+function disconnectLive() {
+  clearTimeout(liveTimer);
+  const socket = liveSocket;
+  liveSocket = null;
+  if (socket !== null) socket.close();
 }
 
 function openOrders() {
@@ -384,7 +442,10 @@ async function submitOrder(event) {
 }
 
 $("order-form").addEventListener("submit", submitOrder);
-$("orders-dialog").addEventListener("close", () => clearTimeout(pollTimer));
+$("orders-dialog").addEventListener("close", () => {
+  clearTimeout(pollTimer);
+  disconnectLive();
+});
 $("search-form").addEventListener("submit", (event) => {
   event.preventDefault();
   state.q = $("search-input").value.trim();

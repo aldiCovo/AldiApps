@@ -6,11 +6,13 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -473,5 +475,89 @@ func TestBadEventsAreDropped(t *testing.T) {
 		if err := h.store.handleEvent(context.Background(), body); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+type sentSignal struct {
+	userID, orderID int64
+	status          string
+}
+
+func TestStatusChangesSendOneSignalToTheOwner(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	var signals []sentSignal
+	h.store.notify = func(userID, orderID int64, status string) {
+		signals = append(signals, sentSignal{userID, orderID, status})
+	}
+	expect := func(want ...sentSignal) {
+		t.Helper()
+		if !slices.Equal(signals, want) {
+			t.Errorf("signals = %v, want %v", signals, want)
+		}
+		signals = nil
+	}
+	create := func() int64 {
+		t.Helper()
+		order, err := h.store.Create(ctx, 7, []OrderItem{{VariantID: 1, Price: 100, Quantity: 1}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		expect(sentSignal{7, order.ID, statusPending})
+		return order.ID
+	}
+	check := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	paid := create()
+	check(h.store.MarkReserved(ctx, paid))
+	check(h.store.MarkReserved(ctx, paid))
+	expect(sentSignal{7, paid, statusAwaitingPayment})
+	_, err := h.store.Pay(ctx, 7, paid, outcomeOK)
+	check(err)
+	expect(sentSignal{7, paid, statusPaying})
+	check(h.store.MarkPaid(ctx, paid))
+	check(h.store.MarkPaid(ctx, paid))
+	expect(sentSignal{7, paid, statusPaid})
+
+	rejected := create()
+	check(h.store.MarkRejected(ctx, rejected, "out_of_stock"))
+	expect(sentSignal{7, rejected, statusRejected})
+
+	failed := create()
+	check(h.store.MarkReserved(ctx, failed))
+	_, err = h.store.Pay(ctx, 7, failed, outcomeFailed)
+	check(err)
+	signals = nil
+	check(h.store.CancelPaying(ctx, failed))
+	check(h.store.CancelPaying(ctx, failed))
+	expect(sentSignal{7, failed, statusCancelled})
+
+	expired := create()
+	check(h.store.MarkReserved(ctx, expired))
+	signals = nil
+	if _, err := h.store.pool.Exec(ctx, `UPDATE orders SET expires_at = now() - interval '1 second' WHERE id = $1`, expired); err != nil {
+		t.Fatal(err)
+	}
+	count, err := h.store.ExpireUnpaid(ctx)
+	check(err)
+	if count != 1 {
+		t.Errorf("expired %d orders, want 1", count)
+	}
+	expect(sentSignal{7, expired, statusCancelled})
+}
+
+func TestARefusedOrderSendsNoSignal(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	h.store.notify = func(userID, orderID int64, status string) {
+		t.Errorf("unexpected signal for order %d: %s", orderID, status)
+	}
+	if _, err := h.store.Pay(ctx, 7, 999, outcomeOK); !errors.Is(err, errNotFound) {
+		t.Errorf("want errNotFound, got %v", err)
 	}
 }

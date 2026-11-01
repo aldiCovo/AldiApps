@@ -93,7 +93,7 @@ async function loadProducts(append = false) {
 
 async function loadCategories() {
   try {
-    const categories = await api("/categories");
+    const { categories } = await api("/categories");
     state.categories = new Map(categories.map((category) => [category.id, category.name]));
   } catch {
     state.categories = new Map();

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prastika</title>
+  <meta name="description" content="Toko online fashion wanita.">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="/">Prastika</a>
+    <form id="search-form" class="search" role="search">
+      <label class="visually-hidden" for="search-input">Cari produk</label>
+      <input id="search-input" type="search" maxlength="200" placeholder="Cari dress, blouse, hijab…" autocomplete="off">
+      <button type="submit">Cari</button>
+    </form>
+    <div id="account" class="account"></div>
+  </header>
+
+  <main>
+    <section class="intro">
+      <h1>Busana untuk hari-harimu</h1>
+      <p>Pilih model, ukuran, dan warna yang kamu suka.</p>
+    </section>
+
+    <section class="filters" aria-label="Saring produk">
+      <div id="categories" class="chips"></div>
+      <div class="selects">
+        <label>Ukuran <select id="size-filter"><option value="">Semua</option></select></label>
+        <label>Warna <select id="color-filter"><option value="">Semua</option></select></label>
+        <label class="check"><input id="stock-filter" type="checkbox"> Hanya yang tersedia</label>
+      </div>
+    </section>
+
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+    <section id="products" class="products" aria-label="Produk"></section>
+    <div class="more"><button id="more" class="secondary" type="button" hidden>Muat lebih banyak</button></div>
+  </main>
+
+  <footer class="site-footer">Prastika · Pemesanan online segera hadir.</footer>
+
+  <dialog id="product-dialog" class="sheet" aria-labelledby="product-title">
+    <button class="close" type="button" data-close aria-label="Tutup">×</button>
+    <div class="swatch" id="product-swatch" aria-hidden="true"></div>
+    <h2 id="product-title"></h2>
+    <p id="product-price" class="price"></p>
+    <p id="product-description"></p>
+    <h3>Ukuran dan warna</h3>
+    <ul id="product-variants" class="variants"></ul>
+    <p class="note">Pemesanan online segera hadir.</p>
+  </dialog>
+
+  <dialog id="auth-dialog" class="sheet narrow" aria-labelledby="auth-title">
+    <button class="close" type="button" data-close aria-label="Tutup">×</button>
+    <h2 id="auth-title">Masuk</h2>
+    <form id="auth-form">
+      <label id="name-field" hidden>Nama <input id="auth-name" type="text" maxlength="200" autocomplete="name"></label>
+      <label>Email <input id="auth-email" type="email" maxlength="254" required autocomplete="email"></label>
+      <label>Password <input id="auth-password" type="password" minlength="8" maxlength="128" required autocomplete="current-password"></label>
+      <p id="password-hint" class="hint" hidden>Minimal 8 karakter.</p>
+      <p id="auth-error" class="error" role="alert" hidden></p>
+      <button id="auth-submit" type="submit">Masuk</button>
+    </form>
+    <p class="switch"><span id="auth-switch-text">Belum punya akun?</span> <button id="auth-switch" class="link" type="button">Daftar</button></p>
+  </dialog>
+</body>
+</html>

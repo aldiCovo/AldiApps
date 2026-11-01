@@ -6,6 +6,7 @@ Application source code, one folder per application. Each folder has its own `Do
 |---|---|
 | [`cvaldi/`](cvaldi/) | Online CV (English / Indonesian), live at **https://aldilukito.aldiab.ai.id** |
 | [`catalog-service/`](catalog-service/) | Go API for the shop's products and stock, using PostgreSQL. Only reachable inside the cluster |
+| [`search-service/`](search-service/) | Go API that searches the shop's products, using Elasticsearch. Only reachable inside the cluster |
 
 ## Deploy
 
@@ -68,5 +69,28 @@ The tests need a throwaway PostgreSQL, because they reset the database. The publ
 ```bash
 cd catalog-service
 TEST_DATABASE_URL='postgres://postgres:test@127.0.0.1:5432/catalog?sslmode=disable' \
+TEST_RABBITMQ_URL='amqp://guest:guest@127.0.0.1:5672/' go test -race ./...
+```
+
+## search-service
+
+| Request | Does |
+|---|---|
+| `GET /search?q=dress+merah` | Searches names, descriptions, sizes and colors. All words must match, and small typos are allowed |
+| `GET /search?category_id=1` | Limits the results to one category |
+| `GET /search?size=M&color=Merah&in_stock=true` | Limits the results to products with one variant that matches all of these |
+| `GET /search?limit=20&offset=0` | Pages through the results. `limit` is at most 100 and `offset` at most 9900 |
+
+The answer is `{"total", "products"}`, with products in the same shape as catalog-service's. All parameters are optional and combine. It answers 503 while Elasticsearch is down or before the first sync has created the index.
+
+It binds its durable queue to `product.*` on `catalog.events`, loads every product from catalog-service, then applies events. Each event's `id` becomes the document's version in Elasticsearch, so duplicates and older events change nothing. Synced products use version 0, so they never replace an event's data. The sync runs at every start, so an emptied index rebuilds itself.
+
+Category names aren't searchable, because the index only keeps `category_id`.
+
+The tests need a throwaway Elasticsearch and RabbitMQ, because they delete their index and queue:
+
+```bash
+cd search-service
+TEST_ELASTICSEARCH_URL='http://elastic:test@127.0.0.1:9200' \
 TEST_RABBITMQ_URL='amqp://guest:guest@127.0.0.1:5672/' go test -race ./...
 ```

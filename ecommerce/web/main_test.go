@@ -64,7 +64,15 @@ func newTestGateway(t *testing.T) (*httptest.Server, *fakeServices) {
 			io.WriteString(w, `{"id":1}`)
 		}
 	}
-	server := httptest.NewServer(newHandler(f.start(t, "catalog", ok), f.start(t, "search", ok), f.start(t, "user", users)))
+	orders := func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer "+testToken {
+			w.WriteHeader(http.StatusUnauthorized)
+			io.WriteString(w, `{"error":"the token is not valid"}`)
+			return
+		}
+		io.WriteString(w, `{"ok":true}`)
+	}
+	server := httptest.NewServer(newHandler(f.start(t, "catalog", ok), f.start(t, "search", ok), f.start(t, "user", users), f.start(t, "order", orders)))
 	t.Cleanup(server.Close)
 	return server, f
 }
@@ -267,7 +275,7 @@ func TestDownServiceAnswers502WithoutDetails(t *testing.T) {
 	down := httptest.NewServer(http.NotFoundHandler())
 	url := down.URL
 	down.Close()
-	server := httptest.NewServer(newHandler(url, url, url))
+	server := httptest.NewServer(newHandler(url, url, url, url))
 	defer server.Close()
 	for _, c := range []struct{ method, path string }{{"GET", "/api/search"}, {"POST", "/api/login"}} {
 		resp, body := do(t, c.method, server.URL+c.path, "application/json", "{}")
@@ -295,5 +303,75 @@ func TestPagesAndHeaders(t *testing.T) {
 	}
 	if resp, _ := do(t, "GET", server.URL+"/healthz", "", ""); resp.StatusCode != http.StatusOK {
 		t.Fatalf("/healthz: status %d", resp.StatusCode)
+	}
+}
+
+func TestOrdersUseTheSessionCookie(t *testing.T) {
+	server, f := newTestGateway(t)
+	session := &http.Cookie{Name: sessionCookie, Value: testToken}
+	cases := []struct{ method, path, want string }{
+		{"POST", "/api/orders", "order POST /orders"},
+		{"GET", "/api/orders?limit=5", "order GET /orders?limit=5"},
+		{"GET", "/api/orders/12", "order GET /orders/12"},
+		{"POST", "/api/orders/12/pay", "order POST /orders/12/pay"},
+	}
+	for _, c := range cases {
+		resp, body := do(t, c.method, server.URL+c.path, "application/json", "{}", session)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("%s %s: status %d, body %s", c.method, c.path, resp.StatusCode, body)
+		}
+		if resp.Header.Get("Cache-Control") != "no-store" {
+			t.Fatalf("%s: Cache-Control %q", c.path, resp.Header.Get("Cache-Control"))
+		}
+		seen := f.seen()
+		if got := seen[len(seen)-1]; got != c.want {
+			t.Fatalf("%s reached %q", c.path, got)
+		}
+		if got := f.headers[len(f.headers)-1].Get("Authorization"); got != "Bearer "+testToken {
+			t.Fatalf("%s: Authorization %q", c.path, got)
+		}
+	}
+}
+
+func TestOrdersWithoutValidSession(t *testing.T) {
+	server, f := newTestGateway(t)
+	for _, c := range []struct{ method, path string }{{"POST", "/api/orders"}, {"GET", "/api/orders"}, {"GET", "/api/orders/1"}, {"POST", "/api/orders/1/pay"}} {
+		before := len(f.seen())
+		resp, _ := do(t, c.method, server.URL+c.path, "application/json", "{}")
+		if resp.StatusCode != http.StatusUnauthorized || len(f.seen()) != before {
+			t.Fatalf("%s %s: status %d", c.method, c.path, resp.StatusCode)
+		}
+		resp, _ = do(t, c.method, server.URL+c.path, "application/json", "{}", &http.Cookie{Name: sessionCookie, Value: "bad"})
+		if cookies := resp.Cookies(); resp.StatusCode != http.StatusUnauthorized || len(cookies) != 1 || cookies[0].MaxAge >= 0 {
+			t.Fatalf("%s %s bad cookie: status %d, cookies %v", c.method, c.path, resp.StatusCode, cookies)
+		}
+	}
+}
+
+func TestOrderPathsStayNarrow(t *testing.T) {
+	server, f := newTestGateway(t)
+	session := &http.Cookie{Name: sessionCookie, Value: testToken}
+	for _, c := range []struct{ method, path string }{
+		{"GET", "/api/orders/abc"},
+		{"GET", "/api/orders/1%2Fpay"},
+		{"POST", "/api/orders/abc/pay"},
+		{"DELETE", "/api/orders/1"},
+		{"PUT", "/api/orders/1"},
+		{"GET", "/api/orders/1/pay"},
+		{"POST", "/api/orders/1/refund"},
+		{"GET", "/api/payments"},
+	} {
+		before := len(f.seen())
+		resp, _ := do(t, c.method, server.URL+c.path, "application/json", "{}", session)
+		if resp.StatusCode < 400 || len(f.seen()) != before {
+			t.Fatalf("%s %s: status %d, reached %v", c.method, c.path, resp.StatusCode, f.seen()[before:])
+		}
+	}
+	for _, path := range []string{"/api/orders", "/api/orders/1/pay"} {
+		before := len(f.seen())
+		resp, _ := do(t, "POST", server.URL+path, "text/plain", "{}", session)
+		if resp.StatusCode != http.StatusUnsupportedMediaType || len(f.seen()) != before {
+			t.Fatalf("%s from a form: status %d", path, resp.StatusCode)
+		}
 	}
 }

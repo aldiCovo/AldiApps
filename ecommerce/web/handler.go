@@ -27,15 +27,16 @@ var static embed.FS
 var numericID = regexp.MustCompile(`^[0-9]{1,18}$`)
 
 type gateway struct {
-	catalogURL, searchURL, userURL string
-	client                         *http.Client
+	catalogURL, searchURL, userURL, orderURL string
+	client                                   *http.Client
 }
 
-func newHandler(catalogURL, searchURL, userURL string) http.Handler {
+func newHandler(catalogURL, searchURL, userURL, orderURL string) http.Handler {
 	g := &gateway{
 		catalogURL: catalogURL,
 		searchURL:  searchURL,
 		userURL:    userURL,
+		orderURL:   orderURL,
 		client: &http.Client{
 			Timeout: upstreamTimeout,
 			// Redirects from a service stay inside the cluster, so they must not reach the browser.
@@ -78,6 +79,28 @@ func newHandler(catalogURL, searchURL, userURL string) http.Handler {
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("GET /api/me", g.me)
+	mux.HandleFunc("POST /api/orders", func(w http.ResponseWriter, r *http.Request) {
+		if body, ok := readBody(w, r); ok {
+			g.withSession(w, r, g.orderURL+"/orders", body)
+		}
+	})
+	mux.HandleFunc("GET /api/orders", func(w http.ResponseWriter, r *http.Request) {
+		g.withSession(w, r, g.orderURL+"/orders?"+r.URL.RawQuery, nil)
+	})
+	mux.HandleFunc("GET /api/orders/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if id, ok := orderPath(w, r); ok {
+			g.withSession(w, r, g.orderURL+"/orders/"+id, nil)
+		}
+	})
+	mux.HandleFunc("POST /api/orders/{id}/pay", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := orderPath(w, r)
+		if !ok {
+			return
+		}
+		if body, ok := readBody(w, r); ok {
+			g.withSession(w, r, g.orderURL+"/orders/"+id+"/pay", body)
+		}
+	})
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 	})
@@ -206,14 +229,29 @@ func (g *gateway) login(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func orderPath(w http.ResponseWriter, r *http.Request) (string, bool) {
+	id := r.PathValue("id")
+	if !numericID.MatchString(id) {
+		writeError(w, http.StatusNotFound, "order not found")
+		return "", false
+	}
+	return id, true
+}
+
 func (g *gateway) me(w http.ResponseWriter, r *http.Request) {
+	g.withSession(w, r, g.userURL+"/me", nil)
+}
+
+// withSession passes the cookie's token on as the service expects it. Personal answers must
+// not be cached, and a token the service refuses is cleared.
+func (g *gateway) withSession(w http.ResponseWriter, r *http.Request, url string, body []byte) {
 	w.Header().Set("Cache-Control", "no-store")
 	cookie, err := r.Cookie(sessionCookie)
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, "not logged in")
 		return
 	}
-	resp, data, err := g.call(r, g.userURL+"/me", nil, cookie.Value)
+	resp, data, err := g.call(r, url, body, cookie.Value)
 	if err != nil {
 		writeUpstreamError(w, err)
 		return

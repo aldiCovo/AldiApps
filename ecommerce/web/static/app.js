@@ -139,6 +139,19 @@ async function loadFilterChoices() {
   }
 }
 
+function variantChoice(variant) {
+  const soldOut = variant.stock === 0;
+  const row = el("label", soldOut ? "variant unavailable" : "variant");
+  const input = el("input");
+  input.type = "radio";
+  input.name = "variant";
+  input.value = variant.id;
+  input.disabled = soldOut;
+  row.append(input, el("span", "", `${variant.size} · ${variant.color}`),
+    el("span", soldOut ? "variant-stock sold-out" : "variant-stock", soldOut ? "Stok habis" : `Stok ${variant.stock}`));
+  return row;
+}
+
 async function openProduct(id) {
   try {
     const product = await api(`/products/${encodeURIComponent(id)}`);
@@ -146,14 +159,12 @@ async function openProduct(id) {
     $("product-title").textContent = product.name;
     $("product-price").textContent = rupiah.format(product.price);
     $("product-description").textContent = product.description;
-    $("product-variants").replaceChildren(...(product.variants || []).map((variant) => {
-      const row = el("li");
-      row.append(
-        el("span", "", `${variant.size} · ${variant.color}`),
-        el("span", variant.stock === 0 ? "sold-out" : "", variant.stock === 0 ? "Stok habis" : `Stok ${variant.stock}`),
-      );
-      return row;
-    }));
+    $("product-variants").replaceChildren(...(product.variants || []).map(variantChoice));
+    $("order-quantity").value = 1;
+    $("order-error").hidden = true;
+    const first = document.querySelector('input[name="variant"]:not(:disabled)');
+    if (first) first.checked = true;
+    $("order-submit").disabled = !first;
     $("product-dialog").showModal();
   } catch (error) {
     setStatus(error.status === 404 ? "Produk ini sudah tidak tersedia." : "Produk belum bisa dibuka. Coba lagi sebentar lagi.", true);
@@ -161,6 +172,7 @@ async function openProduct(id) {
 }
 
 let authMode = "login";
+let loggedIn = false;
 
 function setAuthMode(mode) {
   authMode = mode;
@@ -214,6 +226,7 @@ async function submitAuth(event) {
 }
 
 function renderAccount(user) {
+  loggedIn = Boolean(user);
   const account = $("account");
   if (!user) {
     const login = el("button", "secondary", "Masuk");
@@ -232,7 +245,10 @@ function renderAccount(user) {
       setStatus("Belum bisa keluar. Coba lagi sebentar lagi.", true);
     }
   });
-  account.replaceChildren(el("span", "", `Halo, ${user.name}`), logout);
+  const orders = el("button", "link", "Pesanan");
+  orders.type = "button";
+  orders.addEventListener("click", openOrders);
+  account.replaceChildren(el("span", "", `Halo, ${user.name}`), orders, logout);
 }
 
 async function loadAccount() {
@@ -243,6 +259,132 @@ async function loadAccount() {
   }
 }
 
+const orderStates = {
+  pending: ["Memeriksa stok…", ""],
+  awaiting_payment: ["Menunggu pembayaran", ""],
+  paying: ["Memproses pembayaran…", ""],
+  paid: ["Dibayar", "good"],
+  rejected: ["Ditolak: stok tidak cukup", "bad"],
+};
+const pollEvery = 1500;
+const unsettled = new Set(["pending", "paying"]);
+let pollTimer = null;
+
+function orderState(order) {
+  if (order.status === "cancelled") {
+    return [order.reason === "expired" ? "Dibatalkan: waktu pembayaran habis" : "Dibatalkan: pembayaran gagal", "bad"];
+  }
+  return orderStates[order.status] || [order.status, ""];
+}
+
+function payButton(order, label, className, simulate) {
+  const button = el("button", className, label);
+  button.type = "button";
+  button.addEventListener("click", async () => {
+    for (const other of button.parentElement.querySelectorAll("button")) other.disabled = true;
+    try {
+      await post(`/orders/${order.id}/pay`, { simulate });
+      $("orders-status").textContent = "";
+    } catch (error) {
+      $("orders-status").textContent = error.status === 409 ? "Pesanan ini sudah tidak bisa dibayar." : "Pembayaran belum bisa diproses. Coba lagi sebentar lagi.";
+    }
+    await refreshOrders();
+  });
+  return button;
+}
+
+function orderCard(order) {
+  const card = el("article", "order");
+  const head = el("div", "order-head");
+  const [label, tone] = orderState(order);
+  head.append(el("span", "", `Pesanan #${order.id}`), el("span", `order-state ${tone}`, label));
+  card.append(head);
+  for (const item of order.items) {
+    card.append(el("p", "order-item", `${item.product_name} · ${item.size} · ${item.color} × ${item.quantity}`));
+  }
+  card.append(el("p", "card-price", `Total ${rupiah.format(order.total)}`));
+  if (order.status === "awaiting_payment") {
+    if (order.expires_at) {
+      const time = new Date(order.expires_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+      card.append(el("p", "order-item", `Bayar sebelum pukul ${time}. Setelah itu stok dikembalikan.`));
+    }
+    const actions = el("div", "order-actions");
+    actions.append(payButton(order, "Bayar (simulasi)", "primary", "success"), payButton(order, "Simulasikan gagal bayar", "secondary", "failure"));
+    card.append(actions);
+  }
+  return card;
+}
+
+// Polls one order at a time, because the order list has a rate limit and these don't.
+async function refreshOrders() {
+  clearTimeout(pollTimer);
+  try {
+    const { orders } = await api("/orders?limit=20");
+    renderOrders(orders);
+  } catch (error) {
+    if (error.status === 401) {
+      renderAccount(null);
+      $("orders-dialog").close();
+      openAuth();
+      return;
+    }
+    $("orders-status").textContent = error.status === 429 ? "Terlalu banyak permintaan. Tunggu sebentar." : "Pesanan belum bisa dimuat. Coba lagi sebentar lagi.";
+  }
+}
+
+function renderOrders(orders) {
+  $("orders-list").replaceChildren(...orders.map(orderCard));
+  if (orders.length === 0) $("orders-status").textContent = "Belum ada pesanan.";
+  const waiting = orders.filter((order) => unsettled.has(order.status));
+  if (waiting.length > 0 && $("orders-dialog").open) pollTimer = setTimeout(() => pollOrders(orders, waiting), pollEvery);
+}
+
+async function pollOrders(orders, waiting) {
+  try {
+    const updated = await Promise.all(waiting.map((order) => api(`/orders/${order.id}`)));
+    const byId = new Map(updated.map((order) => [order.id, order]));
+    renderOrders(orders.map((order) => byId.get(order.id) || order));
+  } catch {
+    if ($("orders-dialog").open) pollTimer = setTimeout(() => pollOrders(orders, waiting), pollEvery * 2);
+  }
+}
+
+function openOrders() {
+  $("orders-status").textContent = "";
+  $("orders-dialog").showModal();
+  refreshOrders();
+}
+
+async function submitOrder(event) {
+  event.preventDefault();
+  if (!loggedIn) {
+    openAuth();
+    return;
+  }
+  const chosen = document.querySelector('input[name="variant"]:checked');
+  if (!chosen) return;
+  $("order-submit").disabled = true;
+  $("order-error").hidden = true;
+  try {
+    await post("/orders", { items: [{ variant_id: Number(chosen.value), quantity: Number($("order-quantity").value) }] });
+    $("product-dialog").close();
+    openOrders();
+  } catch (error) {
+    const messages = {
+      401: "Silakan masuk lagi.",
+      409: "Masih ada 5 pesanan yang belum selesai. Selesaikan dulu pesanan itu.",
+      429: "Terlalu banyak percobaan. Tunggu sebentar lalu coba lagi.",
+    };
+    if (error.status === 401) renderAccount(null);
+    $("order-error").textContent = messages[error.status] || "Pesanan belum bisa dibuat. Coba lagi sebentar lagi.";
+    $("order-error").hidden = false;
+  } finally {
+    $("order-submit").disabled = false;
+  }
+}
+
+$("order-form").addEventListener("submit", submitOrder);
+$("orders-dialog").addEventListener("close", () => clearTimeout(pollTimer));
 $("search-form").addEventListener("submit", (event) => {
   event.preventDefault();
   state.q = $("search-input").value.trim();

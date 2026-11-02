@@ -278,6 +278,8 @@ Login keeps the token in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie, so page
 
 A guest's cart lives in the browser's `localStorage`, so it needs no account. A customer's lives in cart-service, so it follows them to any browser and leaves the browser when they log out. Logging in moves a guest's cart to the account. The browser's copy stays until the account has it. Either way the cart holds only ids and quantities, and reads names, prices and stock again each time it opens. Checkout sends one `POST /api/orders`, which holds at most 20 different variants, up to 20 of each. An order is all or nothing: if one item is short, the whole order is rejected, and the customer can put it back in the cart.
 
+Products have no photos yet, so the pages draw a garment for the categories Dress, Blouse, Rok and Hijab, and show the first letter of the name for anything else. The heading font is Cormorant Garamond, served from `static/fonts/` under its [license](ecommerce/web/static/fonts/OFL.txt), because the Content-Security-Policy only allows this site's own files.
+
 It needs `CATALOG_URL`, `SEARCH_URL`, `USER_URL`, `ORDER_URL`, `REALTIME_URL` and `CART_URL`, and won't start without them.
 
 The tests use fake services, so they need nothing running:

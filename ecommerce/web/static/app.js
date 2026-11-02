@@ -41,24 +41,74 @@ function totalStock(product) {
   return (product.variants || []).reduce((sum, variant) => sum + variant.stock, 0);
 }
 
-function fillSwatch(node, product) {
-  node.className = `swatch tone-${product.id % 5}`;
-  node.textContent = Array.from(product.name)[0] || "";
+// Drawings stand in until products have photos. A category without one shows the first letter.
+const garments = { dress: "garment-dress", blouse: "garment-blouse", rok: "garment-rok", hijab: "garment-hijab" };
+
+function fillArt(node, categoryName, fallback) {
+  const garment = garments[(categoryName || "").trim().toLowerCase()];
+  if (!garment) {
+    node.textContent = Array.from(fallback)[0] || "";
+    return;
+  }
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNS, "svg");
+  svg.setAttribute("class", "garment");
+  svg.setAttribute("viewBox", "0 0 120 150");
+  const use = document.createElementNS(svgNS, "use");
+  use.setAttribute("href", `#${garment}`);
+  svg.append(use);
+  node.replaceChildren(svg);
+}
+
+function fillSwatch(node, product, className = "art") {
+  node.className = `${className} tone-${product.id % 5}`;
+  fillArt(node, state.categories.get(product.category_id), product.name);
+}
+
+// Buttons around a quantity. They're out of the tab order because the field takes arrow keys.
+function addStepper(input) {
+  const stepper = el("div", "stepper");
+  input.before(stepper);
+  const step = (label, text, change) => {
+    const button = el("button", "", text);
+    button.type = "button";
+    button.tabIndex = -1;
+    button.setAttribute("aria-label", label);
+    button.addEventListener("click", () => {
+      change();
+      input.dispatchEvent(new Event("change"));
+    });
+    return button;
+  };
+  stepper.append(step("Kurangi", "−", () => input.stepDown()), input, step("Tambah", "+", () => input.stepUp()));
 }
 
 function productCard(product) {
   const card = el("button", "card");
   card.type = "button";
+  const art = el("span", "card-art");
   const swatch = el("span");
   swatch.setAttribute("aria-hidden", "true");
   fillSwatch(swatch, product);
-  card.append(swatch, el("span", "card-name", product.name));
+  art.append(swatch);
+  const stock = totalStock(product);
+  if (stock === 0) art.append(el("span", "badge sold-out", "Stok habis"));
+  else if (stock <= 5) art.append(el("span", "badge", `Sisa ${stock}`));
+  art.append(el("span", "card-view", "Lihat detail"));
+  card.append(art);
   const category = state.categories.get(product.category_id);
-  if (category) card.append(el("span", "card-meta", category));
+  if (category) card.append(el("span", "card-category", category));
+  card.append(el("span", "card-name", product.name));
+  const sizes = [...new Set((product.variants || []).map((variant) => variant.size))];
+  if (sizes.length > 0) card.append(el("span", "card-meta", `Ukuran ${sizes.join(", ")}`));
   card.append(el("span", "card-price", rupiah.format(product.price)));
-  if (totalStock(product) === 0) card.append(el("span", "card-meta sold-out", "Stok habis"));
   card.addEventListener("click", () => openProduct(product.id));
   return card;
+}
+
+function showSkeletons() {
+  if ($("products").children.length > 0) return;
+  $("products").append(...Array.from({ length: 8 }, () => el("div", "skeleton")));
 }
 
 function searchParams() {
@@ -74,7 +124,10 @@ function searchParams() {
 async function loadProducts(append = false) {
   const request = ++latestRequest;
   state.offset = append ? state.offset + pageSize : 0;
-  if (!append) setStatus("Memuat produk…");
+  if (!append) {
+    setStatus("Memuat produk…");
+    showSkeletons();
+  }
   try {
     const result = await api(`/search?${searchParams()}`);
     if (request !== latestRequest) return;
@@ -102,20 +155,35 @@ async function loadCategories() {
 }
 
 function renderCategories() {
+  const choose = (id) => {
+    state.categoryId = id;
+    renderCategories();
+    loadProducts();
+  };
   const chip = (label, id) => {
     const button = el("button", "chip", label);
     button.type = "button";
     button.setAttribute("aria-pressed", String(state.categoryId === id));
+    button.addEventListener("click", () => choose(id));
+    return button;
+  };
+  const tile = (id, name, index) => {
+    const button = el("button", "tile");
+    button.type = "button";
+    const art = el("span", `tile-art tone-${index % 5}`);
+    art.setAttribute("aria-hidden", "true");
+    fillArt(art, name, name);
+    button.append(art, el("span", "tile-name", name));
     button.addEventListener("click", () => {
-      state.categoryId = id;
-      renderCategories();
-      loadProducts();
+      choose(String(id));
+      $("katalog").scrollIntoView();
     });
     return button;
   };
-  const chips = [chip("Semua", "")];
-  for (const [id, name] of state.categories) chips.push(chip(name, String(id)));
-  $("categories").replaceChildren(...chips);
+  const categories = [...state.categories];
+  $("categories").replaceChildren(chip("Semua", ""), ...categories.map(([id, name]) => chip(name, String(id))));
+  $("category-tiles").replaceChildren(...categories.map(([id, name], index) => tile(id, name, index)));
+  $("shop-by").hidden = categories.length === 0;
 }
 
 function addOptions(select, values) {
@@ -148,7 +216,7 @@ function variantChoice(variant) {
   input.value = variant.id;
   input.disabled = soldOut;
   input.dataset.stock = variant.stock;
-  row.append(input, el("span", "", `${variant.size} · ${variant.color}`),
+  row.append(input, el("span", "variant-name", `${variant.size} · ${variant.color}`),
     el("span", soldOut ? "variant-stock sold-out" : "variant-stock", soldOut ? "Stok habis" : `Stok ${variant.stock}`));
   return row;
 }
@@ -159,6 +227,9 @@ async function openProduct(id) {
   try {
     const product = await api(`/products/${encodeURIComponent(id)}`);
     fillSwatch($("product-swatch"), product);
+    const category = state.categories.get(product.category_id);
+    $("product-category").textContent = category || "";
+    $("product-category").hidden = !category;
     $("product-title").textContent = product.name;
     $("product-price").textContent = rupiah.format(product.price);
     $("product-description").textContent = product.description;
@@ -642,16 +713,19 @@ function cartRow(item) {
   const { product, variant } = cartDetails.get(item.variant_id);
   const soldOut = variant.stock === 0;
   const row = el("article", "cart-row");
+  const art = el("div");
+  art.setAttribute("aria-hidden", "true");
+  fillSwatch(art, product, "art cart-art");
   const about = el("div");
-  about.append(el("div", "cart-name", product.name), el("div", "cart-detail", `${variant.size} · ${variant.color} · ${rupiah.format(product.price)}`));
+  about.append(el("div", "cart-name", product.name), el("div", "cart-detail", `${variant.size} · ${variant.color}`), el("div", "cart-detail", rupiah.format(product.price)));
   const subtotal = el("div", "cart-subtotal", soldOut ? "" : rupiah.format(product.price * item.quantity));
   const actions = el("div", "cart-actions");
   if (soldOut) {
     actions.append(el("span", "sold-out", "Stok habis"));
   } else {
-    const label = el("label", "", "Jumlah");
     const input = el("input");
     input.type = "number";
+    input.setAttribute("aria-label", `Jumlah ${product.name} ${variant.size} ${variant.color}`);
     input.min = 1;
     input.max = Math.min(variant.stock, cartMaxQuantity);
     input.value = item.quantity;
@@ -672,8 +746,8 @@ function cartRow(item) {
         await cartWriteFailed(error);
       }
     });
-    label.append(input);
-    actions.append(label);
+    actions.append(input);
+    addStepper(input);
   }
   const remove = el("button", "link", "Hapus");
   remove.type = "button";
@@ -694,7 +768,7 @@ function cartRow(item) {
     }
   });
   actions.append(remove);
-  row.append(about, subtotal, actions);
+  row.append(art, about, subtotal, actions);
   return row;
 }
 
@@ -845,6 +919,7 @@ for (const button of document.querySelectorAll("[data-close]")) {
   button.addEventListener("click", () => button.closest("dialog").close());
 }
 
+addStepper($("order-quantity"));
 showCartCount();
 renderCategories();
 loadAccount();

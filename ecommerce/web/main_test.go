@@ -329,6 +329,17 @@ func TestDownServiceAnswers502WithoutDetails(t *testing.T) {
 	}
 }
 
+func TestTheFontIsServedFromThisSite(t *testing.T) {
+	server, _ := newTestGateway(t)
+	resp, body := do(t, "GET", server.URL+"/fonts/cormorant-garamond-latin-500-normal.woff2", "", "")
+	if resp.StatusCode != http.StatusOK || !strings.HasPrefix(body, "wOF2") || resp.Header.Get("Content-Type") != "font/woff2" {
+		t.Fatalf("status %d, type %q", resp.StatusCode, resp.Header.Get("Content-Type"))
+	}
+	if !strings.Contains(resp.Header.Get("Content-Security-Policy"), "font-src 'self'") {
+		t.Fatalf("CSP %q", resp.Header.Get("Content-Security-Policy"))
+	}
+}
+
 func TestPagesAndHeaders(t *testing.T) {
 	server, _ := newTestGateway(t)
 	cases := map[string]string{"/": "<title>Prastika</title>", "/app.js": "use strict", "/style.css": "--paper"}

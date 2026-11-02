@@ -2,7 +2,9 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -13,6 +15,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -145,6 +148,7 @@ func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL s
 		panic(err)
 	}
 	fileServer := http.FileServerFS(files)
+	page, assets := versionedPage(files)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			w.Header().Set("Allow", "GET, HEAD")
@@ -152,10 +156,49 @@ func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL s
 			return
 		}
 		w.Header().Set("Cache-Control", "no-cache")
+		if r.URL.Path == "/" {
+			http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(page))
+			return
+		}
+		// During a rollout, another version's page can reach this Pod. Answering
+		// with this version's file would let the browser keep it under that URL.
+		if version := r.URL.Query().Get("v"); version != "" && version != assets[r.URL.Path] {
+			w.Header().Set("Cache-Control", "no-store")
+			http.NotFound(w, r)
+			return
+		}
 		fileServer.ServeHTTP(w, r)
 	})
 
 	return securityHeaders(mux)
+}
+
+// versionedPage returns index.html with a hash of each file's content in its URL,
+// and the hash of each path. Cloudflare tells browsers to keep CSS and JavaScript
+// for hours whatever this server says, while the page itself is never kept, so
+// without this a new page runs on the old files.
+func versionedPage(files fs.FS) ([]byte, map[string]string) {
+	page, err := fs.ReadFile(files, "index.html")
+	if err != nil {
+		panic(err)
+	}
+	assets := make(map[string]string)
+	for _, name := range []string{"style.css", "app.js"} {
+		content, err := fs.ReadFile(files, name)
+		if err != nil {
+			panic(err)
+		}
+		sum := sha256.Sum256(content)
+		version := hex.EncodeToString(sum[:6])
+		path := "/" + name
+		quoted := `"` + path + `"`
+		if !bytes.Contains(page, []byte(quoted)) {
+			panic("index.html does not link " + path)
+		}
+		page = []byte(strings.ReplaceAll(string(page), quoted, `"`+path+"?v="+version+`"`))
+		assets[path] = version
+	}
+	return page, assets
 }
 
 func securityHeaders(next http.Handler) http.Handler {

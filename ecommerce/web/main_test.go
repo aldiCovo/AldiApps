@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -358,6 +360,38 @@ func TestPagesAndHeaders(t *testing.T) {
 	}
 	if resp, _ := do(t, "GET", server.URL+"/healthz", "", ""); resp.StatusCode != http.StatusOK {
 		t.Fatalf("/healthz: status %d", resp.StatusCode)
+	}
+}
+
+func TestPageLinksFilesByTheirContent(t *testing.T) {
+	server, _ := newTestGateway(t)
+	_, page := do(t, "GET", server.URL+"/", "", "")
+	cases := map[string]string{"/style.css": "--paper", "/app.js": "use strict"}
+	for path, want := range cases {
+		content, err := static.ReadFile("static" + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sum := sha256.Sum256(content)
+		url := path + "?v=" + hex.EncodeToString(sum[:6])
+		if !strings.Contains(page, `"`+url+`"`) {
+			t.Fatalf("page does not link %s", url)
+		}
+		resp, body := do(t, "GET", server.URL+url, "", "")
+		if resp.StatusCode != http.StatusOK || !strings.Contains(body, want) {
+			t.Fatalf("%s: status %d", url, resp.StatusCode)
+		}
+		// A file from another version must not be kept under this URL.
+		resp, _ = do(t, "GET", server.URL+path+"?v=000000000000", "", "")
+		if resp.StatusCode != http.StatusNotFound || resp.Header.Get("Cache-Control") != "no-store" {
+			t.Fatalf("%s other version: status %d, cache %q", path, resp.StatusCode, resp.Header.Get("Cache-Control"))
+		}
+	}
+	if resp, body := do(t, "HEAD", server.URL+"/", "", ""); resp.StatusCode != http.StatusOK || body != "" || !strings.HasPrefix(resp.Header.Get("Content-Type"), "text/html") {
+		t.Fatalf("HEAD /: status %d, type %q", resp.StatusCode, resp.Header.Get("Content-Type"))
+	}
+	if resp, _ := do(t, "GET", server.URL+"/index.html", "", ""); resp.StatusCode != http.StatusMovedPermanently {
+		t.Fatalf("/index.html: status %d", resp.StatusCode)
 	}
 }
 

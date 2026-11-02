@@ -147,10 +147,13 @@ function variantChoice(variant) {
   input.name = "variant";
   input.value = variant.id;
   input.disabled = soldOut;
+  input.dataset.stock = variant.stock;
   row.append(input, el("span", "", `${variant.size} · ${variant.color}`),
     el("span", soldOut ? "variant-stock sold-out" : "variant-stock", soldOut ? "Stok habis" : `Stok ${variant.stock}`));
   return row;
 }
+
+let shownProductId = null;
 
 async function openProduct(id) {
   try {
@@ -162,9 +165,12 @@ async function openProduct(id) {
     $("product-variants").replaceChildren(...(product.variants || []).map(variantChoice));
     $("order-quantity").value = 1;
     $("order-error").hidden = true;
+    $("cart-note").hidden = true;
+    shownProductId = product.id;
     const first = document.querySelector('input[name="variant"]:not(:disabled)');
     if (first) first.checked = true;
-    $("order-submit").disabled = !first;
+    $("cart-add").disabled = !first;
+    $("order-now").disabled = !first;
     $("product-dialog").showModal();
   } catch (error) {
     setStatus(error.status === 404 ? "Produk ini sudah tidak tersedia." : "Produk belum bisa dibuka. Coba lagi sebentar lagi.", true);
@@ -313,6 +319,16 @@ function orderCard(order) {
     card.append(el("p", "order-item", `${item.product_name} · ${item.size} · ${item.color} × ${item.quantity}`));
   }
   card.append(el("p", "card-price", `Total ${rupiah.format(order.total)}`));
+  if (order.status === "rejected") {
+    const again = el("button", "link", "Masukkan lagi ke keranjang");
+    again.type = "button";
+    again.addEventListener("click", () => {
+      for (const item of order.items) addToCart(item.product_id, item.variant_id, item.quantity);
+      $("orders-dialog").close();
+      openCart();
+    });
+    card.append(again);
+  }
   if (order.status === "awaiting_payment") {
     if (order.expires_at) {
       const time = new Date(order.expires_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
@@ -413,35 +429,249 @@ function openOrders() {
   refreshOrders();
 }
 
-async function submitOrder(event) {
-  event.preventDefault();
+function orderError(error) {
+  const messages = {
+    400: "Ada barang yang sudah tidak tersedia. Periksa lagi pilihanmu.",
+    401: "Silakan masuk lagi.",
+    409: "Masih ada 5 pesanan yang belum selesai. Selesaikan dulu pesanan itu.",
+    429: "Terlalu banyak percobaan. Tunggu sebentar lalu coba lagi.",
+  };
+  if (error.status === 401) renderAccount(null);
+  return messages[error.status] || "Pesanan belum bisa dibuat. Coba lagi sebentar lagi.";
+}
+
+async function orderNow() {
+  if (!$("order-form").reportValidity()) return;
   if (!loggedIn) {
     openAuth();
     return;
   }
   const chosen = document.querySelector('input[name="variant"]:checked');
   if (!chosen) return;
-  $("order-submit").disabled = true;
+  $("order-now").disabled = true;
   $("order-error").hidden = true;
   try {
     await post("/orders", { items: [{ variant_id: Number(chosen.value), quantity: Number($("order-quantity").value) }] });
     $("product-dialog").close();
     openOrders();
   } catch (error) {
-    const messages = {
-      401: "Silakan masuk lagi.",
-      409: "Masih ada 5 pesanan yang belum selesai. Selesaikan dulu pesanan itu.",
-      429: "Terlalu banyak percobaan. Tunggu sebentar lalu coba lagi.",
-    };
-    if (error.status === 401) renderAccount(null);
-    $("order-error").textContent = messages[error.status] || "Pesanan belum bisa dibuat. Coba lagi sebentar lagi.";
+    $("order-error").textContent = orderError(error);
     $("order-error").hidden = false;
   } finally {
-    $("order-submit").disabled = false;
+    $("order-now").disabled = false;
   }
 }
 
-$("order-form").addEventListener("submit", submitOrder);
+// The cart lives in this browser and holds only ids and quantities. Names, prices and stock
+// are read again each time it opens, so it never shows old ones.
+const cartKey = "prastika-cart";
+const cartMaxItems = 20;
+const cartMaxQuantity = 20;
+const isPositiveInt = (value) => Number.isSafeInteger(value) && value > 0;
+let cart = loadCart();
+let cartDetails = new Map();
+let latestCartRequest = 0;
+
+function loadCart() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(cartKey));
+    if (!Array.isArray(saved)) return [];
+    const seen = new Set();
+    return saved.filter((item) => {
+      if (!item || !isPositiveInt(item.product_id) || !isPositiveInt(item.variant_id) || !isPositiveInt(item.quantity)) return false;
+      if (item.quantity > cartMaxQuantity || seen.has(item.variant_id)) return false;
+      seen.add(item.variant_id);
+      return true;
+    }).slice(0, cartMaxItems);
+  } catch {
+    return [];
+  }
+}
+
+function saveCart() {
+  try {
+    localStorage.setItem(cartKey, JSON.stringify(cart));
+  } catch {
+    // Without storage the cart still works until the page closes.
+  }
+  $("cart-count").textContent = cart.reduce((sum, item) => sum + item.quantity, 0);
+}
+
+function addToCart(productId, variantId, quantity) {
+  const item = cart.find((entry) => entry.variant_id === variantId);
+  if (item) {
+    item.quantity = Math.min(item.quantity + quantity, cartMaxQuantity);
+  } else if (cart.length < cartMaxItems) {
+    cart.push({ product_id: productId, variant_id: variantId, quantity: Math.min(quantity, cartMaxQuantity) });
+  } else {
+    return false;
+  }
+  saveCart();
+  return true;
+}
+
+function submitCartAdd(event) {
+  event.preventDefault();
+  const chosen = document.querySelector('input[name="variant"]:checked');
+  if (!chosen) return;
+  const variantId = Number(chosen.value);
+  const wanted = Number($("order-quantity").value);
+  const inCart = cart.find((item) => item.variant_id === variantId)?.quantity || 0;
+  const limit = Math.min(Number(chosen.dataset.stock), cartMaxQuantity);
+  const room = limit - inCart;
+  $("order-error").hidden = true;
+  $("cart-note").hidden = true;
+  if (room <= 0) {
+    $("order-error").textContent = `Keranjang sudah berisi ${inCart} barang ini, jumlah terbanyak yang bisa dipesan.`;
+    $("order-error").hidden = false;
+    return;
+  }
+  if (!addToCart(shownProductId, variantId, Math.min(wanted, room))) {
+    $("order-error").textContent = `Keranjang penuh. Satu pesanan paling banyak ${cartMaxItems} jenis barang.`;
+    $("order-error").hidden = false;
+    return;
+  }
+  $("cart-note-text").textContent = wanted > room ? `Hanya ${room} yang bisa ditambahkan, sesuai stok.` : "Masuk ke keranjang.";
+  $("cart-note").hidden = false;
+}
+
+function cartRow(item) {
+  const { product, variant } = cartDetails.get(item.variant_id);
+  const soldOut = variant.stock === 0;
+  const row = el("article", "cart-row");
+  const about = el("div");
+  about.append(el("div", "cart-name", product.name), el("div", "cart-detail", `${variant.size} · ${variant.color} · ${rupiah.format(product.price)}`));
+  const subtotal = el("div", "cart-subtotal", soldOut ? "" : rupiah.format(product.price * item.quantity));
+  const actions = el("div", "cart-actions");
+  if (soldOut) {
+    actions.append(el("span", "sold-out", "Stok habis"));
+  } else {
+    const label = el("label", "", "Jumlah");
+    const input = el("input");
+    input.type = "number";
+    input.min = 1;
+    input.max = Math.min(variant.stock, cartMaxQuantity);
+    input.value = item.quantity;
+    input.addEventListener("change", () => {
+      const wanted = Math.trunc(Number(input.value)) || 1;
+      item.quantity = Math.min(Math.max(wanted, 1), Number(input.max));
+      input.value = item.quantity;
+      subtotal.textContent = rupiah.format(product.price * item.quantity);
+      saveCart();
+      updateCartTotal();
+    });
+    label.append(input);
+    actions.append(label);
+  }
+  const remove = el("button", "link", "Hapus");
+  remove.type = "button";
+  remove.setAttribute("aria-label", `Hapus ${product.name} ${variant.size} ${variant.color}`);
+  remove.addEventListener("click", () => {
+    cart = cart.filter((entry) => entry !== item);
+    saveCart();
+    renderCart();
+    $("cart-title").focus();
+  });
+  actions.append(remove);
+  row.append(about, subtotal, actions);
+  return row;
+}
+
+function updateCartTotal() {
+  const lines = cart.map((item) => ({ item, ...cartDetails.get(item.variant_id) }));
+  const total = lines.reduce((sum, { item, product, variant }) => sum + (variant.stock === 0 ? 0 : product.price * item.quantity), 0);
+  $("cart-total").textContent = rupiah.format(total);
+  $("cart-checkout").disabled = lines.some(({ variant }) => variant.stock === 0);
+}
+
+function renderCart(note = "") {
+  $("cart-list").replaceChildren(...cart.map(cartRow));
+  $("cart-footer").hidden = cart.length === 0;
+  if (cart.length === 0) {
+    $("cart-status").textContent = note ? `${note} Keranjangmu kosong.` : "Keranjangmu masih kosong.";
+    return;
+  }
+  const soldOut = cart.some((item) => cartDetails.get(item.variant_id).variant.stock === 0);
+  $("cart-status").textContent = [note, soldOut ? "Hapus barang yang stoknya habis untuk memesan." : ""].filter(Boolean).join(" ");
+  updateCartTotal();
+}
+
+async function refreshCart() {
+  const request = ++latestCartRequest;
+  $("cart-error").hidden = true;
+  $("cart-footer").hidden = true;
+  $("cart-list").replaceChildren();
+  $("cart-status").textContent = cart.length > 0 ? "Memuat keranjang…" : "";
+  const ids = [...new Set(cart.map((item) => item.product_id))];
+  const results = await Promise.allSettled(ids.map((id) => api(`/products/${id}`)));
+  if (request !== latestCartRequest) return;
+  if (results.some((result) => result.status === "rejected" && result.reason.status !== 404)) {
+    $("cart-status").textContent = "Keranjang belum bisa dimuat. Tutup lalu buka lagi sebentar lagi.";
+    return;
+  }
+  cartDetails = new Map();
+  results.forEach((result) => {
+    if (result.status !== "fulfilled") return;
+    for (const variant of result.value.variants || []) cartDetails.set(variant.id, { product: result.value, variant });
+  });
+  const before = cart.length;
+  cart = cart.filter((item) => cartDetails.has(item.variant_id));
+  const removed = before - cart.length;
+  let reduced = 0;
+  for (const item of cart) {
+    const { stock } = cartDetails.get(item.variant_id).variant;
+    if (stock > 0 && item.quantity > stock) {
+      item.quantity = stock;
+      reduced++;
+    }
+  }
+  saveCart();
+  const notes = [];
+  if (removed > 0) notes.push(`${removed} barang dihapus karena sudah tidak dijual.`);
+  if (reduced > 0) notes.push(`${reduced} barang dikurangi jumlahnya, sesuai stok.`);
+  renderCart(notes.join(" "));
+}
+
+function openCart() {
+  $("cart-dialog").showModal();
+  refreshCart();
+}
+
+async function checkout() {
+  if (!loggedIn) {
+    openAuth();
+    return;
+  }
+  $("cart-checkout").disabled = true;
+  $("cart-error").hidden = true;
+  try {
+    await post("/orders", { items: cart.map(({ variant_id, quantity }) => ({ variant_id, quantity })) });
+    cart = [];
+    saveCart();
+    $("cart-dialog").close();
+    openOrders();
+  } catch (error) {
+    $("cart-error").textContent = orderError(error);
+    $("cart-error").hidden = false;
+    $("cart-checkout").disabled = false;
+  }
+}
+
+$("order-form").addEventListener("submit", submitCartAdd);
+$("order-now").addEventListener("click", orderNow);
+$("cart-open").addEventListener("click", openCart);
+$("cart-note-open").addEventListener("click", () => {
+  $("product-dialog").close();
+  openCart();
+});
+$("cart-checkout").addEventListener("click", checkout);
+// Keeps a second tab showing the same cart.
+window.addEventListener("storage", (event) => {
+  if (event.key !== cartKey && event.key !== null) return;
+  cart = loadCart();
+  saveCart();
+  if ($("cart-dialog").open) refreshCart();
+});
 $("orders-dialog").addEventListener("close", () => {
   clearTimeout(pollTimer);
   disconnectLive();
@@ -461,6 +691,7 @@ for (const button of document.querySelectorAll("[data-close]")) {
   button.addEventListener("click", () => button.closest("dialog").close());
 }
 
+saveCart();
 renderCategories();
 loadAccount();
 loadFilterChoices();

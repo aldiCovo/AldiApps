@@ -76,7 +76,7 @@ func newTestServer(t *testing.T, passwords *Passwords) *testServer {
 		}
 	}
 	tokens := newTestTokens(t, time.Hour)
-	server := httptest.NewServer(newHandler(&Store{pool: pool}, tokens, passwords))
+	server := httptest.NewServer(newHandler(&Store{pool: pool}, tokens, passwords, testInternalToken))
 	t.Cleanup(server.Close)
 	return &testServer{Server: server, pool: pool, tokens: tokens}
 }
@@ -459,5 +459,51 @@ func TestSameKeyKeepsItsID(t *testing.T) {
 	}
 	if a.keyID != b.keyID || a.keyID == "" {
 		t.Fatalf("got %q and %q", a.keyID, b.keyID)
+	}
+}
+
+const testInternalToken = "internal-token-for-the-tests-only"
+
+func TestInternalUserNeedsTheInternalToken(t *testing.T) {
+	server := newTestServer(t, nil)
+	status, body := request(t, http.MethodPost, server.URL+"/register", `{"email":"sari@example.com","name":"Sari","password":"rahasia-sekali"}`, "")
+	if status != http.StatusCreated {
+		t.Fatalf("register answered %d: %s", status, body)
+	}
+	var created User
+	if err := json.Unmarshal(body, &created); err != nil {
+		t.Fatal(err)
+	}
+	url := fmt.Sprintf("%s/internal/users/%d", server.URL, created.ID)
+
+	userToken, err := server.tokens.Issue(created)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, bearer := range []string{"", "wrong", userToken} {
+		if status, _ := request(t, http.MethodGet, url, "", bearer); status != http.StatusUnauthorized {
+			t.Errorf("bearer %q: want 401, got %d", bearer, status)
+		}
+	}
+
+	status, body = request(t, http.MethodGet, url, "", testInternalToken)
+	if status != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", status, body)
+	}
+	var user map[string]any
+	if err := json.Unmarshal(body, &user); err != nil {
+		t.Fatal(err)
+	}
+	if user["email"] != "sari@example.com" || user["name"] != "Sari" {
+		t.Errorf("got %v", user)
+	}
+	if strings.Contains(string(body), "password") {
+		t.Errorf("the answer mentions a password: %s", body)
+	}
+
+	for _, id := range []string{"999999", "0", "abc"} {
+		if status, _ := request(t, http.MethodGet, server.URL+"/internal/users/"+id, "", testInternalToken); status != http.StatusNotFound {
+			t.Errorf("id %s: want 404, got %d", id, status)
+		}
 	}
 }

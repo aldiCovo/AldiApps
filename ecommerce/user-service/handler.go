@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"net/mail"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -81,7 +83,7 @@ type loginResponse struct {
 	User      User   `json:"user"`
 }
 
-func newHandler(store *Store, tokens *Tokens, passwords *Passwords) http.Handler {
+func newHandler(store *Store, tokens *Tokens, passwords *Passwords, internalToken string) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -158,6 +160,31 @@ func newHandler(store *Store, tokens *Tokens, passwords *Passwords) http.Handler
 			ExpiresIn: int(tokens.lifetime.Seconds()),
 			User:      user,
 		})
+	})
+
+	// web has no route to this. The token keeps emails from other Pods in the cluster too.
+	mux.HandleFunc("GET /internal/users/{id}", func(w http.ResponseWriter, r *http.Request) {
+		bearer, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if subtle.ConstantTimeCompare([]byte(bearer), []byte(internalToken)) != 1 {
+			writeUnauthorized(w, "the internal token is not valid")
+			return
+		}
+		id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+		if err != nil || id <= 0 {
+			writeError(w, http.StatusNotFound, errNotFound.Error())
+			return
+		}
+		user, err := store.ByID(r.Context(), id)
+		if errors.Is(err, errNotFound) {
+			writeError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		if err != nil {
+			writeFailure(w, err)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		writeJSON(w, http.StatusOK, user)
 	})
 
 	mux.HandleFunc("GET /me", func(w http.ResponseWriter, r *http.Request) {

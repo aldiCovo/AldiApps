@@ -63,9 +63,14 @@ type orderCreatedEvent struct {
 	Items   []reservationItem `json:"items"`
 }
 
-type orderCancelledEvent struct {
-	OrderID int64  `json:"order_id"`
-	Reason  string `json:"reason"`
+// orderFinishedEvent says how an order ended. It carries what an email needs, so
+// notification-service doesn't need this database or another request.
+type orderFinishedEvent struct {
+	OrderID int64       `json:"order_id"`
+	UserID  int64       `json:"user_id"`
+	Reason  string      `json:"reason,omitempty"`
+	Total   int64       `json:"total"`
+	Items   []OrderItem `json:"items"`
 }
 
 type paymentRequestedEvent struct {
@@ -257,26 +262,34 @@ func (s *Store) MarkReserved(ctx context.Context, id int64) error {
 }
 
 func (s *Store) MarkRejected(ctx context.Context, id int64, reason string) error {
-	return s.mark(ctx, id, statusRejected,
-		`UPDATE orders SET status = 'rejected', reason = $2, updated_at = now() WHERE id = $1 AND status = 'pending' RETURNING user_id`, id, reason)
+	return s.finish(ctx, id, statusPending, statusRejected, reason, eventOrderRejected)
 }
 
 func (s *Store) MarkPaid(ctx context.Context, id int64) error {
-	return s.mark(ctx, id, statusPaid,
-		`UPDATE orders SET status = 'paid', updated_at = now() WHERE id = $1 AND status = 'paying' RETURNING user_id`, id)
+	return s.finish(ctx, id, statusPaying, statusPaid, "", eventOrderPaid)
 }
 
-// CancelPaying is the saga's compensation: the failed payment's stock goes back on sale.
-func (s *Store) CancelPaying(ctx context.Context, id int64) error {
-	var userID int64
+// addFinishedEvent saves how the order ended in the same transaction as the status.
+func addFinishedEvent(ctx context.Context, tx pgx.Tx, eventType string, id, userID, total int64, reason string) error {
+	orders := []Order{{ID: id}}
+	if err := attachItems(ctx, tx, orders); err != nil {
+		return err
+	}
+	return addEvent(ctx, tx, eventType, orderFinishedEvent{OrderID: id, UserID: userID, Reason: reason, Total: total, Items: orders[0].Items})
+}
+
+// finish applies a final status only from the status before it, so a repeated event changes
+// nothing and sends nothing.
+func (s *Store) finish(ctx context.Context, id int64, from, to, reason, eventType string) error {
+	var userID, total int64
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx,
-			`UPDATE orders SET status = 'cancelled', reason = $2, updated_at = now() WHERE id = $1 AND status = 'paying' RETURNING user_id`,
-			id, reasonPaymentFailed).Scan(&userID)
+			`UPDATE orders SET status = $3, reason = $4, updated_at = now() WHERE id = $1 AND status = $2 RETURNING user_id, total`,
+			id, from, to, reason).Scan(&userID, &total)
 		if err != nil {
 			return err
 		}
-		return addEvent(ctx, tx, eventOrderCancelled, orderCancelledEvent{OrderID: id, Reason: reasonPaymentFailed})
+		return addFinishedEvent(ctx, tx, eventType, id, userID, total, reason)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
@@ -284,12 +297,17 @@ func (s *Store) CancelPaying(ctx context.Context, id int64) error {
 	if err != nil {
 		return err
 	}
-	s.changed(userID, id, statusCancelled)
+	s.changed(userID, id, to)
 	return nil
 }
 
+// CancelPaying is the saga's compensation: the failed payment's stock goes back on sale.
+func (s *Store) CancelPaying(ctx context.Context, id int64) error {
+	return s.finish(ctx, id, statusPaying, statusCancelled, reasonPaymentFailed, eventOrderCancelled)
+}
+
 type expiredOrder struct {
-	ID, UserID int64
+	ID, UserID, Total int64
 }
 
 // ExpireUnpaid cancels orders whose payment window has passed, so they stop holding stock.
@@ -301,7 +319,7 @@ func (s *Store) ExpireUnpaid(ctx context.Context) (int, error) {
 			 WHERE id IN (
 			     SELECT id FROM orders WHERE status = 'awaiting_payment' AND expires_at <= now()
 			     ORDER BY expires_at LIMIT $2 FOR UPDATE SKIP LOCKED
-			 ) RETURNING id, user_id`, reasonExpired, expireBatch)
+			 ) RETURNING id, user_id, total`, reasonExpired, expireBatch)
 		if err != nil {
 			return err
 		}
@@ -310,7 +328,7 @@ func (s *Store) ExpireUnpaid(ctx context.Context) (int, error) {
 			return err
 		}
 		for _, order := range expired {
-			if err := addEvent(ctx, tx, eventOrderCancelled, orderCancelledEvent{OrderID: order.ID, Reason: reasonExpired}); err != nil {
+			if err := addFinishedEvent(ctx, tx, eventOrderCancelled, order.ID, order.UserID, order.Total, reasonExpired); err != nil {
 				return err
 			}
 		}

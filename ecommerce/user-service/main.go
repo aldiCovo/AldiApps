@@ -32,6 +32,9 @@ func main() {
 	}
 }
 
+// Long enough that it can only be generated, not guessed.
+const minInternalTokenLength = 32
+
 func run() error {
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
@@ -40,6 +43,10 @@ func run() error {
 	privateKey := os.Getenv("JWT_PRIVATE_KEY")
 	if privateKey == "" {
 		return errors.New("JWT_PRIVATE_KEY is required")
+	}
+	internalToken := os.Getenv("INTERNAL_TOKEN")
+	if len(internalToken) < minInternalTokenLength {
+		return fmt.Errorf("INTERNAL_TOKEN must have at least %d characters", minInternalTokenLength)
 	}
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -70,7 +77,7 @@ func run() error {
 
 	server := &http.Server{
 		Addr:              ":" + port,
-		Handler:           newHandler(&Store{pool: pool}, tokens, passwords),
+		Handler:           newHandler(&Store{pool: pool}, tokens, passwords, internalToken),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,

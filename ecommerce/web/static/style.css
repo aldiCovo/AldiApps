@@ -93,7 +93,7 @@ main { max-width: 1320px; margin: 0 auto; padding: 0 var(--gutter); }
 /* Shop by category */
 .shop-by { padding: 8px 0 clamp(32px, 5vw, 56px); }
 .section-title { font-size: clamp(1.9rem, 3.4vw, 2.6rem); line-height: 1.1; }
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: clamp(10px, 1.6vw, 20px); margin-top: 20px; }
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: clamp(10px, 1.6vw, 20px); margin-top: 20px; }
 .tile { display: block; width: 100%; padding: 0; border: 0; background: none; text-align: left; }
 .tile-art { display: grid; place-items: center; aspect-ratio: 5 / 4; overflow: hidden; border-radius: var(--radius); font: 500 3rem/1 var(--serif); transition: transform .3s; }
 .tile-art svg { width: auto; height: 76%; transition: transform .3s; }
@@ -104,11 +104,11 @@ main { max-width: 1320px; margin: 0 auto; padding: 0 var(--gutter); }
 /* A tile with a photo: tall, with its name over the darkened foot of the picture. */
 .tile.has-photo { position: relative; overflow: hidden; border-radius: var(--radius); color: #fff; }
 .has-photo .tile-art { position: relative; aspect-ratio: 3 / 4; border-radius: 0; }
-.has-photo .tile-art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top, rgb(28 18 14 / .78), rgb(28 18 14 / .32) 26%, rgb(28 18 14 / 0) 52%); }
+.has-photo .tile-art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top, rgb(28 18 14 / .84), rgb(28 18 14 / .52) 28%, rgb(28 18 14 / 0) 58%); }
 .tile-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform .9s cubic-bezier(.2, .7, .2, 1); }
 .tile.has-photo:hover .tile-photo { transform: scale(1.045); }
 .has-photo .tile-label { position: absolute; inset: auto 0 0; z-index: 1; padding: clamp(14px, 2vw, 24px); }
-.has-photo .tile-name { margin: 0; color: #fff; font-size: clamp(1.55rem, 2.6vw, 2.15rem); line-height: 1.05; }
+.has-photo .tile-name { margin: 0; color: #fff; text-shadow: 0 1px 14px rgb(28 18 14 / .5); font-size: clamp(1.55rem, 2.6vw, 2.15rem); line-height: 1.05; }
 .tile.has-photo:hover .tile-name { color: #fff; }
 .tile-cta { display: inline-block; margin-top: 8px; padding-bottom: 2px; border-bottom: 1px solid rgb(255 255 255 / .55); font-size: .69rem; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; transition: border-color .3s; }
 .tile.has-photo:hover .tile-cta { border-color: #fff; }

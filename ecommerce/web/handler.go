@@ -14,7 +14,10 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
+	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -29,7 +32,10 @@ const (
 //go:embed static
 var static embed.FS
 
-var numericID = regexp.MustCompile(`^[0-9]{1,18}$`)
+var (
+	numericID = regexp.MustCompile(`^[0-9]{1,18}$`)
+	photoFile = regexp.MustCompile(`^[a-z0-9-]{1,64}\.(jpg|jpeg|png|webp)$`)
+)
 
 type gateway struct {
 	catalogURL, searchURL, userURL, orderURL, cartURL string
@@ -37,7 +43,7 @@ type gateway struct {
 	events                                            http.Handler
 }
 
-func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL string) http.Handler {
+func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, photosDir string) http.Handler {
 	g := &gateway{
 		catalogURL: catalogURL,
 		searchURL:  searchURL,
@@ -139,6 +145,13 @@ func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL s
 		g.withSession(w, r, g.cartURL+"/cart/items/"+id, nil)
 	})
 	mux.HandleFunc("GET /api/events", g.openEvents)
+	categoryPhotosDir := filepath.Join(photosDir, "categories")
+	mux.HandleFunc("GET /api/category-photos", func(w http.ResponseWriter, r *http.Request) {
+		listCategoryPhotos(w, categoryPhotosDir)
+	})
+	mux.HandleFunc("GET /photos/categories/{name}", func(w http.ResponseWriter, r *http.Request) {
+		serveCategoryPhoto(w, r, categoryPhotosDir)
+	})
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 	})
@@ -171,6 +184,53 @@ func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL s
 	})
 
 	return securityHeaders(mux)
+}
+
+// listCategoryPhotos answers with each photo's URL by its name without the extension,
+// such as "dress". The folder lives on the server's disk, so a photo can change without
+// a new image, and its URL changes with it because Cloudflare keeps images for hours.
+// A missing folder means no photos, and the page then keeps its drawings.
+func listCategoryPhotos(w http.ResponseWriter, dir string) {
+	photos := map[string]string{}
+	entries, err := os.ReadDir(dir)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		slog.Error("reading category photos failed", "error", err)
+	}
+	for _, entry := range entries {
+		if !entry.Type().IsRegular() || !photoFile.MatchString(entry.Name()) {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		version := strconv.FormatInt(info.ModTime().Unix(), 36) + "-" + strconv.FormatInt(info.Size(), 36)
+		name := strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))
+		photos[name] = "/photos/categories/" + entry.Name() + "?v=" + version
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-cache")
+	if err := json.NewEncoder(w).Encode(photos); err != nil {
+		slog.Error("writing response failed", "error", err)
+	}
+}
+
+func serveCategoryPhoto(w http.ResponseWriter, r *http.Request, dir string) {
+	name := r.PathValue("name")
+	if !photoFile.MatchString(name) {
+		http.NotFound(w, r)
+		return
+	}
+	path := filepath.Join(dir, name)
+	if info, err := os.Lstat(path); err != nil || !info.Mode().IsRegular() {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	if r.URL.Query().Get("v") == "" {
+		w.Header().Set("Cache-Control", "no-cache")
+	}
+	http.ServeFile(w, r, path)
 }
 
 // versionedPage returns index.html with a hash of each file's content in its URL,

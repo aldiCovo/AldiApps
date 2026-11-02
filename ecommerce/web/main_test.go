@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -74,7 +76,7 @@ func newTestGateway(t *testing.T) (*httptest.Server, *fakeServices) {
 		}
 		io.WriteString(w, `{"ok":true}`)
 	}
-	server := httptest.NewServer(newHandler(f.start(t, "catalog", ok), f.start(t, "search", ok), f.start(t, "user", users), f.start(t, "order", orders), f.start(t, "realtime", ok), f.start(t, "cart", orders)))
+	server := httptest.NewServer(newHandler(f.start(t, "catalog", ok), f.start(t, "search", ok), f.start(t, "user", users), f.start(t, "order", orders), f.start(t, "realtime", ok), f.start(t, "cart", orders), t.TempDir()))
 	t.Cleanup(server.Close)
 	return server, f
 }
@@ -321,7 +323,7 @@ func TestDownServiceAnswers502WithoutDetails(t *testing.T) {
 	down := httptest.NewServer(http.NotFoundHandler())
 	url := down.URL
 	down.Close()
-	server := httptest.NewServer(newHandler(url, url, url, url, url, url))
+	server := httptest.NewServer(newHandler(url, url, url, url, url, url, t.TempDir()))
 	defer server.Close()
 	for _, c := range []struct{ method, path string }{{"GET", "/api/search"}, {"POST", "/api/login"}} {
 		resp, body := do(t, c.method, server.URL+c.path, "application/json", "{}")
@@ -392,6 +394,57 @@ func TestPageLinksFilesByTheirContent(t *testing.T) {
 	}
 	if resp, _ := do(t, "GET", server.URL+"/index.html", "", ""); resp.StatusCode != http.StatusMovedPermanently {
 		t.Fatalf("/index.html: status %d", resp.StatusCode)
+	}
+}
+
+func TestCategoryPhotos(t *testing.T) {
+	photos := t.TempDir()
+	dir := filepath.Join(photos, "categories")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"dress.jpg", "hijab.webp", "notes.txt", "Upper.jpg"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(name), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Mkdir(filepath.Join(dir, "folder.jpg"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(photos, "secret.jpg"), []byte("secret"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(photos, "secret.jpg"), filepath.Join(dir, "link.jpg")); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(newHandler("http://127.0.0.1:1", "", "", "", "http://127.0.0.1:1", "", photos))
+	t.Cleanup(server.Close)
+
+	resp, body := do(t, "GET", server.URL+"/api/category-photos", "", "")
+	var listed map[string]string
+	if err := json.Unmarshal([]byte(body), &listed); err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("status %d, body %q, err %v", resp.StatusCode, body, err)
+	}
+	if len(listed) != 2 || !strings.HasPrefix(listed["dress"], "/photos/categories/dress.jpg?v=") || !strings.HasPrefix(listed["hijab"], "/photos/categories/hijab.webp?v=") {
+		t.Fatalf("listed %v", listed)
+	}
+
+	resp, body = do(t, "GET", server.URL+listed["dress"], "", "")
+	if resp.StatusCode != http.StatusOK || body != "dress.jpg" || resp.Header.Get("Content-Type") != "image/jpeg" || !strings.Contains(resp.Header.Get("Cache-Control"), "immutable") {
+		t.Fatalf("photo: status %d, body %q, headers %v", resp.StatusCode, body, resp.Header)
+	}
+	if resp, _ := do(t, "GET", server.URL+"/photos/categories/dress.jpg", "", ""); resp.Header.Get("Cache-Control") != "no-cache" {
+		t.Fatalf("no version: cache %q", resp.Header.Get("Cache-Control"))
+	}
+	for _, path := range []string{"/photos/categories/", "/photos/categories/notes.txt", "/photos/categories/Upper.jpg", "/photos/categories/folder.jpg", "/photos/categories/link.jpg", "/photos/categories/..%2fsecret.jpg", "/photos/secret.jpg", "/photos/categories/missing.jpg"} {
+		if resp, body := do(t, "GET", server.URL+path, "", ""); resp.StatusCode != http.StatusNotFound || strings.Contains(body, "secret") {
+			t.Fatalf("%s: status %d, body %q", path, resp.StatusCode, body)
+		}
+	}
+	empty := httptest.NewServer(newHandler("http://127.0.0.1:1", "", "", "", "http://127.0.0.1:1", "", t.TempDir()))
+	t.Cleanup(empty.Close)
+	if resp, body := do(t, "GET", empty.URL+"/api/category-photos", "", ""); resp.StatusCode != http.StatusOK || strings.TrimSpace(body) != "{}" {
+		t.Fatalf("no folder: status %d, body %q", resp.StatusCode, body)
 	}
 }
 

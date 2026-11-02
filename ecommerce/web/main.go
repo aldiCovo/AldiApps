@@ -65,7 +65,7 @@ func run() error {
 
 	server := &http.Server{
 		Addr:              ":" + port,
-		Handler:           newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL),
+		Handler:           newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, os.Getenv("PHOTOS_DIR")),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      20 * time.Second,

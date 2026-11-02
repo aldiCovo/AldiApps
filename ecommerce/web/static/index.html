@@ -16,7 +16,10 @@
       <input id="search-input" type="search" maxlength="200" placeholder="Cari dress, blouse, hijab…" autocomplete="off">
       <button type="submit">Cari</button>
     </form>
-    <div id="account" class="account"></div>
+    <div class="header-actions">
+      <button id="cart-open" class="link" type="button">Keranjang (<span id="cart-count">0</span>)</button>
+      <div id="account" class="account"></div>
+    </div>
   </header>
 
   <main>
@@ -54,10 +57,26 @@
       </fieldset>
       <div class="order-row">
         <label>Jumlah <input id="order-quantity" type="number" min="1" max="20" value="1" required></label>
-        <button id="order-submit" class="primary" type="submit">Pesan</button>
+        <div class="order-buttons">
+          <button id="cart-add" class="primary" type="submit">Tambah ke keranjang</button>
+          <button id="order-now" class="secondary" type="button">Beli sekarang</button>
+        </div>
       </div>
+      <p id="cart-note" class="cart-note" role="status" hidden><span id="cart-note-text"></span> <button id="cart-note-open" class="link" type="button">Lihat keranjang</button></p>
       <p id="order-error" class="error" role="alert" hidden></p>
     </form>
+  </dialog>
+
+  <dialog id="cart-dialog" class="sheet" aria-labelledby="cart-title">
+    <button class="close" type="button" data-close aria-label="Tutup">×</button>
+    <h2 id="cart-title" tabindex="-1">Keranjang</h2>
+    <p id="cart-status" class="status" role="status" aria-live="polite"></p>
+    <div id="cart-list" class="cart-list"></div>
+    <div id="cart-footer" hidden>
+      <p class="cart-total"><span>Total</span> <strong id="cart-total"></strong></p>
+      <p id="cart-error" class="error" role="alert" hidden></p>
+      <button id="cart-checkout" class="primary" type="button">Pesan sekarang</button>
+    </div>
   </dialog>
 
   <dialog id="orders-dialog" class="sheet" aria-labelledby="orders-title">

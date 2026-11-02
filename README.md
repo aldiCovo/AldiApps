@@ -253,6 +253,8 @@ Anything else answers 404, so the other services' write endpoints stay inside th
 
 Login keeps the token in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie, so page scripts can't read it. Because of `Secure`, browsers only keep it on HTTPS and `localhost`. `POST` requests must be `application/json`, which a form on another site can't send without asking. A WebSocket handshake carries the cookie without asking, so `/api/events` checks `Origin` instead.
 
+The cart lives in the browser's `localStorage`, so it needs no login, no service and no table, but it doesn't follow a customer to another device. It holds only ids and quantities, and reads names, prices and stock again each time it opens. Checkout sends one `POST /api/orders`, which holds at most 20 different variants, up to 20 of each. An order is all or nothing: if one item is short, the whole order is rejected, and the customer can put it back in the cart.
+
 It needs `CATALOG_URL`, `SEARCH_URL`, `USER_URL`, `ORDER_URL` and `REALTIME_URL`, and won't start without them.
 
 The tests use fake services, so they need nothing running:

@@ -4,7 +4,7 @@ const pageSize = 24;
 const $ = (id) => document.getElementById(id);
 const rupiah = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 });
 
-const state = { q: "", categoryId: "", size: "", color: "", inStock: false, offset: 0, total: 0, categories: new Map() };
+const state = { q: "", categoryId: "", size: "", color: "", inStock: false, offset: 0, total: 0, categories: new Map(), categoryPhotos: {} };
 let latestRequest = 0;
 
 class ApiError extends Error {
@@ -145,12 +145,14 @@ async function loadProducts(append = false) {
 }
 
 async function loadCategories() {
+  const photos = api("/category-photos").catch(() => ({}));
   try {
     const { categories } = await api("/categories");
     state.categories = new Map(categories.map((category) => [category.id, category.name]));
   } catch {
     state.categories = new Map();
   }
+  state.categoryPhotos = await photos;
   renderCategories();
 }
 
@@ -173,7 +175,26 @@ function renderCategories() {
     const art = el("span", `tile-art tone-${index % 5}`);
     art.setAttribute("aria-hidden", "true");
     fillArt(art, name, name);
-    button.append(art, el("span", "tile-name", name));
+    const label = el("span", "tile-label");
+    label.append(el("span", "tile-name", name));
+    const photo = state.categoryPhotos[name.trim().toLowerCase()];
+    if (photo) {
+      const image = document.createElement("img");
+      image.className = "tile-photo";
+      image.src = photo;
+      image.alt = "";
+      image.loading = "lazy";
+      image.decoding = "async";
+      // A photo that can't load leaves the drawing underneath.
+      image.addEventListener("error", () => {
+        image.remove();
+        button.classList.remove("has-photo");
+      });
+      art.append(image);
+      button.classList.add("has-photo");
+      label.append(el("span", "tile-cta", "Lihat koleksi"));
+    }
+    button.append(art, label);
     button.addEventListener("click", () => {
       choose(String(id));
       $("katalog").scrollIntoView();

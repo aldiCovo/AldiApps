@@ -494,7 +494,10 @@ function saveCart() {
   } catch {
     // Without storage the cart still works until the page closes.
   }
-  $("cart-count").textContent = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const count = cart.reduce((sum, item) => sum + item.quantity, 0);
+  $("cart-count").textContent = count > 99 ? "99+" : count;
+  $("cart-count").hidden = count === 0;
+  $("cart-open").setAttribute("aria-label", `Keranjang, ${count} barang`);
 }
 
 function addToCart(productId, variantId, quantity) {

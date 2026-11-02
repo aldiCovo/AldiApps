@@ -72,7 +72,7 @@ func newTestGateway(t *testing.T) (*httptest.Server, *fakeServices) {
 		}
 		io.WriteString(w, `{"ok":true}`)
 	}
-	server := httptest.NewServer(newHandler(f.start(t, "catalog", ok), f.start(t, "search", ok), f.start(t, "user", users), f.start(t, "order", orders), f.start(t, "realtime", ok)))
+	server := httptest.NewServer(newHandler(f.start(t, "catalog", ok), f.start(t, "search", ok), f.start(t, "user", users), f.start(t, "order", orders), f.start(t, "realtime", ok), f.start(t, "cart", orders)))
 	t.Cleanup(server.Close)
 	return server, f
 }
@@ -271,11 +271,55 @@ func TestLargeBodyIsRefused(t *testing.T) {
 	}
 }
 
+func TestCartRequestsCarryTheSession(t *testing.T) {
+	server, f := newTestGateway(t)
+	session := &http.Cookie{Name: sessionCookie, Value: testToken}
+	cases := []struct{ method, path, body, want string }{
+		{"GET", "/api/cart", "", "cart GET /cart"},
+		{"DELETE", "/api/cart", "", "cart DELETE /cart"},
+		{"POST", "/api/cart/merge", `{"items":[]}`, "cart POST /cart/merge"},
+		{"PUT", "/api/cart/items/7", `{"quantity":1}`, "cart PUT /cart/items/7"},
+		{"DELETE", "/api/cart/items/7", "", "cart DELETE /cart/items/7"},
+	}
+	for _, c := range cases {
+		resp, _ := do(t, c.method, server.URL+c.path, "application/json", c.body, session)
+		seen := f.seen()
+		if resp.StatusCode != http.StatusOK || seen[len(seen)-1] != c.want || resp.Header.Get("Cache-Control") != "no-store" {
+			t.Fatalf("%s %s: status %d, seen %v", c.method, c.path, resp.StatusCode, seen)
+		}
+		f.mu.Lock()
+		got := f.headers[len(f.headers)-1].Get("Authorization")
+		f.mu.Unlock()
+		if got != "Bearer "+testToken {
+			t.Fatalf("%s %s: Authorization %q", c.method, c.path, got)
+		}
+		before := len(f.seen())
+		if resp, _ := do(t, c.method, server.URL+c.path, "application/json", c.body); resp.StatusCode != http.StatusUnauthorized || len(f.seen()) != before {
+			t.Fatalf("%s %s without a session: status %d", c.method, c.path, resp.StatusCode)
+		}
+	}
+	for _, c := range []struct {
+		method, path, contentType string
+		want                      int
+	}{
+		{"PUT", "/api/cart/items/abc", "application/json", http.StatusNotFound},
+		{"DELETE", "/api/cart/items/abc", "", http.StatusNotFound},
+		{"PUT", "/api/cart/items/7", "text/plain", http.StatusUnsupportedMediaType},
+		{"POST", "/api/cart/merge", "text/plain", http.StatusUnsupportedMediaType},
+		{"PUT", "/api/cart", "application/json", http.StatusNotFound},
+		{"POST", "/api/cart", "application/json", http.StatusNotFound},
+	} {
+		if resp, _ := do(t, c.method, server.URL+c.path, c.contentType, "{}", session); resp.StatusCode != c.want {
+			t.Fatalf("%s %s: status %d", c.method, c.path, resp.StatusCode)
+		}
+	}
+}
+
 func TestDownServiceAnswers502WithoutDetails(t *testing.T) {
 	down := httptest.NewServer(http.NotFoundHandler())
 	url := down.URL
 	down.Close()
-	server := httptest.NewServer(newHandler(url, url, url, url, url))
+	server := httptest.NewServer(newHandler(url, url, url, url, url, url))
 	defer server.Close()
 	for _, c := range []struct{ method, path string }{{"GET", "/api/search"}, {"POST", "/api/login"}} {
 		resp, body := do(t, c.method, server.URL+c.path, "application/json", "{}")

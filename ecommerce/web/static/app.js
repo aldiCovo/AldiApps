@@ -232,7 +232,20 @@ async function submitAuth(event) {
 }
 
 function renderAccount(user) {
+  const wasLoggedIn = loggedIn;
   loggedIn = Boolean(user);
+  if (user) {
+    if ($("cart-dialog").open) refreshCart();
+    else syncAccountCart();
+  } else if (wasLoggedIn) {
+    cart = loadCart();
+    showCartCount();
+    // Only an ended session gets here with the cart open, because logging out is behind it.
+    if ($("cart-dialog").open) {
+      refreshCart("Silakan masuk lagi untuk melihat keranjang akunmu.");
+      openAuth();
+    }
+  }
   const account = $("account");
   if (!user) {
     const login = el("button", "secondary", "Masuk");
@@ -260,8 +273,9 @@ function renderAccount(user) {
 async function loadAccount() {
   try {
     renderAccount(await api("/me"));
-  } catch {
-    renderAccount(null);
+  } catch (error) {
+    // A network problem doesn't end the session, so a logged-in page stays as it is.
+    if (error.status === 401 || !loggedIn) renderAccount(null);
   }
 }
 
@@ -322,10 +336,16 @@ function orderCard(order) {
   if (order.status === "rejected") {
     const again = el("button", "link", "Masukkan lagi ke keranjang");
     again.type = "button";
-    again.addEventListener("click", () => {
-      for (const item of order.items) addToCart(item.product_id, item.variant_id, item.quantity);
-      $("orders-dialog").close();
-      openCart();
+    again.addEventListener("click", async () => {
+      again.disabled = true;
+      try {
+        await addToCart(order.items.map(({ product_id, variant_id, quantity }) => ({ product_id, variant_id, quantity })));
+        $("orders-dialog").close();
+        openCart();
+      } catch {
+        $("orders-status").textContent = "Keranjang belum bisa diubah. Coba lagi sebentar lagi.";
+        again.disabled = false;
+      }
     });
     card.append(again);
   }
@@ -462,8 +482,10 @@ async function orderNow() {
   }
 }
 
-// The cart lives in this browser and holds only ids and quantities. Names, prices and stock
-// are read again each time it opens, so it never shows old ones.
+// A guest's cart lives in this browser. A customer's lives on their account in cart-service, so
+// it follows them to any browser and leaves this one when they log out. Logging in moves a
+// guest's cart to the account. Both hold only ids and quantities: names, prices and stock are
+// read again each time the cart opens, so it never shows old ones.
 const cartKey = "prastika-cart";
 const cartMaxItems = 20;
 const cartMaxQuantity = 20;
@@ -471,6 +493,7 @@ const isPositiveInt = (value) => Number.isSafeInteger(value) && value > 0;
 let cart = loadCart();
 let cartDetails = new Map();
 let latestCartRequest = 0;
+let cartSync = null;
 
 function loadCart() {
   try {
@@ -488,32 +511,84 @@ function loadCart() {
   }
 }
 
-function saveCart() {
+function clearGuestCart() {
   try {
-    localStorage.setItem(cartKey, JSON.stringify(cart));
+    localStorage.removeItem(cartKey);
   } catch {
-    // Without storage the cart still works until the page closes.
+    // Without storage there's nothing to clear.
   }
+}
+
+function showCartCount() {
   const count = cart.reduce((sum, item) => sum + item.quantity, 0);
   $("cart-count").textContent = count > 99 ? "99+" : count;
   $("cart-count").hidden = count === 0;
   $("cart-open").setAttribute("aria-label", `Keranjang, ${count} barang`);
 }
 
-function addToCart(productId, variantId, quantity) {
-  const item = cart.find((entry) => entry.variant_id === variantId);
-  if (item) {
-    item.quantity = Math.min(item.quantity + quantity, cartMaxQuantity);
-  } else if (cart.length < cartMaxItems) {
-    cart.push({ product_id: productId, variant_id: variantId, quantity: Math.min(quantity, cartMaxQuantity) });
-  } else {
-    return false;
+function saveGuestCart() {
+  try {
+    localStorage.setItem(cartKey, JSON.stringify(cart));
+  } catch {
+    // Without storage the cart still works until the page closes.
   }
-  saveCart();
-  return true;
 }
 
-function submitCartAdd(event) {
+function send(method, path, body) {
+  const options = { method };
+  if (body !== undefined) {
+    options.headers = { "Content-Type": "application/json" };
+    options.body = JSON.stringify(body);
+  }
+  return api(path, options);
+}
+
+// Reads the account's cart, first moving a guest's cart into it. Requests share one run, so a
+// guest's cart can't be added twice. The guest's copy stays until the account has it.
+function syncAccountCart() {
+  cartSync ||= (async () => {
+    const guest = loadCart();
+    try {
+      const result = guest.length > 0 ? await post("/cart/merge", { items: guest }) : await api("/cart");
+      if (guest.length > 0) clearGuestCart();
+      if (!loggedIn) return false;
+      cart = result.items;
+      showCartCount();
+      return true;
+    } catch (error) {
+      if (error.status === 401) renderAccount(null);
+      return false;
+    }
+  })().finally(() => { cartSync = null; });
+  return cartSync;
+}
+
+// Returns how many items didn't fit.
+async function addToCart(items) {
+  if (loggedIn) {
+    const result = await post("/cart/merge", { items });
+    cart = result.items;
+    showCartCount();
+    return result.skipped;
+  }
+  let skipped = 0;
+  for (const added of items) {
+    const item = cart.find((entry) => entry.variant_id === added.variant_id);
+    if (item) item.quantity = Math.min(item.quantity + added.quantity, cartMaxQuantity);
+    else if (cart.length < cartMaxItems) cart.push({ ...added, quantity: Math.min(added.quantity, cartMaxQuantity) });
+    else skipped++;
+  }
+  saveGuestCart();
+  showCartCount();
+  return skipped;
+}
+
+function cartWriteMessage(error) {
+  if (error.status === 429) return "Terlalu banyak percobaan. Tunggu sebentar lalu coba lagi.";
+  return "Keranjang belum bisa diubah. Coba lagi sebentar lagi.";
+}
+
+async function submitCartAdd(event) {
   event.preventDefault();
   const chosen = document.querySelector('input[name="variant"]:checked');
   if (!chosen) return;
@@ -529,13 +604,38 @@ function submitCartAdd(event) {
     $("order-error").hidden = false;
     return;
   }
-  if (!addToCart(shownProductId, variantId, Math.min(wanted, room))) {
-    $("order-error").textContent = `Keranjang penuh. Satu pesanan paling banyak ${cartMaxItems} jenis barang.`;
+  $("cart-add").disabled = true;
+  try {
+    const skipped = await addToCart([{ product_id: shownProductId, variant_id: variantId, quantity: Math.min(wanted, room) }]);
+    if (skipped > 0) {
+      $("order-error").textContent = `Keranjang penuh. Satu pesanan paling banyak ${cartMaxItems} jenis barang.`;
+      $("order-error").hidden = false;
+      return;
+    }
+    $("cart-note-text").textContent = wanted > room ? `Hanya ${room} yang bisa ditambahkan, sesuai stok.` : "Masuk ke keranjang.";
+    $("cart-note").hidden = false;
+  } catch (error) {
+    if (error.status === 401) renderAccount(null);
+    $("order-error").textContent = error.status === 401 ? "Silakan masuk lagi, lalu coba tambahkan." : cartWriteMessage(error);
     $("order-error").hidden = false;
+  } finally {
+    $("cart-add").disabled = false;
+  }
+}
+
+// Shows a failed change, then reads the cart again so the page matches what's really saved.
+async function cartWriteFailed(error) {
+  if (error.status === 401) {
+    renderAccount(null);
     return;
   }
-  $("cart-note-text").textContent = wanted > room ? `Hanya ${room} yang bisa ditambahkan, sesuai stok.` : "Masuk ke keranjang.";
-  $("cart-note").hidden = false;
+  await refreshCart();
+  if ($("cart-footer").hidden) {
+    $("cart-status").textContent = cartWriteMessage(error);
+    return;
+  }
+  $("cart-error").textContent = cartWriteMessage(error);
+  $("cart-error").hidden = false;
 }
 
 function cartRow(item) {
@@ -555,13 +655,22 @@ function cartRow(item) {
     input.min = 1;
     input.max = Math.min(variant.stock, cartMaxQuantity);
     input.value = item.quantity;
-    input.addEventListener("change", () => {
+    input.addEventListener("change", async () => {
       const wanted = Math.trunc(Number(input.value)) || 1;
       item.quantity = Math.min(Math.max(wanted, 1), Number(input.max));
       input.value = item.quantity;
       subtotal.textContent = rupiah.format(product.price * item.quantity);
-      saveCart();
+      showCartCount();
       updateCartTotal();
+      if (!loggedIn) {
+        saveGuestCart();
+        return;
+      }
+      try {
+        await send("PUT", `/cart/items/${item.variant_id}`, { product_id: item.product_id, quantity: item.quantity });
+      } catch (error) {
+        await cartWriteFailed(error);
+      }
     });
     label.append(input);
     actions.append(label);
@@ -569,11 +678,20 @@ function cartRow(item) {
   const remove = el("button", "link", "Hapus");
   remove.type = "button";
   remove.setAttribute("aria-label", `Hapus ${product.name} ${variant.size} ${variant.color}`);
-  remove.addEventListener("click", () => {
-    cart = cart.filter((entry) => entry !== item);
-    saveCart();
+  remove.addEventListener("click", async () => {
+    cart = cart.filter((entry) => entry.variant_id !== item.variant_id);
+    showCartCount();
     renderCart();
     $("cart-title").focus();
+    if (!loggedIn) {
+      saveGuestCart();
+      return;
+    }
+    try {
+      await send("DELETE", `/cart/items/${item.variant_id}`);
+    } catch (error) {
+      await cartWriteFailed(error);
+    }
   });
   actions.append(remove);
   row.append(about, subtotal, actions);
@@ -591,7 +709,7 @@ function renderCart(note = "") {
   $("cart-list").replaceChildren(...cart.map(cartRow));
   $("cart-footer").hidden = cart.length === 0;
   if (cart.length === 0) {
-    $("cart-status").textContent = note ? `${note} Keranjangmu kosong.` : "Keranjangmu masih kosong.";
+    $("cart-status").textContent = note || "Keranjangmu masih kosong.";
     return;
   }
   const soldOut = cart.some((item) => cartDetails.get(item.variant_id).variant.stock === 0);
@@ -599,12 +717,20 @@ function renderCart(note = "") {
   updateCartTotal();
 }
 
-async function refreshCart() {
+async function refreshCart(note = "") {
   const request = ++latestCartRequest;
   $("cart-error").hidden = true;
   $("cart-footer").hidden = true;
   $("cart-list").replaceChildren();
-  $("cart-status").textContent = cart.length > 0 ? "Memuat keranjang…" : "";
+  $("cart-status").textContent = "Memuat keranjang…";
+  if (loggedIn) {
+    const synced = await syncAccountCart();
+    if (request !== latestCartRequest) return;
+    if (!synced) {
+      $("cart-status").textContent = "Keranjang belum bisa dimuat. Tutup lalu buka lagi sebentar lagi.";
+      return;
+    }
+  }
   const ids = [...new Set(cart.map((item) => item.product_id))];
   const results = await Promise.allSettled(ids.map((id) => api(`/products/${id}`)));
   if (request !== latestCartRequest) return;
@@ -617,21 +743,26 @@ async function refreshCart() {
     if (result.status !== "fulfilled") return;
     for (const variant of result.value.variants || []) cartDetails.set(variant.id, { product: result.value, variant });
   });
-  const before = cart.length;
+  const gone = cart.filter((item) => !cartDetails.has(item.variant_id));
+  const reduced = cart.filter((item) => {
+    const details = cartDetails.get(item.variant_id);
+    return details && details.variant.stock > 0 && item.quantity > details.variant.stock;
+  });
   cart = cart.filter((item) => cartDetails.has(item.variant_id));
-  const removed = before - cart.length;
-  let reduced = 0;
-  for (const item of cart) {
-    const { stock } = cartDetails.get(item.variant_id).variant;
-    if (stock > 0 && item.quantity > stock) {
-      item.quantity = stock;
-      reduced++;
-    }
+  for (const item of reduced) item.quantity = cartDetails.get(item.variant_id).variant.stock;
+  showCartCount();
+  if (loggedIn) {
+    // The next opening repeats these if one fails, so a failure doesn't need showing.
+    Promise.allSettled([
+      ...gone.map((item) => send("DELETE", `/cart/items/${item.variant_id}`)),
+      ...reduced.map((item) => send("PUT", `/cart/items/${item.variant_id}`, { product_id: item.product_id, quantity: item.quantity })),
+    ]);
+  } else {
+    saveGuestCart();
   }
-  saveCart();
-  const notes = [];
-  if (removed > 0) notes.push(`${removed} barang dihapus karena sudah tidak dijual.`);
-  if (reduced > 0) notes.push(`${reduced} barang dikurangi jumlahnya, sesuai stok.`);
+  const notes = note ? [note] : [];
+  if (gone.length > 0) notes.push(`${gone.length} barang dihapus karena sudah tidak dijual.`);
+  if (reduced.length > 0) notes.push(`${reduced.length} barang dikurangi jumlahnya, sesuai stok.`);
   renderCart(notes.join(" "));
 }
 
@@ -649,15 +780,34 @@ async function checkout() {
   $("cart-error").hidden = true;
   try {
     await post("/orders", { items: cart.map(({ variant_id, quantity }) => ({ variant_id, quantity })) });
-    cart = [];
-    saveCart();
-    $("cart-dialog").close();
-    openOrders();
   } catch (error) {
-    $("cart-error").textContent = orderError(error);
+    const message = orderError(error);
+    if (error.status === 401) return;
+    $("cart-error").textContent = message;
     $("cart-error").hidden = false;
     $("cart-checkout").disabled = false;
+    return;
   }
+  cart = [];
+  showCartCount();
+  $("cart-dialog").close();
+  openOrders();
+  try {
+    await send("DELETE", "/cart");
+  } catch {
+    // The order exists. Its items only show again in the cart until they're removed.
+  }
+}
+
+// Another tab or browser may have changed the account, or logged it out.
+const accountCheckGap = 5000;
+let lastAccountCheck = 0;
+
+function checkAccountAgain() {
+  if (document.visibilityState !== "visible" || $("cart-dialog").open) return;
+  if (Date.now() - lastAccountCheck < accountCheckGap) return;
+  lastAccountCheck = Date.now();
+  loadAccount();
 }
 
 $("order-form").addEventListener("submit", submitCartAdd);
@@ -668,11 +818,12 @@ $("cart-note-open").addEventListener("click", () => {
   openCart();
 });
 $("cart-checkout").addEventListener("click", checkout);
-// Keeps a second tab showing the same cart.
+document.addEventListener("visibilitychange", checkAccountAgain);
+// Keeps a guest's second tab showing the same cart.
 window.addEventListener("storage", (event) => {
-  if (event.key !== cartKey && event.key !== null) return;
+  if (loggedIn || (event.key !== cartKey && event.key !== null)) return;
   cart = loadCart();
-  saveCart();
+  showCartCount();
   if ($("cart-dialog").open) refreshCart();
 });
 $("orders-dialog").addEventListener("close", () => {
@@ -694,7 +845,7 @@ for (const button of document.querySelectorAll("[data-close]")) {
   button.addEventListener("click", () => button.closest("dialog").close());
 }
 
-saveCart();
+showCartCount();
 renderCategories();
 loadAccount();
 loadFilterChoices();

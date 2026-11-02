@@ -29,7 +29,7 @@ func newEventsGateway(t *testing.T) (*httptest.Server, chan *http.Request) {
 		conn.Read(r.Context())
 	}))
 	t.Cleanup(realtime.Close)
-	gateway := httptest.NewServer(newHandler(realtime.URL, realtime.URL, realtime.URL, realtime.URL, realtime.URL))
+	gateway := httptest.NewServer(newHandler(realtime.URL, realtime.URL, realtime.URL, realtime.URL, realtime.URL, realtime.URL))
 	t.Cleanup(gateway.Close)
 	return gateway, seen
 }
@@ -107,7 +107,7 @@ func TestEventsNeedALogin(t *testing.T) {
 }
 
 func TestEventsAnswer502WhileTheServiceIsDown(t *testing.T) {
-	gateway := httptest.NewServer(newHandler("http://127.0.0.1:1", "http://127.0.0.1:1", "http://127.0.0.1:1", "http://127.0.0.1:1", "http://127.0.0.1:1"))
+	gateway := httptest.NewServer(newHandler("http://127.0.0.1:1", "http://127.0.0.1:1", "http://127.0.0.1:1", "http://127.0.0.1:1", "http://127.0.0.1:1", "http://127.0.0.1:1"))
 	defer gateway.Close()
 	_, resp, err := dialEvents(t, gateway, gateway.URL, testToken)
 	if err == nil || resp == nil || resp.StatusCode != http.StatusBadGateway {

@@ -12,6 +12,7 @@ Application source code, one folder per application. Each folder has its own `Do
 | [`ecommerce/payment-service/`](ecommerce/payment-service/) | Go worker that simulates payments, using PostgreSQL. It has no public API and moves no money |
 | [`ecommerce/realtime-service/`](ecommerce/realtime-service/) | Go service that tells browsers when an order changes, over WebSockets. Only reachable through web |
 | [`ecommerce/notification-service/`](ecommerce/notification-service/) | Go worker that emails customers when their order finishes. It has no public API |
+| [`ecommerce/cart-service/`](ecommerce/cart-service/) | Go API for each customer's cart, using PostgreSQL. Only reachable through `web` |
 | [`ecommerce/web/`](ecommerce/web/) | The shop's pages, and the only part the internet reaches, at **https://prastika.aldiab.ai.id** |
 
 ## Deploy
@@ -217,6 +218,27 @@ cd ecommerce/notification-service
 TEST_DATABASE_URL='postgres://postgres:test@127.0.0.1:5432/notification?sslmode=disable' go test -race ./...
 ```
 
+## cart-service
+
+Keeps each customer's cart on their account, so it follows them to any browser. Every request needs a login token, and only reaches that customer's own cart.
+
+| Request | Does |
+|---|---|
+| `GET /cart` | Returns `{"items": [{"product_id", "variant_id", "quantity"}], "skipped": 0}` |
+| `POST /cart/merge` | Adds `{"items": [...]}`, summing a variant that's already there up to 20. New variants beyond the limit of 20 are counted in `skipped` |
+| `PUT /cart/items/{variant_id}` | Sets `{"product_id", "quantity"}`. Answers 409 if it's a new variant and the cart is full |
+| `DELETE /cart/items/{variant_id}` | Removes one variant |
+| `DELETE /cart` | Empties the cart |
+
+It holds only ids and quantities, because names, prices and stock belong to catalog-service and can change. The limits match an order's, so everything in a cart can be ordered at once. It doesn't check that a variant exists: the pages remove unknown ones when the cart opens, and order-service checks again.
+
+It needs `DATABASE_URL` and `USER_URL`, and won't start without them. The tests need a throwaway PostgreSQL, because they empty the table:
+
+```bash
+cd ecommerce/cart-service
+TEST_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable' go test -race ./...
+```
+
 ## realtime-service
 
 | Request | Does |
@@ -248,14 +270,15 @@ Serves the pages in `static/`, and passes on only these requests:
 | `POST /api/logout` | Handled here. It only clears the cookie |
 | `GET /api/events` | realtime-service, as a WebSocket with the token from the cookie. Answers 403 if `Origin` isn't this site |
 | `POST /api/orders`, `GET /api/orders`, `GET /api/orders/{id}`, `POST /api/orders/{id}/pay` | order-service, with the token from the cookie |
+| `GET` and `DELETE /api/cart`, `POST /api/cart/merge`, `PUT` and `DELETE /api/cart/items/{id}` | cart-service, with the token from the cookie |
 
 Anything else answers 404, so the other services' write endpoints stay inside the cluster, and a new endpoint stays private until it's added here.
 
 Login keeps the token in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie, so page scripts can't read it. Because of `Secure`, browsers only keep it on HTTPS and `localhost`. `POST` requests must be `application/json`, which a form on another site can't send without asking. A WebSocket handshake carries the cookie without asking, so `/api/events` checks `Origin` instead.
 
-The cart lives in the browser's `localStorage`, so it needs no login, no service and no table, but it doesn't follow a customer to another device. It holds only ids and quantities, and reads names, prices and stock again each time it opens. Checkout sends one `POST /api/orders`, which holds at most 20 different variants, up to 20 of each. An order is all or nothing: if one item is short, the whole order is rejected, and the customer can put it back in the cart.
+A guest's cart lives in the browser's `localStorage`, so it needs no account. A customer's lives in cart-service, so it follows them to any browser and leaves the browser when they log out. Logging in moves a guest's cart to the account. The browser's copy stays until the account has it. Either way the cart holds only ids and quantities, and reads names, prices and stock again each time it opens. Checkout sends one `POST /api/orders`, which holds at most 20 different variants, up to 20 of each. An order is all or nothing: if one item is short, the whole order is rejected, and the customer can put it back in the cart.
 
-It needs `CATALOG_URL`, `SEARCH_URL`, `USER_URL`, `ORDER_URL` and `REALTIME_URL`, and won't start without them.
+It needs `CATALOG_URL`, `SEARCH_URL`, `USER_URL`, `ORDER_URL`, `REALTIME_URL` and `CART_URL`, and won't start without them.
 
 The tests use fake services, so they need nothing running:
 

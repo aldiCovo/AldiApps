@@ -29,17 +29,18 @@ var static embed.FS
 var numericID = regexp.MustCompile(`^[0-9]{1,18}$`)
 
 type gateway struct {
-	catalogURL, searchURL, userURL, orderURL string
-	client                                   *http.Client
-	events                                   http.Handler
+	catalogURL, searchURL, userURL, orderURL, cartURL string
+	client                                            *http.Client
+	events                                            http.Handler
 }
 
-func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL string) http.Handler {
+func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL string) http.Handler {
 	g := &gateway{
 		catalogURL: catalogURL,
 		searchURL:  searchURL,
 		userURL:    userURL,
 		orderURL:   orderURL,
+		cartURL:    cartURL,
 		client: &http.Client{
 			Timeout: upstreamTimeout,
 			// Redirects from a service stay inside the cluster, so they must not reach the browser.
@@ -104,6 +105,35 @@ func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL string) ht
 		if body, ok := readBody(w, r); ok {
 			g.withSession(w, r, g.orderURL+"/orders/"+id+"/pay", body)
 		}
+	})
+	mux.HandleFunc("GET /api/cart", func(w http.ResponseWriter, r *http.Request) {
+		g.withSession(w, r, g.cartURL+"/cart", nil)
+	})
+	mux.HandleFunc("DELETE /api/cart", func(w http.ResponseWriter, r *http.Request) {
+		g.withSession(w, r, g.cartURL+"/cart", nil)
+	})
+	mux.HandleFunc("POST /api/cart/merge", func(w http.ResponseWriter, r *http.Request) {
+		if body, ok := readBody(w, r); ok {
+			g.withSession(w, r, g.cartURL+"/cart/merge", body)
+		}
+	})
+	mux.HandleFunc("PUT /api/cart/items/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if !numericID.MatchString(id) {
+			writeError(w, http.StatusNotFound, "item not found")
+			return
+		}
+		if body, ok := readBody(w, r); ok {
+			g.withSession(w, r, g.cartURL+"/cart/items/"+id, body)
+		}
+	})
+	mux.HandleFunc("DELETE /api/cart/items/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if !numericID.MatchString(id) {
+			writeError(w, http.StatusNotFound, "item not found")
+			return
+		}
+		g.withSession(w, r, g.cartURL+"/cart/items/"+id, nil)
 	})
 	mux.HandleFunc("GET /api/events", g.openEvents)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
@@ -171,6 +201,9 @@ func (g *gateway) call(r *http.Request, url string, body []byte, bearer string) 
 	method, reader := http.MethodGet, io.Reader(nil)
 	if body != nil {
 		method, reader = http.MethodPost, bytes.NewReader(body)
+	}
+	if r.Method == http.MethodPut || r.Method == http.MethodDelete {
+		method = r.Method
 	}
 	req, err := http.NewRequestWithContext(r.Context(), method, url, reader)
 	if err != nil {

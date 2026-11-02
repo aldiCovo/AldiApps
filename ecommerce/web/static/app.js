@@ -60,9 +60,34 @@ function fillArt(node, categoryName, fallback) {
   node.replaceChildren(svg);
 }
 
+// Puts the category's photo over the drawing. If it can't load, the drawing stays.
+function addCategoryPhoto(node, categoryName, className, onError) {
+  const url = state.categoryPhotos[(categoryName || "").trim().toLowerCase().replace(/\s+/g, "-")];
+  if (!url) {
+    return false;
+  }
+  const image = document.createElement("img");
+  image.className = className;
+  image.src = url;
+  image.alt = "";
+  image.loading = "lazy";
+  image.decoding = "async";
+  image.addEventListener("error", () => {
+    image.remove();
+    if (onError) {
+      onError();
+    }
+  });
+  node.append(image);
+  return true;
+}
+
+// Products have no photos of their own yet, so they show their category's photo.
 function fillSwatch(node, product, className = "art") {
   node.className = `${className} tone-${product.id % 5}`;
-  fillArt(node, state.categories.get(product.category_id), product.name);
+  const category = state.categories.get(product.category_id);
+  fillArt(node, category, product.name);
+  addCategoryPhoto(node, category, "art-photo");
 }
 
 // Buttons around a quantity. They're out of the tab order because the field takes arrow keys.
@@ -177,20 +202,7 @@ function renderCategories() {
     fillArt(art, name, name);
     const label = el("span", "tile-label");
     label.append(el("span", "tile-name", name));
-    const photo = state.categoryPhotos[name.trim().toLowerCase().replace(/\s+/g, "-")];
-    if (photo) {
-      const image = document.createElement("img");
-      image.className = "tile-photo";
-      image.src = photo;
-      image.alt = "";
-      image.loading = "lazy";
-      image.decoding = "async";
-      // A photo that can't load leaves the drawing underneath.
-      image.addEventListener("error", () => {
-        image.remove();
-        button.classList.remove("has-photo");
-      });
-      art.append(image);
+    if (addCategoryPhoto(art, name, "tile-photo", () => button.classList.remove("has-photo"))) {
       button.classList.add("has-photo");
       label.append(el("span", "tile-cta", "Lihat koleksi"));
     }

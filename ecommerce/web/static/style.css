@@ -132,7 +132,9 @@ main { max-width: 1320px; margin: 0 auto; padding: 0 var(--gutter); }
 .card { display: block; align-self: start; width: 100%; padding: 0; border: 0; background: none; text-align: left; }
 .card-art { position: relative; display: block; overflow: hidden; border-radius: var(--radius); transition: box-shadow .25s, transform .25s; }
 .card:hover .card-art { box-shadow: var(--shadow); transform: translateY(-3px); }
-.art { display: grid; place-items: center; aspect-ratio: 4 / 5; font: 500 clamp(3rem, 8vw, 5rem)/1 var(--serif); }
+.art { position: relative; display: grid; place-items: center; overflow: hidden; aspect-ratio: 4 / 5; font: 500 clamp(3rem, 8vw, 5rem)/1 var(--serif); }
+.art-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 18%; transition: transform .9s cubic-bezier(.2, .7, .2, 1); }
+.card:hover .art-photo { transform: scale(1.04); }
 .art svg { width: 64%; transition: transform .35s; }
 .card:hover .art svg { transform: scale(1.04); }
 .badge { position: absolute; top: 12px; left: 12px; padding: 3px 12px; border-radius: 999px; background: var(--card); color: var(--ink); font-size: .78rem; font-weight: 600; }

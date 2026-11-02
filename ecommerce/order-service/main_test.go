@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -263,7 +264,7 @@ func TestSuccessfulSaga(t *testing.T) {
 	if got := h.status(t, 1, order.ID); got.Status != statusPaid {
 		t.Fatalf("order %+v", got)
 	}
-	want := []string{eventOrderCreated, eventPaymentRequested}
+	want := []string{eventOrderCreated, eventPaymentRequested, eventOrderPaid}
 	if got := h.outbox(t); fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("events %v", got)
 	}
@@ -294,7 +295,8 @@ func TestRejectedStockEndsTheOrder(t *testing.T) {
 		t.Fatalf("order %+v", got)
 	}
 	// Nothing was reserved, so there is nothing to release.
-	if got := h.outbox(t); len(got) != 1 {
+	want := []string{eventOrderCreated, eventOrderRejected}
+	if got := h.outbox(t); fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("events %v", got)
 	}
 }
@@ -559,5 +561,77 @@ func TestARefusedOrderSendsNoSignal(t *testing.T) {
 	}
 	if _, err := h.store.Pay(ctx, 7, 999, outcomeOK); !errors.Is(err, errNotFound) {
 		t.Errorf("want errNotFound, got %v", err)
+	}
+}
+
+func TestFinishedOrdersSendAnEventForTheirEmail(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	check := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	create := func() int64 {
+		t.Helper()
+		order, err := h.store.Create(ctx, 7, []OrderItem{{VariantID: 1, ProductName: "Dress", Size: "M", Color: "Merah", Price: 100, Quantity: 2}})
+		check(err)
+		return order.ID
+	}
+	finished := func(eventType string) []orderFinishedEvent {
+		t.Helper()
+		rows, err := h.store.pool.Query(ctx, `SELECT data FROM outbox_events WHERE type = $1 ORDER BY id`, eventType)
+		check(err)
+		bodies, err := pgx.CollectRows(rows, pgx.RowTo[[]byte])
+		check(err)
+		events := make([]orderFinishedEvent, len(bodies))
+		for i, body := range bodies {
+			check(json.Unmarshal(body, &events[i]))
+		}
+		return events
+	}
+	expect := func(eventType string, want ...int64) {
+		t.Helper()
+		events := finished(eventType)
+		if len(events) != len(want) {
+			t.Fatalf("%s: got %d events, want %d", eventType, len(events), len(want))
+		}
+		for i, event := range events {
+			if event.OrderID != want[i] || event.UserID != 7 || event.Total != 200 || len(event.Items) != 1 || event.Items[0].ProductName != "Dress" || event.Items[0].Quantity != 2 {
+				t.Errorf("%s: unexpected event %+v", eventType, event)
+			}
+		}
+	}
+
+	paid := create()
+	check(h.store.MarkReserved(ctx, paid))
+	_, err := h.store.Pay(ctx, 7, paid, outcomeOK)
+	check(err)
+	check(h.store.MarkPaid(ctx, paid))
+	check(h.store.MarkPaid(ctx, paid))
+	expect(eventOrderPaid, paid)
+
+	rejected := create()
+	check(h.store.MarkRejected(ctx, rejected, "out_of_stock"))
+	check(h.store.MarkRejected(ctx, rejected, "out_of_stock"))
+	expect(eventOrderRejected, rejected)
+
+	failed := create()
+	check(h.store.MarkReserved(ctx, failed))
+	_, err = h.store.Pay(ctx, 7, failed, outcomeFailed)
+	check(err)
+	check(h.store.CancelPaying(ctx, failed))
+	check(h.store.CancelPaying(ctx, failed))
+	expired := create()
+	check(h.store.MarkReserved(ctx, expired))
+	_, err = h.store.pool.Exec(ctx, `UPDATE orders SET expires_at = now() - interval '1 second' WHERE id = $1`, expired)
+	check(err)
+	_, err = h.store.ExpireUnpaid(ctx)
+	check(err)
+	expect(eventOrderCancelled, failed, expired)
+	cancelled := finished(eventOrderCancelled)
+	if cancelled[0].Reason != reasonPaymentFailed || cancelled[1].Reason != reasonExpired {
+		t.Errorf("reasons = %q, %q", cancelled[0].Reason, cancelled[1].Reason)
 	}
 }

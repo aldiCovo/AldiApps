@@ -11,6 +11,7 @@ Application source code, one folder per application. Each folder has its own `Do
 | [`ecommerce/order-service/`](ecommerce/order-service/) | Go API for the shop's orders, which runs the order saga, using PostgreSQL. Only reachable inside the cluster |
 | [`ecommerce/payment-service/`](ecommerce/payment-service/) | Go worker that simulates payments, using PostgreSQL. It has no public API and moves no money |
 | [`ecommerce/realtime-service/`](ecommerce/realtime-service/) | Go service that tells browsers when an order changes, over WebSockets. Only reachable through web |
+| [`ecommerce/notification-service/`](ecommerce/notification-service/) | Go worker that emails customers when their order finishes. It has no public API |
 | [`ecommerce/web/`](ecommerce/web/) | The shop's pages, and the only part the internet reaches, at **https://prastika.aldiab.ai.id** |
 
 ## Deploy
@@ -115,6 +116,7 @@ TEST_RABBITMQ_URL='amqp://guest:guest@127.0.0.1:5672/' go test -race ./...
 | `POST /login` | Checks `{"email", "password"}` and answers `{"token", "token_type", "expires_in", "user"}`, or 401 |
 | `GET /me` | Returns the user that the `Authorization: Bearer <token>` header belongs to |
 | `GET /.well-known/jwks.json` | Returns the public key that checks tokens |
+| `GET /internal/users/{id}` | Returns one user, for other services. It needs `Authorization: Bearer <INTERNAL_TOKEN>`, and web has no route to it |
 
 Passwords are stored as Argon2id hashes. Only 3 are computed at once, which keeps a burst of logins inside the memory limit, and a request that waits over 5 seconds gets 503.
 
@@ -169,8 +171,9 @@ After every status change commits, it publishes `{"order_id", "status"}` to `ord
 | Event | Exchange | `data` |
 |---|---|---|
 | `order.created` | `order.events` | `{"order_id", "items": [{"variant_id", "quantity"}]}` |
-| `order.cancelled` | `order.events` | `{"order_id", "reason"}` |
+| `order.cancelled` | `order.events` | `{"order_id", "user_id", "reason", "total", "items"}` |
 | `payment.requested` | `order.events` | `{"order_id", "amount", "outcome"}` |
+| `order.paid`, `order.rejected` | `order.events` | `{"order_id", "user_id", "reason", "total", "items"}`, for its email |
 
 Consumers ignore an event that doesn't match the order's current status, so a duplicate changes nothing.
 
@@ -197,6 +200,21 @@ The tests need a throwaway PostgreSQL, because they reset the database:
 ```bash
 cd ecommerce/payment-service
 TEST_DATABASE_URL='postgres://postgres:test@127.0.0.1:5432/payments?sslmode=disable' go test -race ./...
+```
+
+## notification-service
+
+It has no public API. It reads `order.paid`, `order.rejected` and `order.cancelled` from `order.events`, through the `notification-service.orders` queue, and sends one email for each in Indonesian. It reads the address from user-service when it needs it, so it keeps no copy.
+
+An event stays in the durable queue until its email is sent, so an email waits while the mail server or user-service is down, and also holds back the emails behind it. A row in `sent_notifications` stops a repeated event from sending again. A crash between sending and saving that row sends one email twice, which is better than losing it. An unreadable event, a deleted user, or an address the server refuses for good is logged and dropped.
+
+In the cluster it sends to Mailpit, which delivers nothing, so customers don't receive these emails. Sending for real needs a mail provider that accepts a login, which `SMTPMailer` doesn't do yet.
+
+The tests need a throwaway PostgreSQL, because they empty the table:
+
+```bash
+cd ecommerce/notification-service
+TEST_DATABASE_URL='postgres://postgres:test@127.0.0.1:5432/notification?sslmode=disable' go test -race ./...
 ```
 
 ## realtime-service

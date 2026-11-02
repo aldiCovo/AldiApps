@@ -18,6 +18,8 @@ const (
 
 	eventOrderCreated     = "order.created"
 	eventOrderCancelled   = "order.cancelled"
+	eventOrderPaid        = "order.paid"
+	eventOrderRejected    = "order.rejected"
 	eventPaymentRequested = "payment.requested"
 	eventStockReserved    = "stock.reserved"
 	eventStockRejected    = "stock.rejected"

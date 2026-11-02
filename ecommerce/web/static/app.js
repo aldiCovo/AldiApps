@@ -177,7 +177,7 @@ function renderCategories() {
     fillArt(art, name, name);
     const label = el("span", "tile-label");
     label.append(el("span", "tile-name", name));
-    const photo = state.categoryPhotos[name.trim().toLowerCase()];
+    const photo = state.categoryPhotos[name.trim().toLowerCase().replace(/\s+/g, "-")];
     if (photo) {
       const image = document.createElement("img");
       image.className = "tile-photo";

@@ -5,14 +5,37 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Prastika</title>
   <meta name="description" content="Toko online fashion wanita.">
+  <link rel="preload" href="/fonts/cormorant-garamond-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/style.css">
   <script src="/app.js" defer></script>
 </head>
 <body>
+  <!-- Drawings of each kind of garment, until products have photos. -->
+  <svg width="0" height="0" class="visually-hidden" aria-hidden="true">
+    <symbol id="garment-dress" viewBox="0 0 120 150">
+      <path d="M48 16c2 9 22 9 24 0l9 4c-2 14-5 27-10 39 1 3 2 6 4 9l22 62c-24 9-50 9-74 0l22-62c2-3 3-6 4-9-5-12-8-25-10-39z"/>
+      <path d="M49 59c7 2 15 2 22 0M50 72l-9 58M60 74v61M70 72l9 58" fill="none"/>
+    </symbol>
+    <symbol id="garment-blouse" viewBox="0 0 120 150">
+      <path d="M47 24c3 8 23 8 26 0l19 7 17 56-14 5-13-36 1 66c-14 5-32 5-46 0l1-66-13 36-14-5 17-56z"/>
+      <path d="M60 34v83M56 46h.01M56 62h.01M56 78h.01M56 94h.01" fill="none"/>
+    </symbol>
+    <symbol id="garment-rok" viewBox="0 0 120 150">
+      <path d="M41 22h38l2 12 23 92c-27 10-61 10-88 0l23-92z"/>
+      <path d="M39 34h42M49 35l-11 95M60 35v99M71 35l11 95" fill="none"/>
+    </symbol>
+    <symbol id="garment-hijab" viewBox="0 0 120 150">
+      <path d="M60 12c20 0 32 16 32 36 0 13-3 23-2 31 9 7 20 18 24 35 1 5-1 8-5 10-32 12-66 12-98 0-4-2-6-5-5-10 4-17 15-28 24-35 1-8-2-18-2-31 0-20 12-36 32-36z"/>
+      <ellipse cx="60" cy="46" rx="15" ry="20" fill="#fff" fill-opacity=".45"/>
+      <path d="M41 62c6 16 28 21 42 8M31 84c14 13 44 15 60 1M72 76c-5 20-17 37-31 49" fill="none"/>
+    </symbol>
+  </svg>
+
   <header class="site-header">
     <a class="brand" href="/">Prastika</a>
     <form id="search-form" class="search" role="search">
       <label class="visually-hidden" for="search-input">Cari produk</label>
+      <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input id="search-input" type="search" maxlength="200" placeholder="Cari dress, blouse, hijab…" autocomplete="off">
       <button type="submit">Cari</button>
     </form>
@@ -30,51 +53,80 @@
   </header>
 
   <main>
-    <section class="intro">
-      <h1>Busana untuk hari-harimu</h1>
-      <p>Pilih model, ukuran, dan warna yang kamu suka.</p>
-    </section>
-
-    <section class="filters" aria-label="Saring produk">
-      <div id="categories" class="chips"></div>
-      <div class="selects">
-        <label>Ukuran <select id="size-filter"><option value="">Semua</option></select></label>
-        <label>Warna <select id="color-filter"><option value="">Semua</option></select></label>
-        <label class="check"><input id="stock-filter" type="checkbox"> Hanya yang tersedia</label>
+    <section class="hero">
+      <div>
+        <p class="eyebrow">Fashion wanita</p>
+        <h1>Busana untuk <em>hari-harimu</em></h1>
+        <p class="hero-text">Pilih model, ukuran, dan warna yang kamu suka, lalu simpan di keranjang sampai kamu siap memesan.</p>
+        <div class="hero-actions"><a class="primary" href="#katalog">Lihat koleksi</a></div>
+      </div>
+      <div class="hero-art" aria-hidden="true">
+        <div class="arch tone-2"><svg class="garment" viewBox="0 0 120 150"><use href="#garment-blouse"/></svg></div>
+        <div class="arch tone-0"><svg class="garment" viewBox="0 0 120 150"><use href="#garment-dress"/></svg></div>
+        <div class="arch tone-1"><svg class="garment" viewBox="0 0 120 150"><use href="#garment-rok"/></svg></div>
       </div>
     </section>
 
-    <p id="status" class="status" role="status" aria-live="polite"></p>
-    <section id="products" class="products" aria-label="Produk"></section>
-    <div class="more"><button id="more" class="secondary" type="button" hidden>Muat lebih banyak</button></div>
-  </main>
+    <section id="shop-by" class="shop-by" aria-labelledby="shop-by-title" hidden>
+      <h2 id="shop-by-title" class="section-title">Belanja menurut kategori</h2>
+      <div id="category-tiles" class="tiles"></div>
+    </section>
 
-  <footer class="site-footer">Prastika · Pembayaran masih simulasi. Tidak ada uang yang ditarik dan tidak ada barang yang dikirim.</footer>
-
-  <dialog id="product-dialog" class="sheet" aria-labelledby="product-title">
-    <button class="close" type="button" data-close aria-label="Tutup">×</button>
-    <div class="swatch" id="product-swatch" aria-hidden="true"></div>
-    <h2 id="product-title"></h2>
-    <p id="product-price" class="price"></p>
-    <p id="product-description"></p>
-    <form id="order-form">
-      <fieldset>
-        <legend>Pilih ukuran dan warna</legend>
-        <div id="product-variants" class="variants"></div>
-      </fieldset>
-      <div class="order-row">
-        <label>Jumlah <input id="order-quantity" type="number" min="1" max="20" value="1" required></label>
-        <div class="order-buttons">
-          <button id="cart-add" class="primary" type="submit">Tambah ke keranjang</button>
-          <button id="order-now" class="secondary" type="button">Beli sekarang</button>
+    <section id="katalog" class="catalog" aria-labelledby="catalog-title">
+      <div class="section-head">
+        <h2 id="catalog-title" class="section-title">Koleksi</h2>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+      </div>
+      <div class="filters" aria-label="Saring produk">
+        <div id="categories" class="chips"></div>
+        <div class="selects">
+          <label>Ukuran <select id="size-filter"><option value="">Semua</option></select></label>
+          <label>Warna <select id="color-filter"><option value="">Semua</option></select></label>
+          <label class="check"><input id="stock-filter" type="checkbox"> Hanya yang tersedia</label>
         </div>
       </div>
-      <p id="cart-note" class="cart-note" role="status" hidden><span id="cart-note-text"></span> <button id="cart-note-open" class="link" type="button">Lihat keranjang</button></p>
-      <p id="order-error" class="error" role="alert" hidden></p>
-    </form>
+      <div id="products" class="products"></div>
+      <div class="more"><button id="more" class="secondary" type="button" hidden>Muat lebih banyak</button></div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <span class="brand">Prastika</span>
+    <p>Pembayaran masih simulasi. Tidak ada uang yang ditarik dan tidak ada barang yang dikirim.</p>
+  </footer>
+
+  <dialog id="product-dialog" class="sheet product-sheet" aria-labelledby="product-title">
+    <button class="close" type="button" data-close aria-label="Tutup">×</button>
+    <div class="product-layout">
+      <div id="product-swatch" class="art" aria-hidden="true"></div>
+      <div class="product-info">
+        <span id="product-category" class="eyebrow" hidden></span>
+        <h2 id="product-title"></h2>
+        <p id="product-price" class="price"></p>
+        <p id="product-description"></p>
+        <form id="order-form">
+          <fieldset>
+            <legend>Pilih ukuran dan warna</legend>
+            <div id="product-variants" class="variants"></div>
+          </fieldset>
+          <div class="order-row">
+            <div class="quantity-field">
+              <label for="order-quantity">Jumlah</label>
+              <input id="order-quantity" type="number" min="1" max="20" value="1" required>
+            </div>
+            <div class="order-buttons">
+              <button id="cart-add" class="primary" type="submit">Tambah ke keranjang</button>
+              <button id="order-now" class="secondary" type="button">Beli sekarang</button>
+            </div>
+          </div>
+          <p id="cart-note" class="cart-note" role="status" hidden><span id="cart-note-text"></span> <button id="cart-note-open" class="link" type="button">Lihat keranjang</button></p>
+          <p id="order-error" class="error" role="alert" hidden></p>
+        </form>
+      </div>
+    </div>
   </dialog>
 
-  <dialog id="cart-dialog" class="sheet" aria-labelledby="cart-title">
+  <dialog id="cart-dialog" class="sheet cart-sheet" aria-labelledby="cart-title">
     <button class="close" type="button" data-close aria-label="Tutup">×</button>
     <h2 id="cart-title" tabindex="-1">Keranjang</h2>
     <p id="cart-status" class="status" role="status" aria-live="polite"></p>

@@ -193,13 +193,28 @@ func (h *harness) apply(t *testing.T, eventType string, orderID int64) {
 	}
 }
 
-const oneDress = `{"items":[{"variant_id":1,"quantity":2}]}`
+const testAddress = `{"recipient":"Sari Dewi","phone":"+62 812-3456-7890","street":"Jl. Melati No. 5","district":"Coblong","city":"Kota Bandung","province":"Jawa Barat","postal_code":"40132"}`
+
+// addressed puts the test address into an order body that has none.
+func addressed(body string) string {
+	return strings.Replace(body, "{", `{"shipping_address":`+testAddress+",", 1)
+}
+
+var oneDress = addressed(`{"items":[{"variant_id":1,"quantity":2}]}`)
+
+var testStoredAddress = Address{Recipient: "Sari Dewi", Phone: "081234567890", Street: "Jl. Melati No. 5", District: "Coblong", City: "Kota Bandung", Province: "Jawa Barat", PostalCode: "40132"}
 
 func TestCreateCopiesPricesAndAsksForStock(t *testing.T) {
 	h := newHarness(t)
-	order := h.create(t, 1, `{"items":[{"variant_id":1,"quantity":2},{"variant_id":2,"quantity":1}]}`)
+	order := h.create(t, 1, addressed(`{"items":[{"variant_id":1,"quantity":2},{"variant_id":2,"quantity":1}]}`))
 	if order.Status != statusPending || order.Total != 800000 || len(order.Items) != 2 {
 		t.Fatalf("order %+v", order)
+	}
+	if order.ShippingAddress == nil || *order.ShippingAddress != testStoredAddress {
+		t.Fatalf("address %+v", order.ShippingAddress)
+	}
+	if read := h.status(t, 1, order.ID); read.ShippingAddress == nil || *read.ShippingAddress != testStoredAddress {
+		t.Fatalf("read address %+v", read.ShippingAddress)
 	}
 	if item := order.Items[0]; item.ProductName != "Dress" || item.Size != "M" || item.Color != "Merah" || item.Price != 350000 {
 		t.Fatalf("item %+v", item)
@@ -220,16 +235,22 @@ func TestCreateValidation(t *testing.T) {
 		many[i] = fmt.Sprintf(`{"variant_id":%d,"quantity":1}`, i+1)
 	}
 	for name, body := range map[string]string{
-		"no items":       `{"items":[]}`,
-		"too many items": `{"items":[` + strings.Join(many, ",") + `]}`,
-		"zero quantity":  `{"items":[{"variant_id":1,"quantity":0}]}`,
-		"large quantity": `{"items":[{"variant_id":1,"quantity":21}]}`,
-		"bad variant":    `{"items":[{"variant_id":0,"quantity":1}]}`,
-		"same twice":     `{"items":[{"variant_id":1,"quantity":1},{"variant_id":1,"quantity":1}]}`,
-		"unknown":        `{"items":[{"variant_id":999,"quantity":1}]}`,
-		"price sent":     `{"items":[{"variant_id":1,"quantity":1,"price":1}]}`,
-		"user sent":      `{"user_id":9,"items":[{"variant_id":1,"quantity":1}]}`,
-		"not JSON":       `nope`,
+		"no items":        addressed(`{"items":[]}`),
+		"too many items":  addressed(`{"items":[` + strings.Join(many, ",") + `]}`),
+		"zero quantity":   addressed(`{"items":[{"variant_id":1,"quantity":0}]}`),
+		"large quantity":  addressed(`{"items":[{"variant_id":1,"quantity":21}]}`),
+		"bad variant":     addressed(`{"items":[{"variant_id":0,"quantity":1}]}`),
+		"same twice":      addressed(`{"items":[{"variant_id":1,"quantity":1},{"variant_id":1,"quantity":1}]}`),
+		"unknown":         addressed(`{"items":[{"variant_id":999,"quantity":1}]}`),
+		"price sent":      addressed(`{"items":[{"variant_id":1,"quantity":1,"price":1}]}`),
+		"user sent":       addressed(`{"user_id":9,"items":[{"variant_id":1,"quantity":1}]}`),
+		"not JSON":        `nope`,
+		"no address":      `{"items":[{"variant_id":1,"quantity":1}]}`,
+		"null address":    `{"shipping_address":null,"items":[{"variant_id":1,"quantity":1}]}`,
+		"bad phone":       strings.Replace(oneDress, "+62 812-3456-7890", "022 123456", 1),
+		"bad postal code": strings.Replace(oneDress, "40132", "401", 1),
+		"no recipient":    strings.Replace(oneDress, "Sari Dewi", " ", 1),
+		"address extra":   strings.Replace(oneDress, `"recipient"`, `"country":"ID","recipient"`, 1),
 	} {
 		t.Run(name, func(t *testing.T) {
 			if status, data := h.do(t, http.MethodPost, "/orders", body, h.token(t, 1)); status != http.StatusBadRequest {
@@ -501,7 +522,7 @@ func TestStatusChangesSendOneSignalToTheOwner(t *testing.T) {
 	}
 	create := func() int64 {
 		t.Helper()
-		order, err := h.store.Create(ctx, 7, []OrderItem{{VariantID: 1, Price: 100, Quantity: 1}})
+		order, err := h.store.Create(ctx, 7, []OrderItem{{VariantID: 1, Price: 100, Quantity: 1}}, testStoredAddress)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -575,7 +596,7 @@ func TestFinishedOrdersSendAnEventForTheirEmail(t *testing.T) {
 	}
 	create := func() int64 {
 		t.Helper()
-		order, err := h.store.Create(ctx, 7, []OrderItem{{VariantID: 1, ProductName: "Dress", Size: "M", Color: "Merah", Price: 100, Quantity: 2}})
+		order, err := h.store.Create(ctx, 7, []OrderItem{{VariantID: 1, ProductName: "Dress", Size: "M", Color: "Merah", Price: 100, Quantity: 2}}, testStoredAddress)
 		check(err)
 		return order.ID
 	}
@@ -633,5 +654,21 @@ func TestFinishedOrdersSendAnEventForTheirEmail(t *testing.T) {
 	cancelled := finished(eventOrderCancelled)
 	if cancelled[0].Reason != reasonPaymentFailed || cancelled[1].Reason != reasonExpired {
 		t.Errorf("reasons = %q, %q", cancelled[0].Reason, cancelled[1].Reason)
+	}
+}
+
+func TestOldOrdersWithoutAddressStillRead(t *testing.T) {
+	h := newHarness(t)
+	order := h.create(t, 1, oneDress)
+	if _, err := h.store.pool.Exec(context.Background(), `UPDATE orders SET shipping_address = NULL`); err != nil {
+		t.Fatal(err)
+	}
+	read := h.status(t, 1, order.ID)
+	if read.ShippingAddress != nil || len(read.Items) != 1 {
+		t.Fatalf("order %+v", read)
+	}
+	status, data := h.do(t, http.MethodGet, "/orders", "", h.token(t, 1))
+	if status != http.StatusOK || !strings.Contains(string(data), `"shipping_address":null`) {
+		t.Fatalf("status %d: %s", status, data)
 	}
 }

@@ -97,6 +97,14 @@ func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, 
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("GET /api/me", g.me)
+	mux.HandleFunc("GET /api/me/address", func(w http.ResponseWriter, r *http.Request) {
+		g.withSession(w, r, g.userURL+"/me/address", nil)
+	})
+	mux.HandleFunc("PUT /api/me/address", func(w http.ResponseWriter, r *http.Request) {
+		if body, ok := readBody(w, r); ok {
+			g.withSession(w, r, g.userURL+"/me/address", body)
+		}
+	})
 	mux.HandleFunc("POST /api/orders", func(w http.ResponseWriter, r *http.Request) {
 		if body, ok := readBody(w, r); ok {
 			g.withSession(w, r, g.orderURL+"/orders", body)

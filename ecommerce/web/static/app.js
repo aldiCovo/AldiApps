@@ -526,6 +526,7 @@ function photoKey(event) {
 
 let authMode = "login";
 let loggedIn = false;
+let currentUser = null;
 
 function setAuthMode(mode) {
   authMode = mode;
@@ -581,6 +582,8 @@ async function submitAuth(event) {
 function renderAccount(user) {
   const wasLoggedIn = loggedIn;
   loggedIn = Boolean(user);
+  currentUser = user;
+  if (!user && $("checkout-dialog").open) $("checkout-dialog").close();
   if (user) {
     if ($("cart-dialog").open) refreshCart();
     else syncAccountCart();
@@ -678,6 +681,10 @@ function orderCard(order) {
   card.append(head);
   for (const item of order.items) {
     card.append(el("p", "order-item", `${item.product_name} · ${item.size} · ${item.color} × ${item.quantity}`));
+  }
+  const address = order.shipping_address;
+  if (address) {
+    card.append(el("p", "order-item order-address", `Dikirim ke ${address.recipient} (${address.phone})\n${address.street}, ${address.district}, ${address.city}, ${address.province} ${address.postal_code}`));
   }
   card.append(el("p", "card-price", `Total ${rupiah.format(order.total)}`));
   if (order.status === "rejected") {
@@ -815,18 +822,8 @@ async function orderNow() {
   }
   const chosen = document.querySelector('input[name="variant"]:checked');
   if (!chosen) return;
-  $("order-now").disabled = true;
-  $("order-error").hidden = true;
-  try {
-    await post("/orders", { items: [{ variant_id: Number(chosen.value), quantity: Number($("order-quantity").value) }] });
-    $("product-dialog").close();
-    openOrders();
-  } catch (error) {
-    $("order-error").textContent = orderError(error);
-    $("order-error").hidden = false;
-  } finally {
-    $("order-now").disabled = false;
-  }
+  $("product-dialog").close();
+  openCheckout([{ product_id: shownProductId, variant_id: Number(chosen.value), quantity: Number($("order-quantity").value) }], false);
 }
 
 // A guest's cart lives in this browser. A customer's lives on their account in cart-service, so
@@ -1121,27 +1118,175 @@ function openCart() {
   refreshCart();
 }
 
-async function checkout() {
+function checkout() {
   if (!loggedIn) {
     openAuth();
     return;
   }
-  $("cart-checkout").disabled = true;
-  $("cart-error").hidden = true;
-  try {
-    await post("/orders", { items: cart.map(({ variant_id, quantity }) => ({ variant_id, quantity })) });
-  } catch (error) {
-    const message = orderError(error);
-    if (error.status === 401) return;
-    $("cart-error").textContent = message;
-    $("cart-error").hidden = false;
-    $("cart-checkout").disabled = false;
+  $("cart-dialog").close();
+  openCheckout(cart, true);
+}
+
+// Checkout shows where the order goes, what's in it and the total, before it's made. Names,
+// prices and stock are read again here, so they're current. The address is kept on the
+// account, and each order gets its own copy of it.
+const addressFields = ["recipient", "phone", "street", "district", "city", "province", "postal_code"];
+let checkoutItems = [];
+let checkoutFromCart = false;
+let checkoutBlocked = true;
+let savedAddress = null;
+let latestCheckout = 0;
+
+async function openCheckout(items, fromCart) {
+  if (!loggedIn) {
+    openAuth();
     return;
   }
+  const request = ++latestCheckout;
+  checkoutItems = items.map(({ product_id, variant_id, quantity }) => ({ product_id, variant_id, quantity }));
+  checkoutFromCart = fromCart;
+  checkoutBlocked = true;
+  for (const id of ["checkout-error", "checkout-problem", "address-error"]) $(id).hidden = true;
+  $("checkout-body").hidden = true;
+  $("checkout-status").textContent = "Memuat…";
+  $("checkout-dialog").showModal();
+  const ids = [...new Set(checkoutItems.map((item) => item.product_id))];
+  const [address, products] = await Promise.allSettled([
+    api("/me/address"),
+    Promise.allSettled(ids.map((id) => api(`/products/${id}`))),
+  ]);
+  if (request !== latestCheckout || !$("checkout-dialog").open) return;
+  if (address.status === "rejected" && address.reason.status === 401) {
+    renderAccount(null);
+    openAuth();
+    return;
+  }
+  const failed = products.value.some((result) => result.status === "rejected" && result.reason.status !== 404);
+  if (failed || (address.status === "rejected" && address.reason.status !== 404)) {
+    $("checkout-status").textContent = "Checkout belum bisa dimuat. Tutup lalu coba lagi sebentar lagi.";
+    return;
+  }
+  savedAddress = address.status === "fulfilled" ? address.value : null;
+  const variants = new Map();
+  for (const result of products.value) {
+    if (result.status !== "fulfilled") continue;
+    for (const variant of result.value.variants || []) variants.set(variant.id, { product: result.value, variant });
+  }
+  renderCheckoutItems(variants);
+  showAddress(!savedAddress);
+  $("checkout-status").textContent = "";
+  $("checkout-body").hidden = false;
+}
+
+function renderCheckoutItems(variants) {
+  let total = 0;
+  let problem = "";
+  const rows = checkoutItems.map((item) => {
+    const row = el("div", "cart-row");
+    const details = variants.get(item.variant_id);
+    if (!details) {
+      problem = "Ada barang yang sudah tidak dijual. Hapus dulu dari keranjang.";
+      row.append(el("div"), el("div", "cart-name", "Barang ini sudah tidak dijual"));
+      return row;
+    }
+    const { product, variant } = details;
+    const art = el("div");
+    art.setAttribute("aria-hidden", "true");
+    fillSwatch(art, product, "art cart-art");
+    const about = el("div");
+    about.append(el("div", "cart-name", product.name), el("div", "cart-detail", `${variant.size} · ${variant.color} · ${item.quantity} × ${rupiah.format(product.price)}`));
+    if (variant.stock < item.quantity) {
+      problem = "Stok ada yang kurang dari jumlah pesananmu. Ubah jumlahnya di keranjang dulu.";
+      about.append(el("p", "error", variant.stock === 0 ? "Stok habis" : `Stok tinggal ${variant.stock}`));
+    }
+    const subtotal = product.price * item.quantity;
+    total += subtotal;
+    row.append(art, about, el("div", "cart-subtotal", rupiah.format(subtotal)));
+    return row;
+  });
+  $("checkout-items").replaceChildren(...rows);
+  $("checkout-total").textContent = rupiah.format(total);
+  $("checkout-problem").textContent = problem;
+  $("checkout-problem").hidden = !problem;
+  checkoutBlocked = Boolean(problem);
+  $("checkout-submit").disabled = checkoutBlocked;
+}
+
+// Shows the saved address, or the form when there's none yet or it's being changed.
+function showAddress(editing) {
+  $("address-form").hidden = !editing;
+  $("address-view").hidden = editing;
+  $("address-cancel").hidden = !savedAddress;
+  $("address-error").hidden = true;
+  if (editing) {
+    const address = savedAddress || { recipient: currentUser ? currentUser.name : "" };
+    for (const field of addressFields) $(`address-${field}`).value = address[field] || "";
+    return;
+  }
+  const a = savedAddress;
+  $("address-text").replaceChildren(...[`${a.recipient} · ${a.phone}`, a.street, `${a.district}, ${a.city}`, `${a.province} ${a.postal_code}`].map((line) => el("span", "", line)));
+}
+
+async function saveAddress() {
+  const address = Object.fromEntries(addressFields.map((field) => [field, $(`address-${field}`).value]));
+  // The answer is the address as stored, with the phone number in one form.
+  savedAddress = await send("PUT", "/me/address", address);
+}
+
+// Answers true when the address could be saved.
+async function trySaveAddress() {
+  $("address-error").hidden = true;
+  try {
+    await saveAddress();
+    showAddress(false);
+    return true;
+  } catch (error) {
+    if (error.status === 401) {
+      renderAccount(null);
+      openAuth();
+      return false;
+    }
+    $("address-error").textContent = error.status === 400
+      ? "Periksa lagi alamatnya. Nomor HP harus nomor ponsel Indonesia dan kode pos 5 angka."
+      : "Alamat belum bisa disimpan. Coba lagi sebentar lagi.";
+    $("address-error").hidden = false;
+    return false;
+  }
+}
+
+async function submitAddress(event) {
+  event.preventDefault();
+  $("address-save").disabled = true;
+  await trySaveAddress();
+  $("address-save").disabled = false;
+}
+
+async function submitCheckout() {
+  if (checkoutBlocked) return;
+  const editing = !$("address-form").hidden;
+  if (editing && !$("address-form").reportValidity()) return;
+  $("checkout-submit").disabled = true;
+  $("checkout-error").hidden = true;
+  try {
+    if (editing && !(await trySaveAddress())) return;
+    await post("/orders", { items: checkoutItems.map(({ variant_id, quantity }) => ({ variant_id, quantity })), shipping_address: savedAddress });
+  } catch (error) {
+    const message = orderError(error);
+    if (error.status === 401) {
+      openAuth();
+      return;
+    }
+    $("checkout-error").textContent = message;
+    $("checkout-error").hidden = false;
+    return;
+  } finally {
+    $("checkout-submit").disabled = checkoutBlocked;
+  }
+  $("checkout-dialog").close();
+  openOrders();
+  if (!checkoutFromCart) return;
   cart = [];
   showCartCount();
-  $("cart-dialog").close();
-  openOrders();
   try {
     await send("DELETE", "/cart");
   } catch {
@@ -1192,6 +1337,13 @@ $("cart-note-open").addEventListener("click", () => {
   openCart();
 });
 $("cart-checkout").addEventListener("click", checkout);
+$("checkout-submit").addEventListener("click", submitCheckout);
+$("address-form").addEventListener("submit", submitAddress);
+$("address-edit").addEventListener("click", () => {
+  showAddress(true);
+  $("address-recipient").focus();
+});
+$("address-cancel").addEventListener("click", () => showAddress(false));
 document.addEventListener("visibilitychange", checkAccountAgain);
 // Keeps a guest's second tab showing the same cart.
 window.addEventListener("storage", (event) => {

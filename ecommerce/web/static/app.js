@@ -652,7 +652,8 @@ const isLive = () => liveSocket !== null && liveSocket.readyState === WebSocket.
 
 function orderState(order) {
   if (order.status === "cancelled") {
-    return [order.reason === "expired" ? "Dibatalkan: waktu pembayaran habis" : "Dibatalkan: pembayaran gagal", "bad"];
+    const reasons = { expired: "Dibatalkan: waktu pembayaran habis", cancelled_by_customer: "Dibatalkan atas permintaanmu" };
+    return [reasons[order.reason] || "Dibatalkan: pembayaran gagal", "bad"];
   }
   return orderStates[order.status] || [order.status, ""];
 }
@@ -671,6 +672,57 @@ function payButton(order, label, className, simulate) {
     await refreshOrders();
   });
   return button;
+}
+
+// Cancelling asks once more in the card itself, because it can't be undone. The list is drawn
+// again whenever orders change, so the open question is remembered by order id.
+let cancelQuestion = null;
+
+function cancelControls(order) {
+  const box = el("div", "order-cancel");
+  const showAsk = () => {
+    const ask = el("button", "link", "Batalkan pesanan");
+    ask.type = "button";
+    ask.dataset.key = `cancel-${order.id}`;
+    ask.addEventListener("click", () => {
+      cancelQuestion = order.id;
+      showQuestion();
+      box.querySelector(".secondary").focus();
+    });
+    box.replaceChildren(ask);
+    return ask;
+  };
+  const showQuestion = () => {
+    const question = el("p", "order-cancel-question", `Batalkan pesanan #${order.id}? Stoknya dikembalikan dan pesanan ini tidak bisa dibayar lagi.`);
+    const yes = el("button", "secondary", "Ya, batalkan");
+    yes.type = "button";
+    yes.dataset.key = `cancel-yes-${order.id}`;
+    const no = el("button", "link", "Tidak");
+    no.type = "button";
+    no.dataset.key = `cancel-no-${order.id}`;
+    no.addEventListener("click", () => {
+      cancelQuestion = null;
+      showAsk().focus();
+    });
+    yes.addEventListener("click", async () => {
+      cancelQuestion = null;
+      for (const button of box.closest(".order").querySelectorAll("button")) button.disabled = true;
+      try {
+        await post(`/orders/${order.id}/cancel`, {});
+        $("orders-status").textContent = `Pesanan #${order.id} sudah dibatalkan.`;
+      } catch (error) {
+        if (error.status === 401) renderAccount(null);
+        $("orders-status").textContent = error.status === 409 ? "Pesanan ini sudah tidak bisa dibatalkan." : "Pesanan belum bisa dibatalkan. Coba lagi sebentar lagi.";
+      }
+      await refreshOrders();
+    });
+    const buttons = el("div", "order-cancel-buttons");
+    buttons.append(yes, no);
+    box.replaceChildren(question, buttons);
+  };
+  if (cancelQuestion === order.id) showQuestion();
+  else showAsk();
+  return box;
 }
 
 function orderCard(order) {
@@ -714,7 +766,7 @@ function orderCard(order) {
     }
     const actions = el("div", "order-actions");
     actions.append(payButton(order, "Bayar (simulasi)", "primary", "success"), payButton(order, "Simulasikan gagal bayar", "secondary", "failure"));
-    card.append(actions);
+    card.append(actions, cancelControls(order));
   }
   return card;
 }
@@ -739,7 +791,14 @@ async function refreshOrders() {
 function renderOrders(orders) {
   shownOrders = orders;
   clearTimeout(pollTimer);
+  // Drawing the list again keeps keyboard focus on the same button.
+  const focused = document.activeElement;
+  const focusKey = $("orders-list").contains(focused) ? focused.dataset.key : undefined;
   $("orders-list").replaceChildren(...orders.map(orderCard));
+  if (focusKey) {
+    const again = $("orders-list").querySelector(`[data-key="${focusKey}"]`);
+    if (again) again.focus();
+  }
   if (orders.length === 0) $("orders-status").textContent = "Belum ada pesanan.";
   if (!$("orders-dialog").open) return;
   if (orders.some((order) => openStatuses.has(order.status))) connectLive();
@@ -1443,6 +1502,7 @@ window.addEventListener("storage", (event) => {
   if ($("cart-dialog").open) refreshCart();
 });
 $("orders-dialog").addEventListener("close", () => {
+  cancelQuestion = null;
   clearTimeout(pollTimer);
   disconnectLive();
 });

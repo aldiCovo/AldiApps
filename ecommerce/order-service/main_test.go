@@ -730,3 +730,99 @@ func TestEveryProvinceHasAZone(t *testing.T) {
 		}
 	}
 }
+
+func TestCustomerCancelsAnUnpaidOrder(t *testing.T) {
+	h := newHarness(t)
+	order := h.create(t, 1, oneDress)
+	cancel := func(userID, id int64) (int, []byte) {
+		t.Helper()
+		return h.do(t, http.MethodPost, fmt.Sprintf("/orders/%d/cancel", id), "", h.token(t, userID))
+	}
+	if status, _ := cancel(1, order.ID); status != http.StatusConflict {
+		t.Fatalf("cancelling while the stock is checked: status %d", status)
+	}
+	h.apply(t, eventStockReserved, order.ID)
+	if status, _ := cancel(2, order.ID); status != http.StatusNotFound {
+		t.Fatalf("another user's order: status %d", status)
+	}
+	if status, _ := cancel(1, 999); status != http.StatusNotFound {
+		t.Fatalf("unknown order: status %d", status)
+	}
+	if status, _ := h.do(t, http.MethodPost, fmt.Sprintf("/orders/%d/cancel", order.ID), "", ""); status != http.StatusUnauthorized {
+		t.Fatalf("no token: status %d", status)
+	}
+	status, data := cancel(1, order.ID)
+	var got Order
+	if err := json.Unmarshal(data, &got); err != nil || status != http.StatusOK {
+		t.Fatalf("status %d: %s", status, data)
+	}
+	if got.Status != statusCancelled || got.Reason != reasonByCustomer || got.ExpiresAt != nil || len(got.Items) != 1 {
+		t.Fatalf("order %+v", got)
+	}
+	if status, _ := cancel(1, order.ID); status != http.StatusConflict {
+		t.Fatalf("second cancel: status %d", status)
+	}
+	if status, _ := h.do(t, http.MethodPost, fmt.Sprintf("/orders/%d/pay", order.ID), `{"simulate":"success"}`, h.token(t, 1)); status != http.StatusConflict {
+		t.Fatalf("paying a cancelled order: status %d", status)
+	}
+	// The stock goes back through order.cancelled, with the reason for the email.
+	want := []string{eventOrderCreated, eventOrderCancelled}
+	if got := h.outbox(t); fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("events %v", got)
+	}
+	var data2 string
+	if err := h.store.pool.QueryRow(context.Background(), `SELECT data::text FROM outbox_events WHERE type = $1`, eventOrderCancelled).Scan(&data2); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(data2, `"reason": "cancelled_by_customer"`) || !strings.Contains(data2, `"user_id": 1`) {
+		t.Fatalf("event %s", data2)
+	}
+	// A late payment event can't bring it back.
+	h.apply(t, eventPaymentSucceeded, order.ID)
+	if got := h.status(t, 1, order.ID); got.Status != statusCancelled {
+		t.Fatalf("after a late event: %+v", got)
+	}
+}
+
+func TestPayingOrPaidOrdersCannotBeCancelled(t *testing.T) {
+	h := newHarness(t)
+	order := h.create(t, 1, oneDress)
+	h.apply(t, eventStockReserved, order.ID)
+	if status, _ := h.do(t, http.MethodPost, fmt.Sprintf("/orders/%d/pay", order.ID), `{"simulate":"success"}`, h.token(t, 1)); status != http.StatusAccepted {
+		t.Fatalf("pay: status %d", status)
+	}
+	for _, step := range []string{"paying", "paid"} {
+		if status, _ := h.do(t, http.MethodPost, fmt.Sprintf("/orders/%d/cancel", order.ID), "", h.token(t, 1)); status != http.StatusConflict {
+			t.Fatalf("%s: status %d", step, status)
+		}
+		h.apply(t, eventPaymentSucceeded, order.ID)
+	}
+	if got := h.status(t, 1, order.ID); got.Status != statusPaid {
+		t.Fatalf("order %+v", got)
+	}
+}
+
+func TestCancelAndPayAtOnceOnlyOneWins(t *testing.T) {
+	h := newHarness(t)
+	for range 10 {
+		order := h.create(t, 1, oneDress)
+		h.apply(t, eventStockReserved, order.ID)
+		var cancelStatus, payStatus int
+		var wg sync.WaitGroup
+		wg.Go(func() {
+			cancelStatus, _ = h.do(t, http.MethodPost, fmt.Sprintf("/orders/%d/cancel", order.ID), "", h.token(t, 1))
+		})
+		wg.Go(func() {
+			payStatus, _ = h.do(t, http.MethodPost, fmt.Sprintf("/orders/%d/pay", order.ID), `{"simulate":"success"}`, h.token(t, 1))
+		})
+		wg.Wait()
+		got := h.status(t, 1, order.ID)
+		cancelled := cancelStatus == http.StatusOK && payStatus == http.StatusConflict && got.Status == statusCancelled
+		paying := payStatus == http.StatusAccepted && cancelStatus == http.StatusConflict && got.Status == statusPaying
+		if !cancelled && !paying {
+			t.Fatalf("cancel %d, pay %d, status %s", cancelStatus, payStatus, got.Status)
+		}
+		// Finish it, so the open order limit isn't reached.
+		h.apply(t, eventPaymentSucceeded, order.ID)
+	}
+}

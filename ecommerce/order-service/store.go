@@ -20,6 +20,7 @@ const (
 
 	reasonPaymentFailed = "payment_failed"
 	reasonExpired       = "expired"
+	reasonByCustomer    = "cancelled_by_customer"
 
 	// Open orders hold stock, so one account can't hold it all.
 	maxOpenOrders = 5
@@ -30,6 +31,7 @@ var (
 	errNotFound      = errors.New("order not found")
 	errTooManyOrders = errors.New("too many unfinished orders")
 	errCannotPay     = errors.New("this order can't be paid now")
+	errCannotCancel  = errors.New("this order can't be cancelled now")
 )
 
 type OrderItem struct {
@@ -303,6 +305,38 @@ func (s *Store) finish(ctx context.Context, id int64, from, to, reason, eventTyp
 	}
 	s.changed(userID, id, to)
 	return nil
+}
+
+// Cancel lets the customer drop an order that is waiting for payment. Its stock goes back on
+// sale through the same event as an expiry. An order already being paid, or still having its
+// stock checked, can't be cancelled: the row's status decides, so cancelling and paying at
+// once can't both succeed.
+func (s *Store) Cancel(ctx context.Context, userID, id int64) (o Order, err error) {
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		o, err = scanOrder(tx.QueryRow(ctx,
+			`UPDATE orders SET status = 'cancelled', reason = $3, expires_at = NULL, updated_at = now()
+			 WHERE id = $1 AND user_id = $2 AND status = 'awaiting_payment'
+			 RETURNING `+orderColumns, id, userID, reasonByCustomer))
+		if errors.Is(err, errNotFound) {
+			if _, err := s.Get(ctx, userID, id); err != nil {
+				return err
+			}
+			return errCannotCancel
+		}
+		if err != nil {
+			return err
+		}
+		return addFinishedEvent(ctx, tx, eventOrderCancelled, o.ID, userID, o.Total, reasonByCustomer)
+	})
+	if err != nil {
+		return Order{}, err
+	}
+	s.changed(userID, o.ID, statusCancelled)
+	orders := []Order{o}
+	if err := attachItems(ctx, s.pool, orders); err != nil {
+		return Order{}, err
+	}
+	return orders[0], nil
 }
 
 // CancelPaying is the saga's compensation: the failed payment's stock goes back on sale.

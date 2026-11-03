@@ -207,6 +207,19 @@ func newHandler(store *Store, verifier *Verifier, catalog *Catalog) http.Handler
 		writeJSON(w, http.StatusAccepted, order)
 	}))
 
+	mux.HandleFunc("POST /orders/{id}/cancel", authenticated(func(w http.ResponseWriter, r *http.Request, userID int64) {
+		id, ok := orderID(w, r)
+		if !ok {
+			return
+		}
+		order, err := store.Cancel(r.Context(), userID, id)
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, order)
+	}))
+
 	return mux
 }
 
@@ -229,7 +242,7 @@ func writeStoreError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, errNotFound):
 		writeError(w, http.StatusNotFound, err.Error())
-	case errors.Is(err, errCannotPay), errors.Is(err, errTooManyOrders):
+	case errors.Is(err, errCannotPay), errors.Is(err, errCannotCancel), errors.Is(err, errTooManyOrders):
 		writeError(w, http.StatusConflict, err.Error())
 	default:
 		slog.Error("database request failed", "error", err)

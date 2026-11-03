@@ -79,7 +79,7 @@ func newHarness(t *testing.T) *harness {
 	}))
 	t.Cleanup(catalog.Close)
 	store := &Store{pool: pool, paymentWindow: time.Minute}
-	server := httptest.NewServer(newHandler(store, newVerifier(users.URL), newCatalog(catalog.URL)))
+	server := httptest.NewServer(newHandler(store, newVerifier(users.URL), newCatalog(catalog.URL), testInternalToken))
 	t.Cleanup(server.Close)
 	return &harness{Server: server, store: store, private: private, keyFetches: fetches, catalog: catalog}
 }

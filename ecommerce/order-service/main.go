@@ -46,6 +46,10 @@ func run() error {
 		}
 		values[name] = value
 	}
+	internalToken := os.Getenv("INTERNAL_TOKEN")
+	if len(internalToken) < minInternalTokenLength {
+		return fmt.Errorf("INTERNAL_TOKEN must have at least %d characters", minInternalTokenLength)
+	}
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -93,7 +97,7 @@ func run() error {
 
 	server := &http.Server{
 		Addr:              ":" + port,
-		Handler:           newHandler(store, newVerifier(values["USER_URL"]), newCatalog(values["CATALOG_URL"])),
+		Handler:           newHandler(store, newVerifier(values["USER_URL"]), newCatalog(values["CATALOG_URL"]), internalToken),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      30 * time.Second,

@@ -18,6 +18,8 @@ const (
 	eventOrderPaid      = "order.paid"
 	eventOrderRejected  = "order.rejected"
 	eventOrderCancelled = "order.cancelled"
+	eventOrderShipped   = "order.shipped"
+	eventOrderCompleted = "order.completed"
 
 	reasonExpired    = "expired"
 	reasonByCustomer = "cancelled_by_customer"
@@ -43,6 +45,13 @@ type FinishedOrder struct {
 		Color       string `json:"color"`
 		Quantity    int32  `json:"quantity"`
 	} `json:"items"`
+	// Only on order.shipped.
+	Shipping *struct {
+		Courier  string `json:"courier"`
+		Service  string `json:"service"`
+		Estimate string `json:"estimate"`
+	} `json:"shipping"`
+	TrackingNumber string `json:"tracking_number"`
 }
 
 // Notifier turns finished orders into emails.
@@ -64,7 +73,7 @@ func (n *Notifier) handle(ctx context.Context, body []byte) error {
 		return nil
 	}
 	switch event.Type {
-	case eventOrderPaid, eventOrderRejected, eventOrderCancelled:
+	case eventOrderPaid, eventOrderRejected, eventOrderCancelled, eventOrderShipped, eventOrderCompleted:
 	default:
 		slog.Warn("ignoring unknown event type", "event_id", event.ID, "type", event.Type)
 		return nil
@@ -116,6 +125,18 @@ func compose(kind string, order FinishedOrder, user User) Email {
 	case kind == eventOrderPaid:
 		subject = "Pesanan #%d sudah dibayar"
 		opening = "Terima kasih, pembayaran pesanan kamu sudah kami terima."
+	case kind == eventOrderShipped:
+		subject = "Pesanan #%d sudah dikirim"
+		opening = "Pesanan kamu sudah kami kirim."
+		if order.Shipping != nil {
+			opening += fmt.Sprintf(" Kurir: %s %s, estimasi %s.", order.Shipping.Courier, order.Shipping.Service, order.Shipping.Estimate)
+		}
+		if order.TrackingNumber != "" {
+			opening += " Nomor resi: " + order.TrackingNumber + "."
+		}
+	case kind == eventOrderCompleted:
+		subject = "Pesanan #%d selesai"
+		opening = "Pesanan kamu sudah sampai dan kami tandai selesai. Terima kasih sudah berbelanja di Prastika."
 	case kind == eventOrderRejected:
 		subject = "Pesanan #%d tidak bisa diproses"
 		opening = "Maaf, stok barang yang kamu pesan tidak cukup. Tidak ada pembayaran yang ditagih."

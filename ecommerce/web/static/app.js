@@ -634,6 +634,9 @@ const orderStates = {
   awaiting_payment: ["Menunggu pembayaran", ""],
   paying: ["Memproses pembayaran…", ""],
   paid: ["Dibayar", "good"],
+  packed: ["Dikemas", "good"],
+  shipped: ["Dikirim", "good"],
+  completed: ["Selesai", "good"],
   rejected: ["Ditolak: stok tidak cukup", "bad"],
 };
 const pollEvery = 1500;
@@ -641,7 +644,9 @@ const pollEvery = 1500;
 const pollEveryWhileLive = 15000;
 const liveRetryMax = 30000;
 const unsettled = new Set(["pending", "paying"]);
-const openStatuses = new Set(["pending", "awaiting_payment", "paying"]);
+// Orders that can still change, so the list listens for their signals. The shop moves a paid
+// order on from the admin pages.
+const openStatuses = new Set(["pending", "awaiting_payment", "paying", "paid", "packed", "shipped"]);
 let pollTimer = null;
 let shownOrders = [];
 let liveSocket = null;
@@ -793,9 +798,13 @@ function orderCard(order) {
   for (const item of order.items) {
     card.append(el("p", "order-item", `${item.product_name} · ${item.size} · ${item.color} × ${item.quantity}`));
   }
+  if (order.tracking_number) {
+    const courier = order.shipping ? `${order.shipping.courier} ${order.shipping.service} · ` : "";
+    card.append(el("p", "order-item order-resi", `${courier}resi ${order.tracking_number}`));
+  }
   const foot = el("div", "order-foot");
   foot.append(el("p", "card-price", `Total ${rupiah.format(order.total)}`),
-    linkButton(order.status === "paid" ? "Lihat detail & struk" : "Lihat detail", `detail-${order.id}`, () => showOrderDetail(order.id)));
+    linkButton(order.paid_at ? "Lihat detail & struk" : "Lihat detail", `detail-${order.id}`, () => showOrderDetail(order.id)));
   card.append(foot);
   orderActions(order, card);
   return card;
@@ -812,7 +821,7 @@ function orderDetail(order) {
   const box = el("article", "order order-detail");
   box.append(linkButton("← Semua pesanan", "detail-back", showOrderList));
   box.lastChild.classList.add("detail-back");
-  const paid = order.status === "paid";
+  const paid = Boolean(order.paid_at);
   if (paid) {
     const brand = el("div", "receipt-brand");
     brand.append(el("span", "brand", "Prastika"), el("span", "", "Struk pembayaran"));
@@ -827,6 +836,9 @@ function orderDetail(order) {
   const fact = (name, value) => facts.append(el("dt", "", name), el("dd", "", value));
   fact("Dipesan", when(order.created_at));
   if (order.paid_at) fact("Dibayar", when(order.paid_at));
+  if (order.packed_at) fact("Dikemas", when(order.packed_at));
+  if (order.shipped_at) fact("Dikirim", when(order.shipped_at));
+  if (order.completed_at) fact("Selesai", when(order.completed_at));
   if (order.status === "cancelled" || order.status === "rejected") fact("Berakhir", when(order.updated_at));
   if (paid) fact("Metode", "Simulasi pembayaran");
   box.append(facts);
@@ -855,6 +867,7 @@ function orderDetail(order) {
     const send = el("section", "detail-send");
     send.append(el("h4", "", "Pengiriman"));
     if (shipping) send.append(el("p", "order-item", `Kurir ${shipping.courier} ${shipping.service} · estimasi ${shipping.estimate}`));
+    if (order.tracking_number) send.append(el("p", "order-item order-resi", `Nomor resi ${order.tracking_number}`));
     const address = order.shipping_address;
     if (address) {
       send.append(el("p", "order-item order-address", `${address.recipient} (${address.phone})\n${address.street}, ${address.district}, ${address.city}, ${address.province} ${address.postal_code}`));

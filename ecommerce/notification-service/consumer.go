@@ -59,7 +59,7 @@ func (c *Consumer) connectAndConsume(ctx context.Context) error {
 	if err := ch.ExchangeDeclare(orderExchange, amqp.ExchangeTopic, true, false, false, false, nil); err != nil {
 		return err
 	}
-	for _, binding := range []string{eventOrderPaid, eventOrderRejected, eventOrderCancelled} {
+	for _, binding := range []string{eventOrderPaid, eventOrderRejected, eventOrderCancelled, eventOrderShipped, eventOrderCompleted} {
 		if err := ch.QueueBind(eventQueue, binding, orderExchange, false, nil); err != nil {
 			return err
 		}

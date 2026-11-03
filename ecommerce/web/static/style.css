@@ -324,6 +324,7 @@ legend { margin-bottom: 10px; padding: 0; font-size: .92rem; font-weight: 600; }
 .order-cancel-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
 .order-cancel .secondary { min-height: 40px; padding: 0 18px; font-size: .9rem; }
 .order-actions .primary, .order-actions .secondary { min-height: 40px; padding: 0 18px; font-size: .9rem; }
+.order-resi { color: var(--ink); font-variant-numeric: tabular-nums; }
 .order-date { margin-top: 2px; color: var(--muted); font-size: .85rem; }
 .order-foot { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; margin-top: 10px; }
 .order-foot .card-price { margin: 0; }

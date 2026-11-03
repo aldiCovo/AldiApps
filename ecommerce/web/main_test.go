@@ -461,6 +461,7 @@ func TestOrdersUseTheSessionCookie(t *testing.T) {
 		{"GET", "/api/orders?limit=5", "order GET /orders?limit=5"},
 		{"GET", "/api/orders/12", "order GET /orders/12"},
 		{"POST", "/api/orders/12/pay", "order POST /orders/12/pay"},
+		{"POST", "/api/orders/12/cancel", "order POST /orders/12/cancel"},
 	}
 	for _, c := range cases {
 		resp, body := do(t, c.method, server.URL+c.path, "application/json", "{}", session)
@@ -482,7 +483,7 @@ func TestOrdersUseTheSessionCookie(t *testing.T) {
 
 func TestOrdersWithoutValidSession(t *testing.T) {
 	server, f := newTestGateway(t)
-	for _, c := range []struct{ method, path string }{{"POST", "/api/orders"}, {"GET", "/api/orders"}, {"GET", "/api/orders/1"}, {"POST", "/api/orders/1/pay"}} {
+	for _, c := range []struct{ method, path string }{{"POST", "/api/orders"}, {"GET", "/api/orders"}, {"GET", "/api/orders/1"}, {"POST", "/api/orders/1/pay"}, {"POST", "/api/orders/1/cancel"}} {
 		before := len(f.seen())
 		resp, _ := do(t, c.method, server.URL+c.path, "application/json", "{}")
 		if resp.StatusCode != http.StatusUnauthorized || len(f.seen()) != before {
@@ -506,6 +507,9 @@ func TestOrderPathsStayNarrow(t *testing.T) {
 		{"PUT", "/api/orders/1"},
 		{"GET", "/api/orders/1/pay"},
 		{"POST", "/api/orders/1/refund"},
+		{"POST", "/api/orders/abc/cancel"},
+		{"GET", "/api/orders/1/cancel"},
+		{"DELETE", "/api/orders/1/cancel"},
 		{"GET", "/api/payments"},
 	} {
 		before := len(f.seen())
@@ -514,7 +518,7 @@ func TestOrderPathsStayNarrow(t *testing.T) {
 			t.Fatalf("%s %s: status %d, reached %v", c.method, c.path, resp.StatusCode, f.seen()[before:])
 		}
 	}
-	for _, path := range []string{"/api/orders", "/api/orders/1/pay"} {
+	for _, path := range []string{"/api/orders", "/api/orders/1/pay", "/api/orders/1/cancel"} {
 		before := len(f.seen())
 		resp, _ := do(t, "POST", server.URL+path, "text/plain", "{}", session)
 		if resp.StatusCode != http.StatusUnsupportedMediaType || len(f.seen()) != before {

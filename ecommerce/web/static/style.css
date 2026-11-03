@@ -319,6 +319,10 @@ legend { margin-bottom: 10px; padding: 0; font-size: .92rem; font-weight: 600; }
 .order .card-price { margin-top: 10px; }
 .order > .link { margin-top: 10px; font-size: .93rem; }
 .order-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.order-cancel { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); font-size: .93rem; }
+.order-cancel-question { margin: 0 0 10px; color: var(--accent-dark); }
+.order-cancel-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+.order-cancel .secondary { min-height: 40px; padding: 0 18px; font-size: .9rem; }
 .order-actions .primary, .order-actions .secondary { min-height: 40px; padding: 0 18px; font-size: .9rem; }
 
 /* Login */

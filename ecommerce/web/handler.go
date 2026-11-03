@@ -131,6 +131,15 @@ func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, 
 			g.withSession(w, r, g.orderURL+"/orders/"+id+"/pay", body)
 		}
 	})
+	mux.HandleFunc("POST /api/orders/{id}/cancel", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := orderPath(w, r)
+		if !ok {
+			return
+		}
+		if body, ok := readBody(w, r); ok {
+			g.withSession(w, r, g.orderURL+"/orders/"+id+"/cancel", body)
+		}
+	})
 	mux.HandleFunc("GET /api/cart", func(w http.ResponseWriter, r *http.Request) {
 		g.withSession(w, r, g.cartURL+"/cart", nil)
 	})

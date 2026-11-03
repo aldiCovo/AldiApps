@@ -19,7 +19,8 @@ const (
 	eventOrderRejected  = "order.rejected"
 	eventOrderCancelled = "order.cancelled"
 
-	reasonExpired = "expired"
+	reasonExpired    = "expired"
+	reasonByCustomer = "cancelled_by_customer"
 )
 
 // Event is the message body.
@@ -121,6 +122,9 @@ func compose(kind string, order FinishedOrder, user User) Email {
 	case order.Reason == reasonExpired:
 		subject = "Pesanan #%d dibatalkan"
 		opening = "Pesanan kamu dibatalkan karena waktu pembayaran habis, dan stoknya sudah dikembalikan."
+	case order.Reason == reasonByCustomer:
+		subject = "Pesanan #%d dibatalkan"
+		opening = "Pesanan kamu sudah dibatalkan sesuai permintaanmu, dan stoknya sudah dikembalikan. Tidak ada pembayaran yang ditagih."
 	default:
 		subject = "Pesanan #%d dibatalkan"
 		opening = "Pembayaran pesanan kamu gagal, jadi pesanan dibatalkan dan stoknya sudah dikembalikan."

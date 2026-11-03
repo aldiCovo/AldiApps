@@ -59,8 +59,9 @@ func (in *orderInput) validate() error {
 	return nil
 }
 
-func newHandler(store *Store, verifier *Verifier, catalog *Catalog) http.Handler {
+func newHandler(store *Store, verifier *Verifier, catalog *Catalog, internalToken string) http.Handler {
 	mux := http.NewServeMux()
+	addInternalRoutes(mux, store, internalToken)
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -242,7 +243,9 @@ func writeStoreError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, errNotFound):
 		writeError(w, http.StatusNotFound, err.Error())
-	case errors.Is(err, errCannotPay), errors.Is(err, errCannotCancel), errors.Is(err, errTooManyOrders):
+	case errors.Is(err, errBadStep), errors.Is(err, errBadTracking):
+		writeError(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, errCannotPay), errors.Is(err, errCannotCancel), errors.Is(err, errTooManyOrders), errors.Is(err, errCannotAdvance):
 		writeError(w, http.StatusConflict, err.Error())
 	default:
 		slog.Error("database request failed", "error", err)

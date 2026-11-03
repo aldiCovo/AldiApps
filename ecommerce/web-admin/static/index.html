@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Prastika Admin</title>
+  <link rel="stylesheet" href="/admin/admin.css">
+  <script src="/admin/admin.js" defer></script>
+</head>
+<body>
+  <header class="bar">
+    <div class="bar-brand"><span class="brand">Prastika</span><span class="badge-admin">Admin</span></div>
+    <div id="who" class="who" hidden>
+      <span id="who-name"></span>
+      <button id="logout" class="link" type="button">Keluar</button>
+    </div>
+  </header>
+
+  <main>
+    <p id="loading" class="muted">Memuat…</p>
+
+    <section id="login-view" class="login" hidden aria-labelledby="login-title">
+      <h1 id="login-title">Masuk admin</h1>
+      <p class="muted">Khusus akun admin toko. Akun pembeli tidak bisa masuk di sini.</p>
+      <form id="login-form" novalidate>
+        <label>Email <input id="login-email" type="email" autocomplete="username" required maxlength="254"></label>
+        <label>Kata sandi <input id="login-password" type="password" autocomplete="current-password" required maxlength="200"></label>
+        <p id="login-error" class="error" role="alert" hidden></p>
+        <button id="login-submit" class="primary" type="submit">Masuk</button>
+      </form>
+    </section>
+
+    <section id="orders-view" hidden aria-labelledby="orders-title">
+      <div class="view-head">
+        <h1 id="orders-title">Pesanan</h1>
+        <button id="reload" class="secondary" type="button">Muat ulang</button>
+      </div>
+      <div class="tabs" role="group" aria-label="Status pesanan">
+        <button class="tab" type="button" data-status="paid" aria-pressed="true">Perlu dikemas</button>
+        <button class="tab" type="button" data-status="packed" aria-pressed="false">Dikemas</button>
+        <button class="tab" type="button" data-status="shipped" aria-pressed="false">Dikirim</button>
+        <button class="tab" type="button" data-status="completed" aria-pressed="false">Selesai</button>
+        <button class="tab" type="button" data-status="" aria-pressed="false">Semua</button>
+      </div>
+      <p id="orders-status" class="status" role="status" aria-live="polite"></p>
+      <div id="orders-list" class="orders"></div>
+      <button id="more" class="secondary more" type="button" hidden>Muat lebih banyak</button>
+    </section>
+  </main>
+</body>
+</html>

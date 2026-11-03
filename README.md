@@ -13,7 +13,9 @@ Application source code, one folder per application. Each folder has its own `Do
 | [`ecommerce/realtime-service/`](ecommerce/realtime-service/) | Go service that tells browsers when an order changes, over WebSockets. Only reachable through web |
 | [`ecommerce/notification-service/`](ecommerce/notification-service/) | Go worker that emails customers when their order finishes. It has no public API |
 | [`ecommerce/cart-service/`](ecommerce/cart-service/) | Go API for each customer's cart, using PostgreSQL. Only reachable through `web` |
-| [`ecommerce/web/`](ecommerce/web/) | The shop's pages, and the only part the internet reaches, at **https://prastika.aldiab.ai.id** |
+| [`ecommerce/web/`](ecommerce/web/) | The shop's pages for customers, at **https://prastika.aldiab.ai.id** |
+| [`ecommerce/admin-service/`](ecommerce/admin-service/) | Go API for the admin pages. It lets in admins only and calls the other services' internal routes. Only reachable through `web-admin` |
+| [`ecommerce/web-admin/`](ecommerce/web-admin/) | The admin pages, with their own login, at **https://prastika.aldiab.ai.id/admin** |
 
 ## Deploy
 
@@ -142,6 +144,7 @@ Every request needs the `Authorization: Bearer <token>` header from user-service
 | `GET /orders?limit=20&offset=0` | Lists the user's orders, newest first |
 | `GET /orders/{id}` | Returns one |
 | `POST /orders/{id}/pay` | Asks for a simulated payment with `{"simulate": "success"}` or `{"simulate": "failure"}`. Answers 202, or 409 if the order isn't waiting for payment |
+| `POST /orders/{id}/cancel` | Cancels an order that is waiting for payment and returns its stock. Answers 409 in any other status |
 
 Prices and names are copied from catalog-service when the order is created, so later catalog changes don't touch it.
 
@@ -150,9 +153,24 @@ Prices and names are copied from catalog-service when the order is created, so l
 | `pending` | Waiting for catalog-service to reserve the stock |
 | `awaiting_payment` | Stock is held until `expires_at`, which is `PAYMENT_WINDOW` (default `15m`) after the reservation |
 | `paying` | Waiting for payment-service. It can no longer expire, so a slow payment-service can't cancel an order that is being paid |
-| `paid` | Finished |
+| `paid` | Paid. `paid_at` says when |
+| `packed` | Packed by the shop, from the admin pages |
+| `shipped` | Handed to the courier. `tracking_number` holds the courier's number |
+| `completed` | Delivered. Each of these three steps keeps its time, in `packed_at`, `shipped_at` and `completed_at` |
 | `rejected` | Not enough stock. `reason` is `out_of_stock` |
-| `cancelled` | Stock was returned. `reason` is `payment_failed` or `expired` |
+| `cancelled` | Stock was returned. `reason` is `payment_failed`, `expired` or `cancelled_by_customer` |
+
+#### Internal routes for the admin pages
+
+These need `Authorization: Bearer <INTERNAL_TOKEN>` instead of a login token, and see every customer's orders with their `user_id`. Only admin-service calls them, and `web` never passes `/internal`.
+
+| Request | Does |
+|---|---|
+| `GET /internal/orders?status=paid&limit=20&offset=0` | Lists orders, newest first, optionally with one status |
+| `GET /internal/orders/{id}` | Returns one |
+| `POST /internal/orders/{id}/status` | Moves a paid order one step on with `{"status": "packed"}`, `{"status": "shipped", "tracking_number": "JP1234567890"}` or `{"status": "completed"}`. A tracking number is 6 to 40 letters, digits or dashes, and is stored in capitals. Answers 409 if the order isn't in the step before, so a step can't be skipped or done twice |
+
+Shipping and completing send `order.shipped` and `order.completed`, for the customer's email. Every step sends the customer's browser a signal.
 
 ### The order saga
 
@@ -205,7 +223,7 @@ TEST_DATABASE_URL='postgres://postgres:test@127.0.0.1:5432/payments?sslmode=disa
 
 ## notification-service
 
-It has no public API. It reads `order.paid`, `order.rejected` and `order.cancelled` from `order.events`, through the `notification-service.orders` queue, and sends one email for each in Indonesian. It reads the address from user-service when it needs it, so it keeps no copy.
+It has no public API. It reads `order.paid`, `order.rejected`, `order.cancelled`, `order.shipped` and `order.completed` from `order.events`, through the `notification-service.orders` queue, and sends one email for each in Indonesian. It reads the address from user-service when it needs it, so it keeps no copy.
 
 An event stays in the durable queue until its email is sent, so an email waits while the mail server or user-service is down, and also holds back the emails behind it. A row in `sent_notifications` stops a repeated event from sending again. A crash between sending and saving that row sends one email twice, which is better than losing it. An unreadable event, a deleted user, or an address the server refuses for good is logged and dropped.
 
@@ -238,6 +256,37 @@ It needs `DATABASE_URL` and `USER_URL`, and won't start without them. The tests 
 cd ecommerce/cart-service
 TEST_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable' go test -race ./...
 ```
+
+## admin-service
+
+The only way in for the admin pages. It has no database. Every request except `POST /login` needs `Authorization: Bearer <token>` from an admin login, and admin-service asks user-service's `/me` each time, so an account that loses the admin role, or is deleted, is refused at once.
+
+| Request | Does |
+|---|---|
+| `POST /login` | Logs in through user-service with `{"email", "password"}`, and answers 403 unless the account is an admin |
+| `GET /me` | Returns the admin |
+| `GET /orders?status=&limit=&offset=` | Every customer's orders from order-service, each with `customer`: `{"name", "email"}`, or `null` for a deleted account |
+| `GET /orders/{id}` | One order, the same way |
+| `POST /orders/{id}/status` | Moves it a step on, as order-service's internal route does |
+
+It needs `USER_URL`, `ORDER_URL`, `USER_INTERNAL_TOKEN` and `ORDER_INTERNAL_TOKEN`. The tests use fake services:
+
+```bash
+cd ecommerce/admin-service
+go test -race ./...
+```
+
+## web-admin
+
+The admin pages, under `/admin` on the shop's domain, separate from `web`. Its login cookie, `admin_session`, is HttpOnly, `SameSite=Strict` and only sent to `/admin/api`, so the shop's cookie never reaches these pages, nor this one the shop. It passes only these requests to admin-service:
+
+| Request | Goes to |
+|---|---|
+| `POST /admin/api/login`, `POST /admin/api/logout` | admin-service, then sets or clears the cookie |
+| `GET /admin/api/me`, `GET /admin/api/orders`, `GET /admin/api/orders/{id}` | admin-service, with the token from the cookie |
+| `POST /admin/api/orders/{id}/status` | admin-service, with the token from the cookie |
+
+The *Pesanan* page lists orders by step: *Perlu dikemas* (paid), *Dikemas*, *Dikirim*, *Selesai* and *Semua*. Each order offers only its next step, and shipping asks for the tracking number. It needs `ADMIN_URL`.
 
 ## realtime-service
 

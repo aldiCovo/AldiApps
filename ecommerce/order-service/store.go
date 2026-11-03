@@ -59,6 +59,11 @@ type Order struct {
 	UpdatedAt time.Time   `json:"updated_at"`
 	// Set once payment succeeds.
 	PaidAt *time.Time `json:"paid_at"`
+	// Set by the shop after payment, from the admin pages.
+	PackedAt       *time.Time `json:"packed_at"`
+	ShippedAt      *time.Time `json:"shipped_at"`
+	CompletedAt    *time.Time `json:"completed_at"`
+	TrackingNumber string     `json:"tracking_number,omitempty"`
 }
 
 type reservationItem struct {
@@ -79,6 +84,9 @@ type orderFinishedEvent struct {
 	Reason  string      `json:"reason,omitempty"`
 	Total   int64       `json:"total"`
 	Items   []OrderItem `json:"items"`
+	// Only on order.shipped, for the email.
+	Shipping       *Shipping `json:"shipping,omitempty"`
+	TrackingNumber string    `json:"tracking_number,omitempty"`
 }
 
 type paymentRequestedEvent struct {
@@ -87,11 +95,11 @@ type paymentRequestedEvent struct {
 	Outcome string `json:"outcome"`
 }
 
-const orderColumns = "id, status, reason, total, expires_at, shipping_address, shipping, created_at, updated_at, paid_at"
+const orderColumns = "id, status, reason, total, expires_at, shipping_address, shipping, created_at, updated_at, paid_at, packed_at, shipped_at, completed_at, tracking_number"
 
 func scanOrder(row pgx.Row) (Order, error) {
 	var o Order
-	err := row.Scan(&o.ID, &o.Status, &o.Reason, &o.Total, &o.ExpiresAt, &o.ShippingAddress, &o.Shipping, &o.CreatedAt, &o.UpdatedAt, &o.PaidAt)
+	err := row.Scan(&o.ID, &o.Status, &o.Reason, &o.Total, &o.ExpiresAt, &o.ShippingAddress, &o.Shipping, &o.CreatedAt, &o.UpdatedAt, &o.PaidAt, &o.PackedAt, &o.ShippedAt, &o.CompletedAt, &o.TrackingNumber)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Order{}, errNotFound
 	}

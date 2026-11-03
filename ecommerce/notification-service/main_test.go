@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -156,12 +157,25 @@ func TestEachOutcomeHasItsOwnWords(t *testing.T) {
 		{eventOrderCancelled, "payment_failed", "dibatalkan", "Pembayaran pesanan kamu gagal"},
 		{eventOrderCancelled, "expired", "dibatalkan", "waktu pembayaran habis"},
 		{eventOrderCancelled, "cancelled_by_customer", "dibatalkan", "sesuai permintaanmu"},
+		{eventOrderShipped, "", "sudah dikirim", "sudah kami kirim"},
+		{eventOrderCompleted, "", "selesai", "kami tandai selesai"},
 	} {
 		order.Reason = test.reason
 		got := compose(test.kind, order, user)
 		if !strings.Contains(got.Subject, test.subject) || !strings.Contains(got.Body, test.opening) {
 			t.Errorf("%s %s: %+v", test.kind, test.reason, got)
 		}
+	}
+}
+
+func TestShippedEmailNamesCourierAndTrackingNumber(t *testing.T) {
+	var order FinishedOrder
+	if err := json.Unmarshal([]byte(`{"order_id":7,"user_id":1,"total":360000,"items":[],"shipping":{"courier":"JNE","service":"Reguler","estimate":"2–3 hari"},"tracking_number":"JP1234567890"}`), &order); err != nil {
+		t.Fatal(err)
+	}
+	got := compose(eventOrderShipped, order, User{Email: "a@example.com", Name: "A"})
+	if got.Subject != "Pesanan #7 sudah dikirim" || !strings.Contains(got.Body, "Kurir: JNE Reguler, estimasi 2–3 hari. Nomor resi: JP1234567890.") {
+		t.Fatalf("%+v", got)
 	}
 }
 

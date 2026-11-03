@@ -324,6 +324,30 @@ legend { margin-bottom: 10px; padding: 0; font-size: .92rem; font-weight: 600; }
 .order-cancel-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
 .order-cancel .secondary { min-height: 40px; padding: 0 18px; font-size: .9rem; }
 .order-actions .primary, .order-actions .secondary { min-height: 40px; padding: 0 18px; font-size: .9rem; }
+.order-date { margin-top: 2px; color: var(--muted); font-size: .85rem; }
+.order-foot { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; margin-top: 10px; }
+.order-foot .card-price { margin: 0; }
+.order-foot .link { font-size: .93rem; }
+.order-detail { padding: 20px 22px; }
+.detail-back { font-size: .93rem; }
+.receipt-brand { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: .85rem; letter-spacing: .08em; text-transform: uppercase; }
+.receipt-brand .brand { font-size: 1.6rem; letter-spacing: .01em; text-transform: none; }
+.order-detail .order-head { margin-top: 16px; }
+.detail-title { margin: 0; font-size: 1.6rem; line-height: 1.2; }
+.detail-facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; margin: 12px 0 0; font-size: .93rem; }
+.detail-facts dt { color: var(--muted); }
+.detail-facts dd { margin: 0; }
+.detail-items { margin-top: 16px; border-top: 1px solid var(--line); }
+.detail-item { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.detail-item-name { display: block; overflow-wrap: anywhere; }
+.detail-item-meta { display: block; color: var(--muted); font-size: .88rem; }
+.detail-item-sum { flex: none; font-variant-numeric: tabular-nums; }
+.order-detail .checkout-sums { margin-top: 0; border-top: 0; }
+.order-detail .sum-row span:last-child, .order-detail .cart-total strong { font-variant-numeric: tabular-nums; }
+.detail-send { margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+.detail-send h4 { margin: 0; font-size: .82rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.receipt-note { margin-top: 14px; color: var(--muted); font-size: .85rem; }
+.detail-print { min-height: 40px; margin-top: 12px; padding: 0 18px; font-size: .9rem; }
 
 /* Login */
 #auth-form { display: grid; gap: 14px; margin-top: 18px; }
@@ -370,4 +394,16 @@ legend { margin-bottom: 10px; padding: 0; font-size: .92rem; font-weight: 600; }
   .cart-sheet { width: 100vw; padding: 0; border-radius: 0; }
   .checkout-sheet { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; }
   .address-form { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Printing shows only the opened order, as a plain receipt. */
+@page { margin: 16mm; }
+@media print {
+  body > *:not(#orders-dialog) { display: none !important; }
+  body { background: #fff; }
+  #orders-dialog { position: static; width: auto; max-height: none; margin: 0; padding: 0; overflow: visible; box-shadow: none; background: #fff; }
+  #orders-dialog::backdrop { background: none; }
+  #orders-dialog > :not(#orders-list), .detail-back, .detail-print, .order-actions, .order-cancel { display: none !important; }
+  .order-detail { padding: 0; border: 0; }
+  .order-state { border: 1px solid currentColor; }
 }

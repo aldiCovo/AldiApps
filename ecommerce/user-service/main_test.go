@@ -591,6 +591,7 @@ func TestAddressValidation(t *testing.T) {
 		"control character": with("city", "Bandung\u0000"),
 		"no district":       with("district", ""),
 		"no province":       with("province", ""),
+		"unknown province":  with("province", "Jawa Utara"),
 		"landline":          with("phone", "022 1234567"),
 		"short phone":       with("phone", "08123"),
 		"letters in phone":  with("phone", "0812abc4567"),
@@ -604,6 +605,9 @@ func TestAddressValidation(t *testing.T) {
 				t.Fatalf("status %d, body %s", status, body)
 			}
 		})
+	}
+	if status, body := request(t, http.MethodPut, s.URL+"/me/address", with("province", " dki jakarta "), token); status != http.StatusOK || !strings.Contains(string(body), `"province":"DKI Jakarta"`) {
+		t.Fatalf("province spelling: status %d, body %s", status, body)
 	}
 	for _, phone := range []string{"0812 3456 7890", "628123456789", "+6281234567", "0812.3456.7890"} {
 		if status, body := request(t, http.MethodPut, s.URL+"/me/address", with("phone", phone), token); status != http.StatusOK {

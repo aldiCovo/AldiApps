@@ -69,6 +69,10 @@ func newTestGateway(t *testing.T) (*httptest.Server, *fakeServices) {
 		}
 	}
 	orders := func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/shipping" {
+			io.WriteString(w, `{"provinces":[],"options":[]}`)
+			return
+		}
 		if r.Header.Get("Authorization") != "Bearer "+testToken {
 			w.WriteHeader(http.StatusUnauthorized)
 			io.WriteString(w, `{"error":"the token is not valid"}`)
@@ -113,6 +117,7 @@ func TestAllowedRequestsReachTheRightService(t *testing.T) {
 		{"GET", "/api/products/12", "", "catalog GET /products/12"},
 		{"GET", "/api/search?q=dress+merah&in_stock=true", "", "search GET /search?q=dress+merah&in_stock=true"},
 		{"POST", "/api/register", `{"email":"a@b.c"}`, "user POST /register"},
+		{"GET", "/api/shipping?x=1", "", "order GET /shipping"},
 	}
 	for _, c := range cases {
 		resp, body := do(t, c.method, server.URL+c.path, "application/json", c.body)

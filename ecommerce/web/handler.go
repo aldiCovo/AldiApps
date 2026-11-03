@@ -105,6 +105,10 @@ func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, 
 			g.withSession(w, r, g.userURL+"/me/address", body)
 		}
 	})
+	// Prices for each courier by province. The same for everyone, so no session is needed.
+	mux.HandleFunc("GET /api/shipping", func(w http.ResponseWriter, r *http.Request) {
+		g.pass(w, r, g.orderURL+"/shipping", nil, "")
+	})
 	mux.HandleFunc("POST /api/orders", func(w http.ResponseWriter, r *http.Request) {
 		if body, ok := readBody(w, r); ok {
 			g.withSession(w, r, g.orderURL+"/orders", body)

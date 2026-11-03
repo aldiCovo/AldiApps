@@ -28,6 +28,7 @@ type orderInput struct {
 		Quantity  int32 `json:"quantity"`
 	} `json:"items"`
 	ShippingAddress *Address `json:"shipping_address"`
+	ShippingOption  string   `json:"shipping_option"`
 }
 
 func (in *orderInput) validate() error {
@@ -97,12 +98,23 @@ func newHandler(store *Store, verifier *Verifier, catalog *Catalog) http.Handler
 		}
 	}
 
+	// The same for everyone and rarely changed, so browsers and Cloudflare may keep it a while.
+	mux.HandleFunc("GET /shipping", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=300")
+		writeJSON(w, http.StatusOK, shippingTable())
+	})
+
 	mux.HandleFunc("POST /orders", authenticated(func(w http.ResponseWriter, r *http.Request, userID int64) {
 		var in orderInput
 		if !readJSON(w, r, &in) {
 			return
 		}
 		if err := in.validate(); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		shipping, err := quote(in.ShippingOption, in.ShippingAddress.Province)
+		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
@@ -119,7 +131,7 @@ func newHandler(store *Store, verifier *Verifier, catalog *Catalog) http.Handler
 				return
 			}
 		}
-		order, err := store.Create(r.Context(), userID, items, *in.ShippingAddress)
+		order, err := store.Create(r.Context(), userID, items, *in.ShippingAddress, shipping)
 		if err != nil {
 			writeStoreError(w, err)
 			return

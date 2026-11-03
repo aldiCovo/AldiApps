@@ -160,6 +160,7 @@ func TestLastEventSeesConcurrentVariantChanges(t *testing.T) {
 					t.Error(err)
 					return
 				}
+				req.Header.Set("Authorization", "Bearer "+testInternalToken)
 				resp, err := http.DefaultClient.Do(req)
 				if err != nil {
 					t.Error(err)

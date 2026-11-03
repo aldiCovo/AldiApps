@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,8 +18,11 @@ const (
 	maxBodyBytes     = 1 << 20
 	maxNameLength    = 200
 	maxVariantLength = 50
-	defaultLimit     = 20
-	maxLimit         = 100
+	maxDescription   = 5000
+	// The internal token must be long enough that it can't be guessed.
+	minInternalTokenLength = 32
+	defaultLimit           = 20
+	maxLimit               = 100
 )
 
 // cleanText trims a required text field and rejects what Postgres or the shop can't use.
@@ -59,6 +63,8 @@ func (in *productInput) validate() (err error) {
 	switch {
 	case strings.ContainsRune(in.Description, 0):
 		return errors.New("description must not contain NUL characters")
+	case utf8.RuneCountInString(in.Description) > maxDescription:
+		return fmt.Errorf("description must be at most %d characters", maxDescription)
 	case in.CategoryID != nil && *in.CategoryID <= 0:
 		return errors.New("category_id must be a positive integer")
 	case in.Price == nil:
@@ -83,7 +89,23 @@ func (in *variantInput) validate() (err error) {
 	return err
 }
 
-func newHandler(store *Store) http.Handler {
+// writesNeedToken lets anyone read, and only holders of the internal token change anything.
+// admin-service is the only one that has it, for the admin pages.
+func writesNeedToken(internalToken string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			bearer, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+			if subtle.ConstantTimeCompare([]byte(bearer), []byte(internalToken)) != 1 {
+				w.Header().Set("WWW-Authenticate", "Bearer")
+				writeError(w, http.StatusUnauthorized, "changes need the internal token")
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func newHandler(store *Store, internalToken string) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -368,7 +390,7 @@ func newHandler(store *Store) http.Handler {
 		writeJSON(w, http.StatusOK, v)
 	})
 
-	return mux
+	return writesNeedToken(internalToken, mux)
 }
 
 func pathID(w http.ResponseWriter, r *http.Request) (int64, bool) {

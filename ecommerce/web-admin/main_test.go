@@ -154,8 +154,8 @@ func TestPageAndAssets(t *testing.T) {
 	if resp.StatusCode != http.StatusOK || !strings.Contains(resp.Header.Get("Content-Security-Policy"), "script-src 'self'") || resp.Header.Get("X-Robots-Tag") == "" {
 		t.Fatalf("page: %d %v", resp.StatusCode, resp.Header)
 	}
-	links := regexp.MustCompile(`"(/admin/admin\.(?:js|css)\?v=[0-9a-f]{12})"`).FindAllStringSubmatch(string(page), -1)
-	if len(links) != 2 {
+	links := regexp.MustCompile(`"(/admin/(?:admin\.js|admin\.css|products\.js)\?v=[0-9a-f]{12})"`).FindAllStringSubmatch(string(page), -1)
+	if len(links) != 3 {
 		t.Fatalf("links %v", links)
 	}
 	for _, link := range links {
@@ -171,5 +171,48 @@ func TestPageAndAssets(t *testing.T) {
 		if resp := request(t, server, http.MethodGet, path, "", "", false); resp.StatusCode == http.StatusOK {
 			t.Fatalf("%s served", path)
 		}
+	}
+}
+
+func TestCatalogRoutesPass(t *testing.T) {
+	server, s := newTestServer(t)
+	cookie := "admin_session=tok-123"
+	for _, c := range []struct{ method, path, body, want string }{
+		{http.MethodGet, "/admin/api/products?limit=100&offset=0&category_id=2&x=1", "", "GET /products?category_id=2&limit=100&offset=0 Bearer tok-123 "},
+		{http.MethodPost, "/admin/api/products", `{"name":"Rok","price":1}`, `POST /products Bearer tok-123 {"name":"Rok","price":1}`},
+		{http.MethodPut, "/admin/api/products/5", `{"name":"Rok","price":1}`, `PUT /products/5 Bearer tok-123 {"name":"Rok","price":1}`},
+		{http.MethodDelete, "/admin/api/products/5", "", "DELETE /products/5 Bearer tok-123 "},
+		{http.MethodPost, "/admin/api/products/5/variants", `{"size":"M","color":"Hitam"}`, `POST /products/5/variants Bearer tok-123 {"size":"M","color":"Hitam"}`},
+		{http.MethodPut, "/admin/api/variants/3", `{"size":"L","color":"Hitam"}`, `PUT /variants/3 Bearer tok-123 {"size":"L","color":"Hitam"}`},
+		{http.MethodDelete, "/admin/api/variants/3", "", "DELETE /variants/3 Bearer tok-123 "},
+		{http.MethodPatch, "/admin/api/variants/3/stock", `{"delta":-2}`, `PATCH /variants/3/stock Bearer tok-123 {"delta":-2}`},
+		{http.MethodGet, "/admin/api/categories", "", "GET /categories Bearer tok-123 "},
+		{http.MethodPost, "/admin/api/categories", `{"name":"Kaftan"}`, `POST /categories Bearer tok-123 {"name":"Kaftan"}`},
+		{http.MethodPut, "/admin/api/categories/2", `{"name":"Kaftan"}`, `PUT /categories/2 Bearer tok-123 {"name":"Kaftan"}`},
+		{http.MethodDelete, "/admin/api/categories/2", "", "DELETE /categories/2 Bearer tok-123 "},
+	} {
+		if resp := request(t, server, c.method, c.path, c.body, cookie, true); resp.StatusCode != http.StatusOK {
+			t.Fatalf("%s %s: %d", c.method, c.path, resp.StatusCode)
+		}
+		if got := s.requests[len(s.requests)-1]; got != c.want {
+			t.Fatalf("sent %q, want %q", got, c.want)
+		}
+	}
+	before := len(s.requests)
+	for _, c := range []struct{ method, path, body string }{
+		{http.MethodDelete, "/admin/api/products/5", ""},
+		{http.MethodPatch, "/admin/api/variants/3/stock", `{"delta":1}`},
+	} {
+		if resp := request(t, server, c.method, c.path, c.body, cookie, false); resp.StatusCode != http.StatusUnsupportedMediaType {
+			t.Fatalf("%s %s without JSON: %d", c.method, c.path, resp.StatusCode)
+		}
+	}
+	for _, path := range []string{"/admin/api/products/abc", "/admin/api/variants/0/stock", "/admin/api/products/5/photos"} {
+		if resp := request(t, server, http.MethodPatch, path, `{}`, cookie, true); resp.StatusCode != http.StatusNotFound && resp.StatusCode != http.StatusMethodNotAllowed {
+			t.Fatalf("%s: %d", path, resp.StatusCode)
+		}
+	}
+	if len(s.requests) != before {
+		t.Fatalf("admin-service was called: %v", s.requests[before:])
 	}
 }

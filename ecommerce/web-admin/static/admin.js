@@ -44,8 +44,15 @@ async function api(path, options = {}) {
   return response.status === 204 ? null : response.json();
 }
 
+// Every change is sent as JSON, which a form on another site can't send.
+function send(method, path, body) {
+  const options = { method, headers: { "Content-Type": "application/json" } };
+  if (body !== undefined) options.body = JSON.stringify(body);
+  return api(path, options);
+}
+
 function post(path, body) {
-  return api(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  return send("POST", path, body);
 }
 
 // Everything from the API goes through textContent, so its text can't become HTML.
@@ -67,7 +74,32 @@ function show(view) {
   $("loading").hidden = true;
   $("login-view").hidden = view !== "login";
   $("orders-view").hidden = view !== "orders";
-  $("who").hidden = view !== "orders";
+  $("products-view").hidden = view !== "products";
+  $("who").hidden = view === "login";
+  $("nav").hidden = view === "login";
+  for (const link of document.querySelectorAll(".nav-link")) {
+    if (link.dataset.view === view) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  }
+}
+
+// The page to open: #produk opens the products, anything else the orders.
+function openView(view) {
+  if (view === "products") {
+    show("products");
+    loadProducts();
+  } else {
+    show("orders");
+    loadOrders(true);
+  }
+}
+
+for (const link of document.querySelectorAll(".nav-link")) {
+  link.addEventListener("click", (event) => {
+    event.preventDefault();
+    history.replaceState(null, "", link.getAttribute("href"));
+    openView(link.dataset.view);
+  });
 }
 
 function showLogin(message) {
@@ -98,8 +130,7 @@ async function start() {
 
 function loggedIn(me) {
   $("who-name").textContent = `${me.name} (${me.email})`;
-  show("orders");
-  loadOrders(true);
+  openView(location.hash === "#produk" ? "products" : "orders");
 }
 
 $("login-form").addEventListener("submit", async (event) => {
@@ -314,4 +345,5 @@ async function advance(order, card, change) {
   }
 }
 
-start();
+// products.js loads after this file, so starting waits for both.
+document.addEventListener("DOMContentLoaded", start);

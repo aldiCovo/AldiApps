@@ -50,7 +50,9 @@ A new image is private on GHCR, and the cluster pulls without credentials. After
 | `PATCH /variants/{id}/stock` | Adds `{"delta"}` to the stock. Answers 409 if the stock would go negative |
 | `DELETE /variants/{id}` | Deletes one |
 
-Prices are in whole rupiah and belong to the product. Stock belongs to each variant. Migrations in `migrations/` run when the service starts.
+Prices are in whole rupiah and belong to the product. Stock belongs to each variant. A description holds at most 5000 characters. Migrations in `migrations/` run when the service starts.
+
+Reading is open inside the cluster. Every change needs `Authorization: Bearer <INTERNAL_TOKEN>`, which only admin-service has, and the service won't start without a token of at least 32 characters. Orders change stock through events, not through these routes.
 
 ### Events
 
@@ -268,8 +270,13 @@ The only way in for the admin pages. It has no database. Every request except `P
 | `GET /orders?status=&limit=&offset=` | Every customer's orders from order-service, each with `customer`: `{"name", "email"}`, or `null` for a deleted account |
 | `GET /orders/{id}` | One order, the same way |
 | `POST /orders/{id}/status` | Moves it a step on, as order-service's internal route does |
+| `GET`, `POST /categories`, `PUT`, `DELETE /categories/{id}` | catalog-service's category routes |
+| `GET`, `POST /products`, `GET`, `PUT`, `DELETE /products/{id}`, `POST /products/{id}/variants` | catalog-service's product routes |
+| `PUT`, `DELETE /variants/{id}`, `PATCH /variants/{id}/stock` | catalog-service's variant and stock routes |
 
-It needs `USER_URL`, `ORDER_URL`, `USER_INTERNAL_TOKEN` and `ORDER_INTERNAL_TOKEN`. The tests use fake services:
+catalog-service checks the changes itself, and admin-service passes its answers on, except that a refused internal token answers 502, so it can't look like a logged-out admin. Every change is logged with the admin's id.
+
+It needs `USER_URL`, `ORDER_URL`, `CATALOG_URL`, `USER_INTERNAL_TOKEN`, `ORDER_INTERNAL_TOKEN` and `CATALOG_INTERNAL_TOKEN`. The tests use fake services:
 
 ```bash
 cd ecommerce/admin-service
@@ -285,6 +292,9 @@ The admin pages, under `/admin` on the shop's domain, separate from `web`. Its l
 | `POST /admin/api/login`, `POST /admin/api/logout` | admin-service, then sets or clears the cookie |
 | `GET /admin/api/me`, `GET /admin/api/orders`, `GET /admin/api/orders/{id}` | admin-service, with the token from the cookie |
 | `POST /admin/api/orders/{id}/status` | admin-service, with the token from the cookie |
+| The category, product, variant and stock routes above, under `/admin/api` | admin-service, with the token from the cookie. Every change, including `DELETE`, must be sent as JSON |
+
+The *Produk* page (`/admin/#produk`) manages categories, products with their price, category and description, and each product's variants. Stock changes by an amount added or taken away, not by a new total, so orders placed meanwhile aren't overwritten. Deleting a product or variant asks first, and old orders keep their own copy of names and prices.
 
 The *Pesanan* page lists orders by step: *Perlu dikemas* (paid), *Dikemas*, *Dikirim*, *Selesai* and *Semua*. Each order offers only its next step, and shipping asks for the tracking number. It needs `ADMIN_URL`.
 

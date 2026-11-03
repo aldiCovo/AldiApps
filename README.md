@@ -273,10 +273,18 @@ The only way in for the admin pages. It has no database. Every request except `P
 | `GET`, `POST /categories`, `PUT`, `DELETE /categories/{id}` | catalog-service's category routes |
 | `GET`, `POST /products`, `GET`, `PUT`, `DELETE /products/{id}`, `POST /products/{id}/variants` | catalog-service's product routes |
 | `PUT`, `DELETE /variants/{id}`, `PATCH /variants/{id}/stock` | catalog-service's variant and stock routes |
+| `GET /photos/products` | Every product's four photo places, by product id, `""` where empty |
+| `PUT /photos/products/{id}/{1-4}` | Puts the photo in the body in that place, replacing what was there. Answers the product's four places |
+| `DELETE /photos/products/{id}/{1-4}` | Removes that photo |
+| `POST /photos/products/{id}/{1-4}/first` | Swaps that photo with the first, which the shop shows on the product's card |
+| `GET /photos/categories` | Each category's photo, by category id |
+| `PUT`, `DELETE /photos/categories/{id}` | Puts or removes a category's photo |
 
 catalog-service checks the changes itself, and admin-service passes its answers on, except that a refused internal token answers 502, so it can't look like a logged-out admin. Every change is logged with the admin's id.
 
-It needs `USER_URL`, `ORDER_URL`, `CATALOG_URL`, `USER_INTERNAL_TOKEN`, `ORDER_INTERNAL_TOKEN` and `CATALOG_INTERNAL_TOKEN`. The tests use fake services:
+Photos go to `PHOTOS_DIR`, the same folder on AldiServer that `web` serves them from, so a new photo shows in the shop at once: `products/<id>/1.jpg` to `4.jpg`, and `categories/<name>.jpg`, where the name is the category's in lowercase with dashes for spaces, such as `office-on-style.jpg`. A photo is at most 5 MB and must be a JPEG, PNG or WEBP by its content, whatever the request says, and JPEG and PNG must decode to at most 10000 pixels a side. Each is written to a temporary file and renamed into place, so the shop never serves half a photo, and links in the folder are never followed. Deleting a product removes its photos, deleting a category removes its photo, and renaming a category moves its photo to the new name. A category whose name has other characters, such as `&`, can't have a photo, because the shop can't find it.
+
+It needs `USER_URL`, `ORDER_URL`, `CATALOG_URL`, `USER_INTERNAL_TOKEN`, `ORDER_INTERNAL_TOKEN`, `CATALOG_INTERNAL_TOKEN` and `PHOTOS_DIR`. The tests use fake services:
 
 ```bash
 cd ecommerce/admin-service
@@ -293,8 +301,11 @@ The admin pages, under `/admin` on the shop's domain, separate from `web`. Its l
 | `GET /admin/api/me`, `GET /admin/api/orders`, `GET /admin/api/orders/{id}` | admin-service, with the token from the cookie |
 | `POST /admin/api/orders/{id}/status` | admin-service, with the token from the cookie |
 | The category, product, variant and stock routes above, under `/admin/api` | admin-service, with the token from the cookie. Every change, including `DELETE`, must be sent as JSON |
+| The photo routes above, under `/admin/api` | admin-service, with the token from the cookie. An upload must be sent as `image/jpeg`, `image/png` or `image/webp`, which a form on another site can't send, and other changes as JSON |
 
 The *Produk* page (`/admin/#produk`) manages categories, products with their price, category and description, and each product's variants. Stock changes by an amount added or taken away, not by a new total, so orders placed meanwhile aren't overwritten. Deleting a product or variant asks first, and old orders keep their own copy of names and prices.
+
+Each product has four photo places; *Jadikan utama* makes a photo the first, the one on the shop's card. *Kelola kategori* gives each category its photo. Before uploading, the browser turns a photo into a JPEG of at most 1600 pixels a side, which keeps uploads small and drops the location a phone camera writes into it.
 
 The *Pesanan* page lists orders by step: *Perlu dikemas* (paid), *Dikemas*, *Dikirim*, *Selesai* and *Semua*. Each order offers only its next step, and shipping asks for the tracking number. It needs `ADMIN_URL`.
 
@@ -337,7 +348,7 @@ Login keeps the token in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie, so page
 
 A guest's cart lives in the browser's `localStorage`, so it needs no account. A customer's lives in cart-service, so it follows them to any browser and leaves the browser when they log out. Logging in moves a guest's cart to the account. The browser's copy stays until the account has it. Either way the cart holds only ids and quantities, and reads names, prices and stock again each time it opens. Checkout sends one `POST /api/orders`, which holds at most 20 different variants, up to 20 of each. An order is all or nothing: if one item is short, the whole order is rejected, and the customer can put it back in the cart.
 
-Products have no photos yet, so the pages draw a garment for the categories Dress, Blouse, Rok and Hijab, and show the first letter of the name for anything else. The heading font is Cormorant Garamond, served from `static/fonts/` under its [license](ecommerce/web/static/fonts/OFL.txt), because the Content-Security-Policy only allows this site's own files.
+Photos come from `PHOTOS_DIR`, which the admin pages fill. A product without photos shows its category's photo, and a category without one gets a drawn garment for Dress, Blouse, Rok and Hijab, or the first letter of its name. The heading font is Cormorant Garamond, served from `static/fonts/` under its [license](ecommerce/web/static/fonts/OFL.txt), because the Content-Security-Policy only allows this site's own files.
 
 It needs `CATALOG_URL`, `SEARCH_URL`, `USER_URL`, `ORDER_URL`, `REALTIME_URL` and `CART_URL`, and won't start without them.
 

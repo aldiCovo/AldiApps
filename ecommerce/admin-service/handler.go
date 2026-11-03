@@ -27,6 +27,7 @@ var numericID = regexp.MustCompile(`^[1-9][0-9]{0,17}$`)
 type services struct {
 	userURL, orderURL, catalogURL                               string
 	userInternalToken, orderInternalToken, catalogInternalToken string
+	photosDir                                                   string
 }
 
 // User is an account as user-service describes it.
@@ -48,10 +49,11 @@ func (e *upstreamError) Error() string { return fmt.Sprintf("upstream answered %
 type admin struct {
 	services
 	client *http.Client
+	photos *photoStore
 }
 
 func newHandler(s services) http.Handler {
-	a := &admin{services: s, client: &http.Client{
+	a := &admin{services: s, photos: &photoStore{dir: s.photosDir}, client: &http.Client{
 		Timeout:       upstreamTimeout,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}}
@@ -164,6 +166,7 @@ func newHandler(s services) http.Handler {
 	}))
 
 	a.addCatalogRoutes(mux)
+	a.addPhotoRoutes(mux)
 	return mux
 }
 
@@ -303,7 +306,10 @@ func (a *admin) addCatalogRoutes(mux *http.ServeMux) {
 		}
 		return true
 	}
-	forward := func(method, path string, withBody bool) http.HandlerFunc {
+	// A hook runs before a change and returns what to do once catalog-service accepted it,
+	// such as removing a deleted product's photos.
+	type hook func(r *http.Request, id string, body []byte) (after func())
+	forward := func(method, path string, withBody bool, hooks ...hook) http.HandlerFunc {
 		return a.onlyAdmins(func(w http.ResponseWriter, r *http.Request, me User) {
 			if strings.Contains(path, "{id}") && !ids(w, r) {
 				return
@@ -327,7 +333,18 @@ func (a *admin) addCatalogRoutes(mux *http.ServeMux) {
 					target += "?" + query.Encode()
 				}
 			}
+			var afters []func()
+			for _, before := range hooks {
+				if after := before(r, r.PathValue("id"), body); after != nil {
+					afters = append(afters, after)
+				}
+			}
 			status, data, err := a.raw(r.Context(), method, a.catalogURL+target, a.catalogInternalToken, body)
+			if err == nil && (status == http.StatusOK || status == http.StatusNoContent) {
+				for _, after := range afters {
+					after()
+				}
+			}
 			if err != nil {
 				a.fail(w, err)
 				return
@@ -350,15 +367,48 @@ func (a *admin) addCatalogRoutes(mux *http.ServeMux) {
 			}
 		})
 	}
+	removeProductPhotos := func(r *http.Request, id string, body []byte) func() {
+		return func() {
+			if err := a.photos.removeProduct(id); err != nil {
+				slog.Error("removing a deleted product's photos failed", "product_id", id, "error", err)
+			}
+		}
+	}
+	// The category's name before the change says which photo is its own.
+	moveCategoryPhoto := func(r *http.Request, id string, body []byte) func() {
+		oldName, err := a.categoryByID(r.Context(), id)
+		var in struct {
+			Name string `json:"name"`
+		}
+		if err != nil || json.Unmarshal(body, &in) != nil {
+			return nil
+		}
+		return func() {
+			if err := a.photos.renameCategoryPhoto(oldName, in.Name); err != nil {
+				slog.Error("moving a renamed category's photo failed", "category_id", id, "error", err)
+			}
+		}
+	}
+	removeCategoryPhoto := func(r *http.Request, id string, body []byte) func() {
+		name, err := a.categoryByID(r.Context(), id)
+		if err != nil {
+			return nil
+		}
+		return func() {
+			if err := a.photos.deleteCategoryPhoto(name); err != nil {
+				slog.Error("removing a deleted category's photo failed", "category_id", id, "error", err)
+			}
+		}
+	}
 	mux.HandleFunc("GET /categories", forward(http.MethodGet, "/categories", false))
 	mux.HandleFunc("POST /categories", forward(http.MethodPost, "/categories", true))
-	mux.HandleFunc("PUT /categories/{id}", forward(http.MethodPut, "/categories/{id}", true))
-	mux.HandleFunc("DELETE /categories/{id}", forward(http.MethodDelete, "/categories/{id}", false))
+	mux.HandleFunc("PUT /categories/{id}", forward(http.MethodPut, "/categories/{id}", true, moveCategoryPhoto))
+	mux.HandleFunc("DELETE /categories/{id}", forward(http.MethodDelete, "/categories/{id}", false, removeCategoryPhoto))
 	mux.HandleFunc("GET /products", forward(http.MethodGet, "/products", false))
 	mux.HandleFunc("GET /products/{id}", forward(http.MethodGet, "/products/{id}", false))
 	mux.HandleFunc("POST /products", forward(http.MethodPost, "/products", true))
 	mux.HandleFunc("PUT /products/{id}", forward(http.MethodPut, "/products/{id}", true))
-	mux.HandleFunc("DELETE /products/{id}", forward(http.MethodDelete, "/products/{id}", false))
+	mux.HandleFunc("DELETE /products/{id}", forward(http.MethodDelete, "/products/{id}", false, removeProductPhotos))
 	mux.HandleFunc("POST /products/{id}/variants", forward(http.MethodPost, "/products/{id}/variants", true))
 	mux.HandleFunc("PUT /variants/{id}", forward(http.MethodPut, "/variants/{id}", true))
 	mux.HandleFunc("DELETE /variants/{id}", forward(http.MethodDelete, "/variants/{id}", false))

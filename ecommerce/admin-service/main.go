@@ -27,7 +27,7 @@ func main() {
 
 func run() error {
 	values := map[string]string{}
-	for _, name := range []string{"USER_URL", "ORDER_URL", "CATALOG_URL", "USER_INTERNAL_TOKEN", "ORDER_INTERNAL_TOKEN", "CATALOG_INTERNAL_TOKEN"} {
+	for _, name := range []string{"USER_URL", "ORDER_URL", "CATALOG_URL", "USER_INTERNAL_TOKEN", "ORDER_INTERNAL_TOKEN", "CATALOG_INTERNAL_TOKEN", "PHOTOS_DIR"} {
 		value := os.Getenv(name)
 		if value == "" {
 			return fmt.Errorf("%s is required", name)
@@ -56,11 +56,13 @@ func run() error {
 			catalogInternalToken: values["CATALOG_INTERNAL_TOKEN"],
 			userInternalToken:    values["USER_INTERNAL_TOKEN"],
 			orderInternalToken:   values["ORDER_INTERNAL_TOKEN"],
+			photosDir:            values["PHOTOS_DIR"],
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		// Long enough to receive a photo over a slow connection.
+		ReadTimeout:  60 * time.Second,
+		WriteTimeout: 90 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
 	serveErr := make(chan error, 1)
 	go func() {

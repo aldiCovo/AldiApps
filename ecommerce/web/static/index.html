@@ -98,7 +98,15 @@
   <dialog id="product-dialog" class="sheet product-sheet" aria-labelledby="product-title">
     <button class="close" type="button" data-close aria-label="Tutup">×</button>
     <div class="product-layout">
-      <div id="product-swatch" class="art" aria-hidden="true"></div>
+      <div class="product-media">
+        <div id="product-swatch" class="art" aria-hidden="true"></div>
+        <button id="photo-zoom" class="photo-zoom" type="button" hidden>
+          <span class="zoom-chip">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M11 8v6M8 11h6"/></svg>
+            Perbesar foto
+          </span>
+        </button>
+      </div>
       <div class="product-info">
         <span id="product-category" class="eyebrow" hidden></span>
         <h2 id="product-title"></h2>
@@ -122,6 +130,20 @@
           <p id="cart-note" class="cart-note" role="status" hidden><span id="cart-note-text"></span> <button id="cart-note-open" class="link" type="button">Lihat keranjang</button></p>
           <p id="order-error" class="error" role="alert" hidden></p>
         </form>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="photo-dialog" class="photo-viewer" aria-label="Foto produk">
+    <div id="photo-stage" class="photo-stage">
+      <img id="photo-image" alt="" draggable="false">
+    </div>
+    <button class="close" type="button" data-close aria-label="Tutup">×</button>
+    <div class="photo-tools">
+      <p id="photo-hint" class="photo-hint" aria-live="polite"></p>
+      <div class="photo-buttons">
+        <button id="photo-zoom-out" type="button" aria-label="Perkecil">−</button>
+        <button id="photo-zoom-in" type="button" aria-label="Perbesar">+</button>
       </div>
     </div>
   </dialog>

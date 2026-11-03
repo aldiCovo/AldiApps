@@ -260,6 +260,7 @@ async function openProduct(id) {
   try {
     const product = await api(`/products/${encodeURIComponent(id)}`);
     fillSwatch($("product-swatch"), product);
+    showZoomButton(product.name);
     const category = state.categories.get(product.category_id);
     $("product-category").textContent = category || "";
     $("product-category").hidden = !category;
@@ -279,6 +280,169 @@ async function openProduct(id) {
   } catch (error) {
     setStatus(error.status === 404 ? "Produk ini sudah tidak tersedia." : "Produk belum bisa dibuka. Coba lagi sebentar lagi.", true);
   }
+}
+
+// The photo viewer. A click or tap zooms in on that spot and zooms out again, dragging moves the
+// photo, and a mouse wheel or two fingers zoom gradually. Photos are only a few hundred pixels
+// wide for now, so zooming further than this only shows blur.
+const zoomStep = 2.5;
+const zoomMax = 4;
+const viewer = { scale: 1, x: 0, y: 0, width: 0, height: 0, pointers: new Map(), drag: null, pinch: null, moved: false };
+
+function showZoomButton(name) {
+  const photo = $("product-swatch").querySelector(".art-photo");
+  $("photo-zoom").hidden = !photo;
+  $("photo-zoom").setAttribute("aria-label", `Perbesar foto ${name}`);
+  $("photo-image").alt = name;
+  if (photo) photo.addEventListener("error", () => { $("photo-zoom").hidden = true; });
+}
+
+function openPhoto() {
+  const photo = $("product-swatch").querySelector(".art-photo");
+  if (!photo) return;
+  const image = $("photo-image");
+  if (image.getAttribute("src") !== photo.getAttribute("src")) image.src = photo.getAttribute("src");
+  $("photo-dialog").showModal();
+  if (image.complete) fitPhoto();
+}
+
+// Sizes the photo to fit the screen, which is zoom level 1.
+function fitPhoto() {
+  const image = $("photo-image");
+  const stage = $("photo-stage");
+  if (!image.naturalWidth || !stage.clientWidth) return;
+  const ratio = Math.min(stage.clientWidth / image.naturalWidth, stage.clientHeight / image.naturalHeight);
+  viewer.width = image.naturalWidth * ratio;
+  viewer.height = image.naturalHeight * ratio;
+  image.style.width = `${viewer.width}px`;
+  image.style.height = `${viewer.height}px`;
+  viewer.scale = 1;
+  viewer.x = 0;
+  viewer.y = 0;
+  showZoom();
+}
+
+// Keeps the photo's edges from coming inside the screen while zoomed.
+function showZoom() {
+  const stage = $("photo-stage");
+  const limitX = Math.max(0, (viewer.width * viewer.scale - stage.clientWidth) / 2);
+  const limitY = Math.max(0, (viewer.height * viewer.scale - stage.clientHeight) / 2);
+  viewer.x = Math.min(limitX, Math.max(-limitX, viewer.x));
+  viewer.y = Math.min(limitY, Math.max(-limitY, viewer.y));
+  $("photo-image").style.transform = `translate(${viewer.x}px, ${viewer.y}px) scale(${viewer.scale})`;
+  const zoomed = viewer.scale > 1.01;
+  stage.classList.toggle("zoomed", zoomed);
+  $("photo-zoom-out").disabled = !zoomed;
+  $("photo-zoom-in").disabled = viewer.scale >= zoomMax;
+  const touch = matchMedia("(hover: none)").matches;
+  $("photo-hint").textContent = zoomed
+    ? (touch ? "Geser untuk melihat detail" : "Geser untuk melihat detail, klik untuk kembali")
+    : (touch ? "Ketuk foto untuk memperbesar" : "Klik foto untuk memperbesar");
+}
+
+// Zooms while the spot under the point, measured from the screen's centre, stays put.
+function zoomAt(scale, pointX = 0, pointY = 0) {
+  const next = Math.min(zoomMax, Math.max(1, scale));
+  const factor = next / viewer.scale;
+  viewer.x = pointX - (pointX - viewer.x) * factor;
+  viewer.y = pointY - (pointY - viewer.y) * factor;
+  viewer.scale = next;
+  showZoom();
+}
+
+function stagePoint(event) {
+  const box = $("photo-stage").getBoundingClientRect();
+  return { x: event.clientX - box.left - box.width / 2, y: event.clientY - box.top - box.height / 2 };
+}
+
+function pinchSpan() {
+  const [a, b] = [...viewer.pointers.values()];
+  return { distance: Math.hypot(a.x - b.x, a.y - b.y) || 1, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+}
+
+function startDrag(point) {
+  viewer.drag = { x: point.x, y: point.y, fromX: viewer.x, fromY: viewer.y };
+}
+
+function photoPointerDown(event) {
+  if (event.pointerType === "mouse" && event.button !== 0) return;
+  event.preventDefault();
+  $("photo-stage").setPointerCapture(event.pointerId);
+  const point = stagePoint(event);
+  viewer.pointers.set(event.pointerId, point);
+  if (viewer.pointers.size === 1) {
+    viewer.moved = false;
+    startDrag(point);
+  } else if (viewer.pointers.size === 2) {
+    viewer.moved = true;
+    viewer.pinch = pinchSpan();
+    $("photo-stage").classList.add("dragging");
+  }
+}
+
+function photoPointerMove(event) {
+  if (!viewer.pointers.has(event.pointerId)) return;
+  const point = stagePoint(event);
+  viewer.pointers.set(event.pointerId, point);
+  if (viewer.pointers.size >= 2 && viewer.pinch) {
+    const span = pinchSpan();
+    zoomAt(viewer.scale * (span.distance / viewer.pinch.distance), span.x, span.y);
+    viewer.x += span.x - viewer.pinch.x;
+    viewer.y += span.y - viewer.pinch.y;
+    showZoom();
+    viewer.pinch = span;
+    return;
+  }
+  const dx = point.x - viewer.drag.x;
+  const dy = point.y - viewer.drag.y;
+  if (!viewer.moved && Math.hypot(dx, dy) > 6) {
+    viewer.moved = true;
+    $("photo-stage").classList.add("dragging");
+  }
+  if (viewer.moved && viewer.scale > 1) {
+    viewer.x = viewer.drag.fromX + dx;
+    viewer.y = viewer.drag.fromY + dy;
+    showZoom();
+  }
+}
+
+function photoPointerUp(event) {
+  if (!viewer.pointers.has(event.pointerId)) return;
+  const point = viewer.pointers.get(event.pointerId);
+  viewer.pointers.delete(event.pointerId);
+  if (viewer.pointers.size === 1) {
+    // One finger stays after a pinch: it carries on dragging from where it is.
+    viewer.pinch = null;
+    startDrag([...viewer.pointers.values()][0]);
+    return;
+  }
+  if (viewer.pointers.size > 0) return;
+  $("photo-stage").classList.remove("dragging");
+  if (event.type === "pointerup" && !viewer.moved) {
+    if (viewer.scale > 1.01) zoomAt(1);
+    else zoomAt(zoomStep, point.x, point.y);
+  }
+}
+
+function photoWheel(event) {
+  event.preventDefault();
+  const point = stagePoint(event);
+  const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
+  zoomAt(viewer.scale * Math.exp(-delta * 0.002), point.x, point.y);
+}
+
+function photoKey(event) {
+  const pan = 80;
+  const moves = { ArrowLeft: [pan, 0], ArrowRight: [-pan, 0], ArrowUp: [0, pan], ArrowDown: [0, -pan] };
+  if (event.key === "+" || event.key === "=") zoomAt(viewer.scale * 1.5);
+  else if (event.key === "-") zoomAt(viewer.scale / 1.5);
+  else if (event.key === "0") zoomAt(1);
+  else if (moves[event.key] && viewer.scale > 1.01) {
+    viewer.x += moves[event.key][0];
+    viewer.y += moves[event.key][1];
+    showZoom();
+  } else return;
+  event.preventDefault();
 }
 
 let authMode = "login";
@@ -918,6 +1082,26 @@ function checkAccountAgain() {
 }
 
 $("order-form").addEventListener("submit", submitCartAdd);
+$("photo-zoom").addEventListener("click", openPhoto);
+$("photo-image").addEventListener("load", fitPhoto);
+$("photo-stage").addEventListener("pointerdown", photoPointerDown);
+$("photo-stage").addEventListener("pointermove", photoPointerMove);
+$("photo-stage").addEventListener("pointerup", photoPointerUp);
+$("photo-stage").addEventListener("pointercancel", photoPointerUp);
+$("photo-stage").addEventListener("wheel", photoWheel, { passive: false });
+// On the document, because a button that turns disabled sends focus out of the viewer.
+document.addEventListener("keydown", (event) => {
+  if ($("photo-dialog").open && !event.ctrlKey && !event.metaKey && !event.altKey) photoKey(event);
+});
+$("photo-zoom-in").addEventListener("click", () => zoomAt(viewer.scale * 1.5));
+$("photo-zoom-out").addEventListener("click", () => zoomAt(viewer.scale / 1.5));
+$("photo-dialog").addEventListener("close", () => {
+  viewer.pointers.clear();
+  $("photo-stage").classList.remove("dragging");
+});
+window.addEventListener("resize", () => {
+  if ($("photo-dialog").open) fitPhoto();
+});
 $("order-now").addEventListener("click", orderNow);
 $("cart-open").addEventListener("click", openCart);
 $("cart-note-open").addEventListener("click", () => {

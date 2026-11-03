@@ -269,6 +269,30 @@ legend { margin-bottom: 10px; padding: 0; font-size: .92rem; font-weight: 600; }
 #cart-checkout { width: 100%; }
 
 /* Orders */
+/* Checkout */
+.checkout-sheet { width: min(620px, calc(100vw - 32px)); }
+#checkout-status:empty { display: none; }
+.checkout-section { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
+.checkout-section h3 { margin: 0 0 12px; font: 600 .78rem/1.2 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.address-view { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8px 16px; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; }
+.address-view[hidden], .address-form[hidden] { display: none; }
+.address-text { display: grid; gap: 2px; margin: 0; overflow-wrap: anywhere; white-space: pre-line; }
+.address-text span:first-child { font-weight: 600; }
+.address-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.address-form .wide { grid-column: 1 / -1; }
+.address-form label { display: grid; gap: 5px; font-size: .92rem; font-weight: 600; }
+.address-form input, .address-form textarea { width: 100%; min-height: 46px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; background: #fff; font: inherit; font-weight: 400; resize: vertical; }
+.address-form input:focus, .address-form textarea:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px rgb(138 59 50 / .14); }
+.address-form .hint { margin: 0; }
+.address-actions { display: flex; align-items: center; gap: 16px; }
+.address-actions .secondary { min-height: 40px; padding: 0 18px; font-size: .9rem; }
+.checkout-items .cart-row { grid-template-columns: 60px minmax(0, 1fr) auto; }
+.checkout-items .cart-row:first-child { padding-top: 0; }
+.checkout-items .error { margin: 4px 0 0; font-size: .88rem; }
+.checkout-total { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.checkout-submit { width: 100%; margin-top: 14px; }
+.order-address { white-space: pre-line; }
+
 .demo-note { margin-top: 8px; padding: 10px 14px; border-radius: 8px; background: var(--wait-soft); color: var(--wait); font-size: .9rem; }
 #orders-status { margin-top: 12px; }
 #orders-status:empty { min-height: 0; margin: 0; }
@@ -327,4 +351,6 @@ legend { margin-bottom: 10px; padding: 0; font-size: .92rem; font-weight: 600; }
   .sheet { padding: 24px 20px; }
   .product-sheet { padding: 0; }
   .cart-sheet { width: 100vw; padding: 0; border-radius: 0; }
+  .checkout-sheet { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; }
+  .address-form { grid-template-columns: minmax(0, 1fr); }
 }

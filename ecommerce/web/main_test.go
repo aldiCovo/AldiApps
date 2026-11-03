@@ -56,7 +56,7 @@ func newTestGateway(t *testing.T) (*httptest.Server, *fakeServices) {
 				return
 			}
 			io.WriteString(w, `{"token":"`+testToken+`","token_type":"Bearer","expires_in":3600,"user":{"id":1,"name":"Sari"}}`)
-		case "/me":
+		case "/me", "/me/address":
 			if r.Header.Get("Authorization") != "Bearer "+testToken {
 				w.WriteHeader(http.StatusUnauthorized)
 				io.WriteString(w, `{"error":"the token is not valid"}`)
@@ -577,5 +577,43 @@ func TestProductPhotos(t *testing.T) {
 	t.Cleanup(empty.Close)
 	if resp, body := do(t, "GET", empty.URL+"/api/product-photos", "", ""); resp.StatusCode != http.StatusOK || strings.TrimSpace(body) != "{}" {
 		t.Fatalf("no folder: status %d, body %q", resp.StatusCode, body)
+	}
+}
+
+func TestAddressRequestsCarryTheSession(t *testing.T) {
+	server, f := newTestGateway(t)
+	session := &http.Cookie{Name: sessionCookie, Value: testToken}
+	for _, c := range []struct{ method, body, want string }{
+		{"GET", "", "user GET /me/address"},
+		{"PUT", `{"recipient":"Sari"}`, "user PUT /me/address"},
+	} {
+		resp, _ := do(t, c.method, server.URL+"/api/me/address", "application/json", c.body, session)
+		seen := f.seen()
+		if resp.StatusCode != http.StatusOK || seen[len(seen)-1] != c.want || resp.Header.Get("Cache-Control") != "no-store" {
+			t.Fatalf("%s: status %d, seen %v", c.method, resp.StatusCode, seen)
+		}
+		f.mu.Lock()
+		got := f.headers[len(f.headers)-1].Get("Authorization")
+		f.mu.Unlock()
+		if got != "Bearer "+testToken {
+			t.Fatalf("%s: Authorization %q", c.method, got)
+		}
+		before := len(f.seen())
+		if resp, _ := do(t, c.method, server.URL+"/api/me/address", "application/json", c.body); resp.StatusCode != http.StatusUnauthorized || len(f.seen()) != before {
+			t.Fatalf("%s without a session: status %d", c.method, resp.StatusCode)
+		}
+	}
+	for _, c := range []struct {
+		method, contentType string
+		want                int
+	}{
+		{"PUT", "text/plain", http.StatusUnsupportedMediaType},
+		{"POST", "application/json", http.StatusNotFound},
+		{"DELETE", "application/json", http.StatusNotFound},
+	} {
+		before := len(f.seen())
+		if resp, _ := do(t, c.method, server.URL+"/api/me/address", c.contentType, "{}", session); resp.StatusCode != c.want || len(f.seen()) != before {
+			t.Fatalf("%s %s: status %d", c.method, c.contentType, resp.StatusCode)
+		}
 	}
 }

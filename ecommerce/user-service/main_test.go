@@ -67,7 +67,7 @@ func newTestServer(t *testing.T, passwords *Passwords) *testServer {
 	if err := migrate(ctx, pool); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, "TRUNCATE users RESTART IDENTITY"); err != nil {
+	if _, err := pool.Exec(ctx, "TRUNCATE users, addresses RESTART IDENTITY"); err != nil {
 		t.Fatal(err)
 	}
 	if passwords == nil {
@@ -504,6 +504,118 @@ func TestInternalUserNeedsTheInternalToken(t *testing.T) {
 	for _, id := range []string{"999999", "0", "abc"} {
 		if status, _ := request(t, http.MethodGet, server.URL+"/internal/users/"+id, "", testInternalToken); status != http.StatusNotFound {
 			t.Errorf("id %s: want 404, got %d", id, status)
+		}
+	}
+}
+
+const sariAddress = `{"recipient":" Sari Dewi ","phone":"+62 812-3456-7890","street":"Jl. Melati No. 5\nRT 01/RW 02","district":"Coblong","city":"Kota Bandung","province":"Jawa Barat","postal_code":"40132"}`
+
+func TestAddressIsSavedPerAccount(t *testing.T) {
+	s := newTestServer(t, nil)
+	s.register(t, "sari@example.com", "password123")
+	s.register(t, "budi@example.com", "password123")
+	sari := s.login(t, "sari@example.com", "password123").Token
+	budi := s.login(t, "budi@example.com", "password123").Token
+
+	if status, body := request(t, http.MethodGet, s.URL+"/me/address", "", sari); status != http.StatusNotFound {
+		t.Fatalf("before saving: status %d, body %s", status, body)
+	}
+	status, body := request(t, http.MethodPut, s.URL+"/me/address", sariAddress, sari)
+	if status != http.StatusOK {
+		t.Fatalf("save: status %d, body %s", status, body)
+	}
+	var saved Address
+	if err := json.Unmarshal(body, &saved); err != nil {
+		t.Fatal(err)
+	}
+	want := Address{Recipient: "Sari Dewi", Phone: "081234567890", Street: "Jl. Melati No. 5\nRT 01/RW 02", District: "Coblong", City: "Kota Bandung", Province: "Jawa Barat", PostalCode: "40132"}
+	if saved != want {
+		t.Fatalf("saved %+v", saved)
+	}
+	status, body = request(t, http.MethodGet, s.URL+"/me/address", "", sari)
+	var read Address
+	if err := json.Unmarshal(body, &read); err != nil || status != http.StatusOK || read != want {
+		t.Fatalf("read: status %d, body %s", status, body)
+	}
+	if status, _ := request(t, http.MethodGet, s.URL+"/me/address", "", budi); status != http.StatusNotFound {
+		t.Fatalf("another account sees it: status %d", status)
+	}
+
+	// Saving again replaces it.
+	changed := strings.Replace(sariAddress, "40132", "40135", 1)
+	if status, body := request(t, http.MethodPut, s.URL+"/me/address", changed, sari); status != http.StatusOK {
+		t.Fatalf("change: status %d, body %s", status, body)
+	}
+	if _, body := request(t, http.MethodGet, s.URL+"/me/address", "", sari); !strings.Contains(string(body), `"postal_code":"40135"`) {
+		t.Fatalf("after change: %s", body)
+	}
+	var count int
+	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM addresses").Scan(&count); err != nil || count != 1 {
+		t.Fatalf("rows %d, err %v", count, err)
+	}
+
+	// A deleted account's token can't save, and its address goes with it.
+	if _, err := s.pool.Exec(context.Background(), "DELETE FROM users WHERE email = 'sari@example.com'"); err != nil {
+		t.Fatal(err)
+	}
+	if status, _ := request(t, http.MethodPut, s.URL+"/me/address", sariAddress, sari); status != http.StatusUnauthorized {
+		t.Fatalf("deleted account: status %d", status)
+	}
+	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM addresses").Scan(&count); err != nil || count != 0 {
+		t.Fatalf("rows after delete %d, err %v", count, err)
+	}
+}
+
+func TestAddressValidation(t *testing.T) {
+	s := newTestServer(t, nil)
+	s.register(t, "sari@example.com", "password123")
+	token := s.login(t, "sari@example.com", "password123").Token
+	with := func(field, value string) string {
+		var fields map[string]string
+		if err := json.Unmarshal([]byte(sariAddress), &fields); err != nil {
+			t.Fatal(err)
+		}
+		fields[field] = value
+		body, err := json.Marshal(fields)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(body)
+	}
+	for name, body := range map[string]string{
+		"no recipient":      with("recipient", "  "),
+		"long recipient":    with("recipient", strings.Repeat("a", 101)),
+		"recipient 2 lines": with("recipient", "Sari\nDewi"),
+		"no street":         with("street", ""),
+		"long street":       with("street", strings.Repeat("a", 301)),
+		"control character": with("city", "Bandung\u0000"),
+		"no district":       with("district", ""),
+		"no province":       with("province", ""),
+		"landline":          with("phone", "022 1234567"),
+		"short phone":       with("phone", "08123"),
+		"letters in phone":  with("phone", "0812abc4567"),
+		"4 digit postcode":  with("postal_code", "4013"),
+		"letters postcode":  with("postal_code", "4013a"),
+		"unknown field":     strings.Replace(sariAddress, `"recipient"`, `"user_id":2,"recipient"`, 1),
+		"not JSON":          "nope",
+	} {
+		t.Run(name, func(t *testing.T) {
+			if status, body := request(t, http.MethodPut, s.URL+"/me/address", body, token); status != http.StatusBadRequest {
+				t.Fatalf("status %d, body %s", status, body)
+			}
+		})
+	}
+	for _, phone := range []string{"0812 3456 7890", "628123456789", "+6281234567", "0812.3456.7890"} {
+		if status, body := request(t, http.MethodPut, s.URL+"/me/address", with("phone", phone), token); status != http.StatusOK {
+			t.Fatalf("%s: status %d, body %s", phone, status, body)
+		}
+	}
+	for _, method := range []string{http.MethodGet, http.MethodPut} {
+		if status, _ := request(t, method, s.URL+"/me/address", sariAddress, ""); status != http.StatusUnauthorized {
+			t.Fatalf("%s without token: status %d", method, status)
+		}
+		if status, _ := request(t, method, s.URL+"/me/address", sariAddress, "not-a-token"); status != http.StatusUnauthorized {
+			t.Fatalf("%s bad token: status %d", method, status)
 		}
 	}
 }

@@ -27,9 +27,16 @@ type orderInput struct {
 		VariantID int64 `json:"variant_id"`
 		Quantity  int32 `json:"quantity"`
 	} `json:"items"`
+	ShippingAddress *Address `json:"shipping_address"`
 }
 
 func (in *orderInput) validate() error {
+	if in.ShippingAddress == nil {
+		return errors.New("shipping_address is required")
+	}
+	if err := in.ShippingAddress.validate(); err != nil {
+		return fmt.Errorf("shipping_address: %w", err)
+	}
 	if len(in.Items) == 0 {
 		return errors.New("items is required")
 	}
@@ -112,7 +119,7 @@ func newHandler(store *Store, verifier *Verifier, catalog *Catalog) http.Handler
 				return
 			}
 		}
-		order, err := store.Create(r.Context(), userID, items)
+		order, err := store.Create(r.Context(), userID, items, *in.ShippingAddress)
 		if err != nil {
 			writeStoreError(w, err)
 			return

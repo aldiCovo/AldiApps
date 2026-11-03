@@ -187,15 +187,24 @@ func newHandler(store *Store, tokens *Tokens, passwords *Passwords, internalToke
 		writeJSON(w, http.StatusOK, user)
 	})
 
-	mux.HandleFunc("GET /me", func(w http.ResponseWriter, r *http.Request) {
+	// tokenUser answers 401 itself when the request has no valid token.
+	tokenUser := func(w http.ResponseWriter, r *http.Request) (int64, bool) {
 		bearer, found := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if !found {
 			writeUnauthorized(w, "a bearer token is required")
-			return
+			return 0, false
 		}
 		id, err := tokens.UserID(bearer)
 		if err != nil {
 			writeUnauthorized(w, "the token is not valid")
+			return 0, false
+		}
+		return id, true
+	}
+
+	mux.HandleFunc("GET /me", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := tokenUser(w, r)
+		if !ok {
 			return
 		}
 		user, err := store.ByID(r.Context(), id)
@@ -209,6 +218,51 @@ func newHandler(store *Store, tokens *Tokens, passwords *Passwords, internalToke
 			return
 		}
 		writeJSON(w, http.StatusOK, user)
+	})
+
+	mux.HandleFunc("GET /me/address", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := tokenUser(w, r)
+		if !ok {
+			return
+		}
+		address, err := store.Address(r.Context(), id)
+		if errors.Is(err, errNoAddress) {
+			writeError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		if err != nil {
+			writeFailure(w, err)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		writeJSON(w, http.StatusOK, address)
+	})
+
+	mux.HandleFunc("PUT /me/address", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := tokenUser(w, r)
+		if !ok {
+			return
+		}
+		var address Address
+		if !readJSON(w, r, &address) {
+			return
+		}
+		if err := address.validate(); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		err := store.SaveAddress(r.Context(), id, address)
+		// The account was deleted after the token was issued.
+		if errors.Is(err, errNotFound) {
+			writeUnauthorized(w, "the token is not valid")
+			return
+		}
+		if err != nil {
+			writeFailure(w, err)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		writeJSON(w, http.StatusOK, address)
 	})
 
 	return mux

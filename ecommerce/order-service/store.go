@@ -57,6 +57,8 @@ type Order struct {
 	Items     []OrderItem `json:"items"`
 	CreatedAt time.Time   `json:"created_at"`
 	UpdatedAt time.Time   `json:"updated_at"`
+	// Set once payment succeeds.
+	PaidAt *time.Time `json:"paid_at"`
 }
 
 type reservationItem struct {
@@ -85,11 +87,11 @@ type paymentRequestedEvent struct {
 	Outcome string `json:"outcome"`
 }
 
-const orderColumns = "id, status, reason, total, expires_at, shipping_address, shipping, created_at, updated_at"
+const orderColumns = "id, status, reason, total, expires_at, shipping_address, shipping, created_at, updated_at, paid_at"
 
 func scanOrder(row pgx.Row) (Order, error) {
 	var o Order
-	err := row.Scan(&o.ID, &o.Status, &o.Reason, &o.Total, &o.ExpiresAt, &o.ShippingAddress, &o.Shipping, &o.CreatedAt, &o.UpdatedAt)
+	err := row.Scan(&o.ID, &o.Status, &o.Reason, &o.Total, &o.ExpiresAt, &o.ShippingAddress, &o.Shipping, &o.CreatedAt, &o.UpdatedAt, &o.PaidAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Order{}, errNotFound
 	}
@@ -290,7 +292,9 @@ func (s *Store) finish(ctx context.Context, id int64, from, to, reason, eventTyp
 	var userID, total int64
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx,
-			`UPDATE orders SET status = $3, reason = $4, updated_at = now() WHERE id = $1 AND status = $2 RETURNING user_id, total`,
+			`UPDATE orders SET status = $3, reason = $4, updated_at = now(),
+				paid_at = CASE WHEN $3 = 'paid' THEN now() END
+			 WHERE id = $1 AND status = $2 RETURNING user_id, total`,
 			id, from, to, reason).Scan(&userID, &total)
 		if err != nil {
 			return err

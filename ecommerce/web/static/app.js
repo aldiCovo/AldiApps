@@ -725,24 +725,21 @@ function cancelControls(order) {
   return box;
 }
 
-function orderCard(order) {
-  const card = el("article", "order");
-  const head = el("div", "order-head");
-  const [label, tone] = orderState(order);
-  head.append(el("span", "", `Pesanan #${order.id}`), el("span", `order-state ${tone}`, label));
-  card.append(head);
-  for (const item of order.items) {
-    card.append(el("p", "order-item", `${item.product_name} · ${item.size} · ${item.color} × ${item.quantity}`));
-  }
-  const shipping = order.shipping;
-  if (shipping) {
-    card.append(el("p", "order-item", `Kurir ${shipping.courier} ${shipping.service} · estimasi ${shipping.estimate} · ongkir ${rupiah.format(shipping.cost)}`));
-  }
-  const address = order.shipping_address;
-  if (address) {
-    card.append(el("p", "order-item order-address", `Dikirim ke ${address.recipient} (${address.phone})\n${address.street}, ${address.district}, ${address.city}, ${address.province} ${address.postal_code}`));
-  }
-  card.append(el("p", "card-price", `Total ${rupiah.format(order.total)}`));
+const dateTime = new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short" });
+const when = (iso) => dateTime.format(new Date(iso));
+// The order opened in detail, by id, so it stays open while the list is drawn again.
+let detailOrder = null;
+
+function linkButton(label, key, onClick) {
+  const button = el("button", "link", label);
+  button.type = "button";
+  button.dataset.key = key;
+  button.addEventListener("click", onClick);
+  return button;
+}
+
+// What the customer can still do with an order, the same in the list and in its detail.
+function orderActions(order, target) {
   if (order.status === "rejected") {
     const again = el("button", "link", "Masukkan lagi ke keranjang");
     again.type = "button";
@@ -757,18 +754,123 @@ function orderCard(order) {
         again.disabled = false;
       }
     });
-    card.append(again);
+    target.append(again);
   }
   if (order.status === "awaiting_payment") {
     if (order.expires_at) {
       const time = new Date(order.expires_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
-      card.append(el("p", "order-item", `Bayar sebelum pukul ${time}. Setelah itu stok dikembalikan.`));
+      target.append(el("p", "order-item", `Bayar sebelum pukul ${time}. Setelah itu stok dikembalikan.`));
     }
     const actions = el("div", "order-actions");
     actions.append(payButton(order, "Bayar (simulasi)", "primary", "success"), payButton(order, "Simulasikan gagal bayar", "secondary", "failure"));
-    card.append(actions, cancelControls(order));
+    target.append(actions, cancelControls(order));
   }
+}
+
+function showOrderDetail(id) {
+  detailOrder = id;
+  $("orders-status").textContent = "";
+  renderOrders(shownOrders);
+  $("orders-dialog").scrollTop = 0;
+  $("orders-list").querySelector(".detail-back").focus();
+}
+
+function showOrderList() {
+  const id = detailOrder;
+  detailOrder = null;
+  $("orders-status").textContent = "";
+  renderOrders(shownOrders);
+  const link = $("orders-list").querySelector(`[data-key="detail-${id}"]`);
+  if (link) link.focus();
+}
+
+function orderCard(order) {
+  const card = el("article", "order");
+  const head = el("div", "order-head");
+  const [label, tone] = orderState(order);
+  head.append(el("span", "", `Pesanan #${order.id}`), el("span", `order-state ${tone}`, label));
+  card.append(head, el("p", "order-date", `Dipesan ${when(order.created_at)}`));
+  for (const item of order.items) {
+    card.append(el("p", "order-item", `${item.product_name} · ${item.size} · ${item.color} × ${item.quantity}`));
+  }
+  const foot = el("div", "order-foot");
+  foot.append(el("p", "card-price", `Total ${rupiah.format(order.total)}`),
+    linkButton(order.status === "paid" ? "Lihat detail & struk" : "Lihat detail", `detail-${order.id}`, () => showOrderDetail(order.id)));
+  card.append(foot);
+  orderActions(order, card);
   return card;
+}
+
+function sumRow(label, value, className = "sum-row") {
+  const row = el("p", className);
+  row.append(el("span", "", label), el(className === "cart-total" ? "strong" : "span", "", value));
+  return row;
+}
+
+// One order in full. A paid one reads as its receipt and can be printed or saved as PDF.
+function orderDetail(order) {
+  const box = el("article", "order order-detail");
+  box.append(linkButton("← Semua pesanan", "detail-back", showOrderList));
+  box.lastChild.classList.add("detail-back");
+  const paid = order.status === "paid";
+  if (paid) {
+    const brand = el("div", "receipt-brand");
+    brand.append(el("span", "brand", "Prastika"), el("span", "", "Struk pembayaran"));
+    box.append(brand);
+  }
+  const head = el("div", "order-head");
+  const [label, tone] = orderState(order);
+  head.append(el("h3", "detail-title", `Pesanan #${order.id}`), el("span", `order-state ${tone}`, label));
+  box.append(head);
+
+  const facts = el("dl", "detail-facts");
+  const fact = (name, value) => facts.append(el("dt", "", name), el("dd", "", value));
+  fact("Dipesan", when(order.created_at));
+  if (order.paid_at) fact("Dibayar", when(order.paid_at));
+  if (order.status === "cancelled" || order.status === "rejected") fact("Berakhir", when(order.updated_at));
+  if (paid) fact("Metode", "Simulasi pembayaran");
+  box.append(facts);
+
+  const items = el("div", "detail-items");
+  let subtotal = 0;
+  for (const item of order.items) {
+    const line = item.price * item.quantity;
+    subtotal += line;
+    const row = el("div", "detail-item");
+    const name = el("div", "");
+    name.append(el("span", "detail-item-name", item.product_name), el("span", "detail-item-meta", `${item.size} · ${item.color} · ${item.quantity} × ${rupiah.format(item.price)}`));
+    row.append(name, el("span", "detail-item-sum", rupiah.format(line)));
+    items.append(row);
+  }
+  box.append(items);
+
+  const sums = el("div", "checkout-sums");
+  sums.append(sumRow("Subtotal", rupiah.format(subtotal)));
+  const shipping = order.shipping;
+  if (shipping) sums.append(sumRow(`Ongkir ${shipping.courier} ${shipping.service}`, rupiah.format(shipping.cost)));
+  sums.append(sumRow("Total", rupiah.format(order.total), "cart-total"));
+  box.append(sums);
+
+  if (shipping || order.shipping_address) {
+    const send = el("section", "detail-send");
+    send.append(el("h4", "", "Pengiriman"));
+    if (shipping) send.append(el("p", "order-item", `Kurir ${shipping.courier} ${shipping.service} · estimasi ${shipping.estimate}`));
+    const address = order.shipping_address;
+    if (address) {
+      send.append(el("p", "order-item order-address", `${address.recipient} (${address.phone})\n${address.street}, ${address.district}, ${address.city}, ${address.province} ${address.postal_code}`));
+    }
+    box.append(send);
+  }
+  if (paid) {
+    box.append(el("p", "receipt-note", "Pembayaran ini masih simulasi: tidak ada uang yang ditarik dan tidak ada barang yang dikirim."));
+    const print = el("button", "secondary detail-print", "Cetak / simpan PDF");
+    print.type = "button";
+    print.dataset.key = `print-${order.id}`;
+    print.addEventListener("click", () => window.print());
+    box.append(print);
+  }
+  orderActions(order, box);
+  return box;
 }
 
 // Updates fetch one order at a time, because the order list has a rate limit and these don't.
@@ -794,7 +896,10 @@ function renderOrders(orders) {
   // Drawing the list again keeps keyboard focus on the same button.
   const focused = document.activeElement;
   const focusKey = $("orders-list").contains(focused) ? focused.dataset.key : undefined;
-  $("orders-list").replaceChildren(...orders.map(orderCard));
+  const detail = detailOrder !== null && orders.find((order) => order.id === detailOrder);
+  if (detailOrder !== null && !detail) detailOrder = null;
+  $("orders-dialog").classList.toggle("showing-detail", Boolean(detail));
+  $("orders-list").replaceChildren(...(detail ? [orderDetail(detail)] : orders.map(orderCard)));
   if (focusKey) {
     const again = $("orders-list").querySelector(`[data-key="${focusKey}"]`);
     if (again) again.focus();
@@ -1503,6 +1608,7 @@ window.addEventListener("storage", (event) => {
 });
 $("orders-dialog").addEventListener("close", () => {
   cancelQuestion = null;
+  detailOrder = null;
   clearTimeout(pollTimer);
   disconnectLive();
 });

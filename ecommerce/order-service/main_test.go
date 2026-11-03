@@ -278,7 +278,7 @@ func TestSuccessfulSaga(t *testing.T) {
 	}
 	h.apply(t, eventStockReserved, order.ID)
 	got := h.status(t, 1, order.ID)
-	if got.Status != statusAwaitingPayment || got.ExpiresAt == nil {
+	if got.Status != statusAwaitingPayment || got.ExpiresAt == nil || got.PaidAt != nil {
 		t.Fatalf("order %+v", got)
 	}
 	status, data := h.do(t, http.MethodPost, fmt.Sprintf("/orders/%d/pay", order.ID), `{"simulate":"success"}`, h.token(t, 1))
@@ -289,12 +289,24 @@ func TestSuccessfulSaga(t *testing.T) {
 		t.Fatalf("second payment: status %d", status)
 	}
 	h.apply(t, eventPaymentSucceeded, order.ID)
-	if got := h.status(t, 1, order.ID); got.Status != statusPaid {
+	got = h.status(t, 1, order.ID)
+	if got.Status != statusPaid || got.PaidAt == nil || got.PaidAt.Before(got.CreatedAt) {
 		t.Fatalf("order %+v", got)
 	}
 	want := []string{eventOrderCreated, eventPaymentRequested, eventOrderPaid}
 	if got := h.outbox(t); fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("events %v", got)
+	}
+}
+
+func TestOnlyPaidOrdersHaveAPaymentTime(t *testing.T) {
+	h := newHarness(t)
+	order := h.create(t, 1, oneDress)
+	h.apply(t, eventStockReserved, order.ID)
+	h.do(t, http.MethodPost, fmt.Sprintf("/orders/%d/pay", order.ID), `{"simulate":"failure"}`, h.token(t, 1))
+	h.apply(t, eventPaymentFailed, order.ID)
+	if got := h.status(t, 1, order.ID); got.Status != statusCancelled || got.PaidAt != nil {
+		t.Fatalf("order %+v", got)
 	}
 }
 

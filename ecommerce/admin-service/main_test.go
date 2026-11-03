@@ -22,13 +22,15 @@ type fakes struct {
 	roles       map[string]string // bearer token -> role
 	orderHits   []string
 	catalogHits []string
-	catalogAuth int // status catalog-service answers to any token, to fake a wrong one
-	advance     int // status order-service answers to a status change
+	catalogAuth int    // status catalog-service answers to any token, to fake a wrong one
+	advance     int    // status order-service answers to a status change
+	category    string // the name of category 1, which a PUT changes
+	photos      string // the photos folder
 }
 
 func newTestServer(t *testing.T) (*httptest.Server, *fakes) {
 	t.Helper()
-	f := &fakes{roles: map[string]string{"admin-token": "admin", "customer-token": "customer"}, advance: http.StatusOK}
+	f := &fakes{roles: map[string]string{"admin-token": "admin", "customer-token": "customer"}, advance: http.StatusOK, category: "Office On Style", photos: t.TempDir()}
 	users := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		bearer := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		switch {
@@ -100,6 +102,22 @@ func newTestServer(t *testing.T) (*httptest.Server, *fakes) {
 			return
 		}
 		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/categories":
+			f.mu.Lock()
+			name, _ := json.Marshal(f.category)
+			f.mu.Unlock()
+			io.WriteString(w, `{"categories":[{"id":1,"name":`+string(name)+`},{"id":2,"name":"Kaos & Polo"}]}`)
+		case r.Method == http.MethodPut && r.URL.Path == "/categories/1":
+			var in struct{ Name string }
+			json.Unmarshal(body, &in)
+			f.mu.Lock()
+			f.category = in.Name
+			f.mu.Unlock()
+			io.WriteString(w, `{"id":1,"name":"`+in.Name+`"}`)
+		case r.Method == http.MethodDelete && r.URL.Path == "/categories/1":
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == http.MethodGet && r.URL.Path == "/products/5":
+			io.WriteString(w, `{"id":5,"name":"Dress","price":350000,"variants":[]}`)
 		case r.Method == http.MethodGet && r.URL.Path == "/products":
 			io.WriteString(w, `{"products":[{"id":5,"name":"Dress","price":350000,"variants":[]}]}`)
 		case r.Method == http.MethodPost && r.URL.Path == "/products":
@@ -117,7 +135,7 @@ func newTestServer(t *testing.T) (*httptest.Server, *fakes) {
 	}))
 	t.Cleanup(catalog.Close)
 	server := httptest.NewServer(newHandler(services{userURL: users.URL, orderURL: orders.URL, catalogURL: catalog.URL,
-		userInternalToken: userToken, orderInternalToken: orderToken, catalogInternalToken: catalogToken}))
+		userInternalToken: userToken, orderInternalToken: orderToken, catalogInternalToken: catalogToken, photosDir: f.photos}))
 	t.Cleanup(server.Close)
 	return server, f
 }

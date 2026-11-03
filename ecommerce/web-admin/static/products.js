@@ -1,7 +1,7 @@
 "use strict";
 
 // Products, variants, prices and stock. Uses $, el, button, api, send, rupiah and handleAuth
-// from admin.js. catalog-service checks every change again.
+// from admin.js, and the photo parts from photos.js. catalog-service checks every change again.
 
 const productPage = 100;
 const maxPrice = 1_000_000_000;
@@ -148,6 +148,7 @@ async function loadProducts(more = false) {
     const [categoryList, page] = await Promise.all([
       more ? Promise.resolve({ categories }) : api("/categories"),
       api(`/products?${query}`),
+      more ? null : loadPhotoLists(),
     ]);
     if (token !== productsToken) return;
     categories = categoryList.categories;
@@ -196,7 +197,7 @@ function categoryRow(category) {
     }
     await changeCategory(row, "DELETE", `/categories/${category.id}`, undefined, `Kategori ${category.name} dihapus.`);
   });
-  row.append(name, save, remove);
+  row.append(name, save, remove, categoryPhotoTools(category));
   row.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!name.value.trim()) {
@@ -297,6 +298,7 @@ function productCard(product, note = "") {
   head.append(title, el("strong", "price num", rupiah.format(product.price)), actions);
   card.append(head);
   if (product.description) card.append(el("p", "description muted", product.description));
+  card.append(photoSection(product, status));
 
   const editBox = el("div", "edit-box");
   editBox.hidden = true;
@@ -323,6 +325,7 @@ function productCard(product, note = "") {
       try {
         await send("DELETE", `/products/${product.id}`);
         products = products.filter((item) => item.id !== product.id);
+        delete productPhotos[product.id];
         card.remove();
         $("products-status").textContent = `Produk ${product.name} dihapus.`;
       } catch (error) {

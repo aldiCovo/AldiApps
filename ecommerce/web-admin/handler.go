@@ -20,6 +20,7 @@ import (
 
 const (
 	maxBodyBytes     = 1 << 16
+	maxPhotoBytes    = 5 << 20
 	maxUpstreamBytes = 8 << 20
 	upstreamTimeout  = 15 * time.Second
 	// Its own name and path, so the shop's session never reaches these pages, nor this one the shop.
@@ -30,7 +31,12 @@ const (
 //go:embed static
 var static embed.FS
 
-var numericID = regexp.MustCompile(`^[1-9][0-9]{0,17}$`)
+var (
+	numericID = regexp.MustCompile(`^[1-9][0-9]{0,17}$`)
+	photoSlot = regexp.MustCompile(`^[1-4]$`)
+	// A form on another site can't send these types without the browser asking first.
+	photoTypes = map[string]bool{"image/jpeg": true, "image/png": true, "image/webp": true}
+)
 
 type gateway struct {
 	adminURL string
@@ -135,6 +141,7 @@ func newHandler(adminURL string) http.Handler {
 			g.withSession(w, r, route.method, path, body)
 		})
 	}
+	g.addPhotoRoutes(mux)
 	mux.HandleFunc("/admin/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 	})
@@ -181,7 +188,7 @@ func versionedPage(files fs.FS) ([]byte, map[string]string) {
 		panic(err)
 	}
 	assets := make(map[string]string)
-	for _, name := range []string{"admin.css", "admin.js", "products.js"} {
+	for _, name := range []string{"admin.css", "admin.js", "products.js", "photos.js"} {
 		content, err := fs.ReadFile(files, name)
 		if err != nil {
 			panic(err)
@@ -249,6 +256,10 @@ func readBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 
 // call sends only what's given here, so the browser's cookies and headers stay out of it.
 func (g *gateway) call(r *http.Request, method, path string, body []byte, bearer string) (*http.Response, []byte, error) {
+	return g.callTyped(r, method, path, body, "application/json", bearer)
+}
+
+func (g *gateway) callTyped(r *http.Request, method, path string, body []byte, contentType, bearer string) (*http.Response, []byte, error) {
 	var reader io.Reader
 	if body != nil {
 		reader = bytes.NewReader(body)
@@ -258,7 +269,7 @@ func (g *gateway) call(r *http.Request, method, path string, body []byte, bearer
 		return nil, nil, err
 	}
 	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Type", contentType)
 	}
 	if bearer != "" {
 		req.Header.Set("Authorization", "Bearer "+bearer)
@@ -304,13 +315,17 @@ func (g *gateway) login(w http.ResponseWriter, r *http.Request) {
 
 // withSession passes the cookie's token on. A token admin-service refuses is cleared.
 func (g *gateway) withSession(w http.ResponseWriter, r *http.Request, method, path string, body []byte) {
+	g.withSessionTyped(w, r, method, path, body, "application/json")
+}
+
+func (g *gateway) withSessionTyped(w http.ResponseWriter, r *http.Request, method, path string, body []byte, contentType string) {
 	w.Header().Set("Cache-Control", "no-store")
 	cookie, err := r.Cookie(sessionCookie)
 	if err != nil || cookie.Value == "" {
 		writeError(w, http.StatusUnauthorized, "not logged in")
 		return
 	}
-	resp, data, err := g.call(r, method, path, body, cookie.Value)
+	resp, data, err := g.callTyped(r, method, path, body, contentType, cookie.Value)
 	if err != nil {
 		writeUpstreamError(w, err)
 		return
@@ -356,4 +371,74 @@ func writeError(w http.ResponseWriter, status int, message string) {
 	if err := json.NewEncoder(w).Encode(map[string]string{"error": message}); err != nil {
 		slog.Error("writing response failed", "error", err)
 	}
+}
+
+// addPhotoRoutes passes photo uploads on as they are; admin-service checks what they contain.
+func (g *gateway) addPhotoRoutes(mux *http.ServeMux) {
+	productSlot := func(w http.ResponseWriter, r *http.Request) (string, bool) {
+		id, slot := r.PathValue("id"), r.PathValue("slot")
+		if !numericID.MatchString(id) || !photoSlot.MatchString(slot) {
+			writeError(w, http.StatusNotFound, "not found")
+			return "", false
+		}
+		return "/photos/products/" + id + "/" + slot, true
+	}
+	mux.HandleFunc("GET /admin/api/photos/products", func(w http.ResponseWriter, r *http.Request) {
+		g.withSession(w, r, http.MethodGet, "/photos/products", nil)
+	})
+	mux.HandleFunc("PUT /admin/api/photos/products/{id}/{slot}", func(w http.ResponseWriter, r *http.Request) {
+		path, ok := productSlot(w, r)
+		if !ok {
+			return
+		}
+		if photo, contentType, ok := readPhoto(w, r); ok {
+			g.withSessionTyped(w, r, http.MethodPut, path, photo, contentType)
+		}
+	})
+	mux.HandleFunc("DELETE /admin/api/photos/products/{id}/{slot}", func(w http.ResponseWriter, r *http.Request) {
+		if path, ok := productSlot(w, r); ok && isJSON(w, r) {
+			g.withSession(w, r, http.MethodDelete, path, nil)
+		}
+	})
+	mux.HandleFunc("POST /admin/api/photos/products/{id}/{slot}/first", func(w http.ResponseWriter, r *http.Request) {
+		if path, ok := productSlot(w, r); ok && isJSON(w, r) {
+			g.withSession(w, r, http.MethodPost, path+"/first", nil)
+		}
+	})
+	mux.HandleFunc("GET /admin/api/photos/categories", func(w http.ResponseWriter, r *http.Request) {
+		g.withSession(w, r, http.MethodGet, "/photos/categories", nil)
+	})
+	mux.HandleFunc("PUT /admin/api/photos/categories/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		if photo, contentType, ok := readPhoto(w, r); ok {
+			g.withSessionTyped(w, r, http.MethodPut, "/photos/categories/"+id, photo, contentType)
+		}
+	})
+	mux.HandleFunc("DELETE /admin/api/photos/categories/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if id, ok := pathID(w, r); ok && isJSON(w, r) {
+			g.withSession(w, r, http.MethodDelete, "/photos/categories/"+id, nil)
+		}
+	})
+}
+
+func readPhoto(w http.ResponseWriter, r *http.Request) ([]byte, string, bool) {
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || !photoTypes[mediaType] {
+		writeError(w, http.StatusUnsupportedMediaType, "Content-Type must be image/jpeg, image/png or image/webp")
+		return nil, "", false
+	}
+	photo, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxPhotoBytes))
+	var tooLarge *http.MaxBytesError
+	switch {
+	case errors.As(err, &tooLarge):
+		writeError(w, http.StatusRequestEntityTooLarge, "a photo can be at most 5 MB")
+		return nil, "", false
+	case err != nil:
+		writeError(w, http.StatusBadRequest, "could not read the photo")
+		return nil, "", false
+	}
+	return photo, mediaType, true
 }

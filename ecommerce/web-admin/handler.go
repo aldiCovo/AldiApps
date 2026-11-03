@@ -142,6 +142,24 @@ func newHandler(adminURL string) http.Handler {
 		})
 	}
 	g.addPhotoRoutes(mux)
+	mux.HandleFunc("GET /admin/api/users", func(w http.ResponseWriter, r *http.Request) {
+		query := url.Values{}
+		for _, name := range []string{"q", "role", "limit", "offset"} {
+			if value := r.URL.Query().Get(name); value != "" {
+				query.Set(name, value)
+			}
+		}
+		g.withSession(w, r, http.MethodGet, "/users?"+query.Encode(), nil)
+	})
+	mux.HandleFunc("PUT /admin/api/users/{id}/role", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		if body, ok := readBody(w, r); ok {
+			g.withSession(w, r, http.MethodPut, "/users/"+id+"/role", body)
+		}
+	})
 	mux.HandleFunc("/admin/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 	})
@@ -188,7 +206,7 @@ func versionedPage(files fs.FS) ([]byte, map[string]string) {
 		panic(err)
 	}
 	assets := make(map[string]string)
-	for _, name := range []string{"admin.css", "admin.js", "products.js", "photos.js"} {
+	for _, name := range []string{"admin.css", "admin.js", "products.js", "photos.js", "users.js"} {
 		content, err := fs.ReadFile(files, name)
 		if err != nil {
 			panic(err)

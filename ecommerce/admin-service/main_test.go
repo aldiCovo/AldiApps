@@ -14,6 +14,7 @@ const (
 	userToken    = "user-internal-token-0123456789abcdef"
 	orderToken   = "order-internal-token-0123456789abcdef"
 	catalogToken = "catalog-internal-token-0123456789abcdef"
+	userAdmin    = "user-admin-token-0123456789abcdef-xyz"
 )
 
 // fakes stands in for user-service and order-service, and records what reached order-service.
@@ -26,6 +27,8 @@ type fakes struct {
 	advance     int    // status order-service answers to a status change
 	category    string // the name of category 1, which a PUT changes
 	photos      string // the photos folder
+	userHits    []string
+	userRefuses bool // user-service refuses the admin token
 }
 
 func newTestServer(t *testing.T) (*httptest.Server, *fakes) {
@@ -56,6 +59,28 @@ func newTestServer(t *testing.T) (*httptest.Server, *fakes) {
 				return
 			}
 			io.WriteString(w, `{"id":1,"email":"admin@example.com","name":"Admin","role":"`+role+`"}`)
+		case r.URL.Path == "/internal/users" || strings.HasSuffix(r.URL.Path, "/role"):
+			body, _ := io.ReadAll(r.Body)
+			f.mu.Lock()
+			refuses := f.userRefuses || bearer != userAdmin
+			if !refuses {
+				f.userHits = append(f.userHits, r.Method+" "+r.URL.RequestURI()+" "+string(body))
+			}
+			f.mu.Unlock()
+			switch {
+			case refuses:
+				w.WriteHeader(http.StatusUnauthorized)
+			case r.URL.Path == "/internal/users":
+				io.WriteString(w, `{"users":[{"id":3,"email":"c@example.com","name":"C","role":"customer"}],"total":1}`)
+			case r.URL.Path == "/internal/users/4/role":
+				w.WriteHeader(http.StatusConflict)
+				io.WriteString(w, `{"error":"the last admin can't stop being an admin"}`)
+			case r.URL.Path == "/internal/users/9/role":
+				w.WriteHeader(http.StatusNotFound)
+				io.WriteString(w, `{"error":"user not found"}`)
+			default:
+				io.WriteString(w, `{"id":3,"email":"c@example.com","name":"C","role":"admin"}`)
+			}
 		case r.URL.Path == "/internal/users/2" && bearer == userToken:
 			io.WriteString(w, `{"id":2,"email":"buyer@example.com","name":"Buyer","role":"customer"}`)
 		case strings.HasPrefix(r.URL.Path, "/internal/users/") && bearer == userToken:
@@ -135,7 +160,7 @@ func newTestServer(t *testing.T) (*httptest.Server, *fakes) {
 	}))
 	t.Cleanup(catalog.Close)
 	server := httptest.NewServer(newHandler(services{userURL: users.URL, orderURL: orders.URL, catalogURL: catalog.URL,
-		userInternalToken: userToken, orderInternalToken: orderToken, catalogInternalToken: catalogToken, photosDir: f.photos}))
+		userInternalToken: userToken, orderInternalToken: orderToken, catalogInternalToken: catalogToken, photosDir: f.photos, userAdminToken: userAdmin}))
 	t.Cleanup(server.Close)
 	return server, f
 }

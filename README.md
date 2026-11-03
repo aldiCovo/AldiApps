@@ -122,6 +122,10 @@ TEST_RABBITMQ_URL='amqp://guest:guest@127.0.0.1:5672/' go test -race ./...
 | `GET /me` | Returns the user that the `Authorization: Bearer <token>` header belongs to |
 | `GET /.well-known/jwks.json` | Returns the public key that checks tokens |
 | `GET /internal/users/{id}` | Returns one user, for other services. It needs `Authorization: Bearer <INTERNAL_TOKEN>`, and web has no route to it |
+| `GET /internal/users?q=&role=&limit=&offset=` | Accounts, newest first, whose email or name contains `q`, with `role` `admin` or `customer` if given, as `{"users", "total"}`. `limit` is 1 to 100, 50 if left out. Needs `Authorization: Bearer <ADMIN_INTERNAL_TOKEN>` |
+| `PUT /internal/users/{id}/role` | Sets `{"role"}` to `admin` or `customer`. Answers 409 rather than take the role from the last admin. Needs `ADMIN_INTERNAL_TOKEN` |
+
+`ADMIN_INTERNAL_TOKEN` is only admin-service's, and must differ from `INTERNAL_TOKEN`, so a service that looks up customers can't make anyone an admin. A role change locks every admin's row first, so two admins taking each other's role at once still leave one.
 
 Passwords are stored as Argon2id hashes. Only 3 are computed at once, which keeps a burst of logins inside the memory limit, and a request that waits over 5 seconds gets 503.
 
@@ -279,12 +283,14 @@ The only way in for the admin pages. It has no database. Every request except `P
 | `POST /photos/products/{id}/{1-4}/first` | Swaps that photo with the first, which the shop shows on the product's card |
 | `GET /photos/categories` | Each category's photo, by category id |
 | `PUT`, `DELETE /photos/categories/{id}` | Puts or removes a category's photo |
+| `GET /users?q=&role=&limit=&offset=` | Accounts from user-service, as its `/internal/users` |
+| `PUT /users/{id}/role` | Makes an account an admin or a customer with `{"role"}`. An admin can't change their own role (409), and user-service keeps at least one admin |
 
 catalog-service checks the changes itself, and admin-service passes its answers on, except that a refused internal token answers 502, so it can't look like a logged-out admin. Every change is logged with the admin's id.
 
 Photos go to `PHOTOS_DIR`, the same folder on AldiServer that `web` serves them from, so a new photo shows in the shop at once: `products/<id>/1.jpg` to `4.jpg`, and `categories/<name>.jpg`, where the name is the category's in lowercase with dashes for spaces, such as `office-on-style.jpg`. A photo is at most 5 MB and must be a JPEG, PNG or WEBP by its content, whatever the request says, and JPEG and PNG must decode to at most 10000 pixels a side. Each is written to a temporary file and renamed into place, so the shop never serves half a photo, and links in the folder are never followed. Deleting a product removes its photos, deleting a category removes its photo, and renaming a category moves its photo to the new name. A category whose name has other characters, such as `&`, can't have a photo, because the shop can't find it.
 
-It needs `USER_URL`, `ORDER_URL`, `CATALOG_URL`, `USER_INTERNAL_TOKEN`, `ORDER_INTERNAL_TOKEN`, `CATALOG_INTERNAL_TOKEN` and `PHOTOS_DIR`. The tests use fake services:
+It needs `USER_URL`, `ORDER_URL`, `CATALOG_URL`, `USER_INTERNAL_TOKEN`, `ORDER_INTERNAL_TOKEN`, `CATALOG_INTERNAL_TOKEN`, `USER_ADMIN_TOKEN` (user-service's `ADMIN_INTERNAL_TOKEN`) and `PHOTOS_DIR`. The tests use fake services:
 
 ```bash
 cd ecommerce/admin-service
@@ -301,11 +307,14 @@ The admin pages, under `/admin` on the shop's domain, separate from `web`. Its l
 | `GET /admin/api/me`, `GET /admin/api/orders`, `GET /admin/api/orders/{id}` | admin-service, with the token from the cookie |
 | `POST /admin/api/orders/{id}/status` | admin-service, with the token from the cookie |
 | The category, product, variant and stock routes above, under `/admin/api` | admin-service, with the token from the cookie. Every change, including `DELETE`, must be sent as JSON |
+| `GET /admin/api/users`, `PUT /admin/api/users/{id}/role` | admin-service, with the token from the cookie. A role change must be sent as JSON |
 | The photo routes above, under `/admin/api` | admin-service, with the token from the cookie. An upload must be sent as `image/jpeg`, `image/png` or `image/webp`, which a form on another site can't send, and other changes as JSON |
 
 The *Produk* page (`/admin/#produk`) manages categories, products with their price, category and description, and each product's variants. Stock changes by an amount added or taken away, not by a new total, so orders placed meanwhile aren't overwritten. Deleting a product or variant asks first, and old orders keep their own copy of names and prices.
 
 Each product has four photo places; *Jadikan utama* makes a photo the first, the one on the shop's card. *Kelola kategori* gives each category its photo. Before uploading, the browser turns a photo into a JPEG of at most 1600 pixels a side, which keeps uploads small and drops the location a phone camera writes into it.
+
+The *Pengguna* page (`/admin/#pengguna`) lists accounts, newest first, with a search by name or email and tabs for admins and customers. *Jadikan admin* and *Cabut admin* ask first. A demoted admin is out on their next request, and their own account shows no button.
 
 The *Pesanan* page lists orders by step: *Perlu dikemas* (paid), *Dikemas*, *Dikirim*, *Selesai* and *Semua*. Each order offers only its next step, and shipping asks for the tracking number. It needs `ADMIN_URL`.
 

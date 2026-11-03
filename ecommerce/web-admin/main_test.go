@@ -127,7 +127,8 @@ func TestOnlyKnownPathsPass(t *testing.T) {
 		{http.MethodGet, "/admin/api/orders/abc"},
 		{http.MethodGet, "/admin/api/orders/0"},
 		{http.MethodPost, "/admin/api/orders/9/cancel"},
-		{http.MethodGet, "/admin/api/users"},
+		{http.MethodDelete, "/admin/api/users/3"},
+		{http.MethodPut, "/admin/api/users/abc/role"},
 		{http.MethodDelete, "/admin/api/orders/9"},
 		{http.MethodGet, "/api/orders"},
 		{http.MethodGet, "/internal/orders"},
@@ -214,5 +215,28 @@ func TestCatalogRoutesPass(t *testing.T) {
 	}
 	if len(s.requests) != before {
 		t.Fatalf("admin-service was called: %v", s.requests[before:])
+	}
+}
+
+func TestUserRoutesPass(t *testing.T) {
+	server, s := newTestServer(t)
+	cookie := "admin_session=tok-123"
+	for _, c := range []struct{ method, path, body, want string }{
+		{http.MethodGet, "/admin/api/users?q=sari%40x&role=admin&limit=50&offset=0&id=1", "", "GET /users?limit=50&offset=0&q=sari%40x&role=admin Bearer tok-123 "},
+		{http.MethodPut, "/admin/api/users/3/role", `{"role":"admin"}`, `PUT /users/3/role Bearer tok-123 {"role":"admin"}`},
+	} {
+		if resp := request(t, server, c.method, c.path, c.body, cookie, true); resp.StatusCode != http.StatusOK {
+			t.Fatalf("%s %s: %d", c.method, c.path, resp.StatusCode)
+		}
+		if got := s.requests[len(s.requests)-1]; got != c.want {
+			t.Fatalf("sent %q, want %q", got, c.want)
+		}
+	}
+	before := len(s.requests)
+	if resp := request(t, server, http.MethodPut, "/admin/api/users/3/role", `{"role":"admin"}`, cookie, false); resp.StatusCode != http.StatusUnsupportedMediaType {
+		t.Fatalf("role change as a form: %d", resp.StatusCode)
+	}
+	if len(s.requests) != before {
+		t.Fatal("admin-service was called")
 	}
 }

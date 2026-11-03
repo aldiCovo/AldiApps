@@ -76,7 +76,7 @@ func newTestServer(t *testing.T, passwords *Passwords) *testServer {
 		}
 	}
 	tokens := newTestTokens(t, time.Hour)
-	server := httptest.NewServer(newHandler(&Store{pool: pool}, tokens, passwords, testInternalToken))
+	server := httptest.NewServer(newHandler(&Store{pool: pool}, tokens, passwords, testInternalToken, testAdminToken))
 	t.Cleanup(server.Close)
 	return &testServer{Server: server, pool: pool, tokens: tokens}
 }

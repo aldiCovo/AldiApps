@@ -83,7 +83,7 @@ type loginResponse struct {
 	User      User   `json:"user"`
 }
 
-func newHandler(store *Store, tokens *Tokens, passwords *Passwords, internalToken string) http.Handler {
+func newHandler(store *Store, tokens *Tokens, passwords *Passwords, internalToken, adminToken string) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -186,6 +186,8 @@ func newHandler(store *Store, tokens *Tokens, passwords *Passwords, internalToke
 		w.Header().Set("Cache-Control", "no-store")
 		writeJSON(w, http.StatusOK, user)
 	})
+
+	addAdminRoutes(mux, store, adminToken)
 
 	// tokenUser answers 401 itself when the request has no valid token.
 	tokenUser := func(w http.ResponseWriter, r *http.Request) (int64, bool) {

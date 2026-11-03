@@ -35,7 +35,11 @@ var static embed.FS
 var (
 	numericID = regexp.MustCompile(`^[0-9]{1,18}$`)
 	photoFile = regexp.MustCompile(`^[a-z0-9-]{1,64}\.(jpg|jpeg|png|webp)$`)
+	// A product has up to productPhotoSlots photos, named by their place: 1.jpg is shown first.
+	productPhotoFile = regexp.MustCompile(`^([1-4])\.(jpg|jpeg|png|webp)$`)
 )
+
+const productPhotoSlots = 4
 
 type gateway struct {
 	catalogURL, searchURL, userURL, orderURL, cartURL string
@@ -150,7 +154,23 @@ func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, 
 		listCategoryPhotos(w, categoryPhotosDir)
 	})
 	mux.HandleFunc("GET /photos/categories/{name}", func(w http.ResponseWriter, r *http.Request) {
-		serveCategoryPhoto(w, r, categoryPhotosDir)
+		if !photoFile.MatchString(r.PathValue("name")) {
+			http.NotFound(w, r)
+			return
+		}
+		servePhoto(w, r, filepath.Join(categoryPhotosDir, r.PathValue("name")))
+	})
+	productPhotosDir := filepath.Join(photosDir, "products")
+	mux.HandleFunc("GET /api/product-photos", func(w http.ResponseWriter, r *http.Request) {
+		listProductPhotos(w, productPhotosDir)
+	})
+	mux.HandleFunc("GET /photos/products/{id}/{name}", func(w http.ResponseWriter, r *http.Request) {
+		id, name := r.PathValue("id"), r.PathValue("name")
+		if !numericID.MatchString(id) || !productPhotoFile.MatchString(name) {
+			http.NotFound(w, r)
+			return
+		}
+		servePhoto(w, r, filepath.Join(productPhotosDir, id, name))
 	})
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
@@ -204,10 +224,66 @@ func listCategoryPhotos(w http.ResponseWriter, dir string) {
 		if err != nil {
 			continue
 		}
-		version := strconv.FormatInt(info.ModTime().Unix(), 36) + "-" + strconv.FormatInt(info.Size(), 36)
 		name := strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))
-		photos[name] = "/photos/categories/" + entry.Name() + "?v=" + version
+		photos[name] = "/photos/categories/" + entry.Name() + "?v=" + photoVersion(info)
 	}
+	writePhotoList(w, photos)
+}
+
+// listProductPhotos answers with each product's photos in their order, by product id, from
+// a folder per product such as products/12/1.jpg to 4.jpg. A missing place is skipped, so
+// 1.jpg and 3.jpg give two photos. Products without a folder keep their category's photo.
+func listProductPhotos(w http.ResponseWriter, dir string) {
+	photos := map[string][]string{}
+	products, err := os.ReadDir(dir)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		slog.Error("reading product photos failed", "error", err)
+	}
+	for _, product := range products {
+		if !product.IsDir() || !numericID.MatchString(product.Name()) {
+			continue
+		}
+		entries, err := os.ReadDir(filepath.Join(dir, product.Name()))
+		if err != nil {
+			slog.Error("reading product photos failed", "product", product.Name(), "error", err)
+			continue
+		}
+		var slots [productPhotoSlots]string
+		for _, entry := range entries {
+			match := productPhotoFile.FindStringSubmatch(entry.Name())
+			if match == nil || !entry.Type().IsRegular() {
+				continue
+			}
+			slot := int(match[1][0] - '1')
+			// Two files for one place, such as 1.jpg and 1.png: the first by name wins.
+			if slots[slot] != "" {
+				continue
+			}
+			info, err := entry.Info()
+			if err != nil {
+				continue
+			}
+			slots[slot] = "/photos/products/" + product.Name() + "/" + entry.Name() + "?v=" + photoVersion(info)
+		}
+		var urls []string
+		for _, url := range slots {
+			if url != "" {
+				urls = append(urls, url)
+			}
+		}
+		if len(urls) > 0 {
+			photos[product.Name()] = urls
+		}
+	}
+	writePhotoList(w, photos)
+}
+
+// photoVersion changes whenever a photo is replaced, because Cloudflare keeps images for hours.
+func photoVersion(info fs.FileInfo) string {
+	return strconv.FormatInt(info.ModTime().Unix(), 36) + "-" + strconv.FormatInt(info.Size(), 36)
+}
+
+func writePhotoList(w http.ResponseWriter, photos any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-cache")
 	if err := json.NewEncoder(w).Encode(photos); err != nil {
@@ -215,13 +291,9 @@ func listCategoryPhotos(w http.ResponseWriter, dir string) {
 	}
 }
 
-func serveCategoryPhoto(w http.ResponseWriter, r *http.Request, dir string) {
-	name := r.PathValue("name")
-	if !photoFile.MatchString(name) {
-		http.NotFound(w, r)
-		return
-	}
-	path := filepath.Join(dir, name)
+// servePhoto sends a photo whose name was already checked. Links are refused, so nothing
+// outside the photos folder can be reached through one.
+func servePhoto(w http.ResponseWriter, r *http.Request, path string) {
 	if info, err := os.Lstat(path); err != nil || !info.Mode().IsRegular() {
 		http.NotFound(w, r)
 		return

@@ -4,7 +4,7 @@ const pageSize = 24;
 const $ = (id) => document.getElementById(id);
 const rupiah = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 });
 
-const state = { q: "", categoryId: "", size: "", color: "", inStock: false, offset: 0, total: 0, categories: new Map(), categoryPhotos: {} };
+const state = { q: "", categoryId: "", size: "", color: "", inStock: false, offset: 0, total: 0, categories: new Map(), categoryPhotos: {}, productPhotos: {} };
 let latestRequest = 0;
 
 class ApiError extends Error {
@@ -60,9 +60,24 @@ function fillArt(node, categoryName, fallback) {
   node.replaceChildren(svg);
 }
 
+function categoryPhotoURL(categoryName) {
+  return state.categoryPhotos[(categoryName || "").trim().toLowerCase().replace(/\s+/g, "-")];
+}
+
+// A product's own photos, or else its category's photo, or none.
+function photosOf(product) {
+  const own = state.productPhotos[product.id];
+  if (own && own.length) return own;
+  const category = categoryPhotoURL(state.categories.get(product.category_id));
+  return category ? [category] : [];
+}
+
 // Puts the category's photo over the drawing. If it can't load, the drawing stays.
 function addCategoryPhoto(node, categoryName, className, onError) {
-  const url = state.categoryPhotos[(categoryName || "").trim().toLowerCase().replace(/\s+/g, "-")];
+  return addPhoto(node, categoryPhotoURL(categoryName), className, onError);
+}
+
+function addPhoto(node, url, className, onError) {
   if (!url) {
     return false;
   }
@@ -82,12 +97,11 @@ function addCategoryPhoto(node, categoryName, className, onError) {
   return true;
 }
 
-// Products have no photos of their own yet, so they show their category's photo.
+// A product shows its first photo, or its category's photo until it has its own.
 function fillSwatch(node, product, className = "art") {
   node.className = `${className} tone-${product.id % 5}`;
-  const category = state.categories.get(product.category_id);
-  fillArt(node, category, product.name);
-  addCategoryPhoto(node, category, "art-photo");
+  fillArt(node, state.categories.get(product.category_id), product.name);
+  addPhoto(node, photosOf(product)[0], "art-photo");
 }
 
 // Buttons around a quantity. They're out of the tab order because the field takes arrow keys.
@@ -171,6 +185,7 @@ async function loadProducts(append = false) {
 
 async function loadCategories() {
   const photos = api("/category-photos").catch(() => ({}));
+  const productPhotos = api("/product-photos").catch(() => ({}));
   try {
     const { categories } = await api("/categories");
     state.categories = new Map(categories.map((category) => [category.id, category.name]));
@@ -178,6 +193,7 @@ async function loadCategories() {
     state.categories = new Map();
   }
   state.categoryPhotos = await photos;
+  state.productPhotos = await productPhotos;
   renderCategories();
 }
 
@@ -260,7 +276,7 @@ async function openProduct(id) {
   try {
     const product = await api(`/products/${encodeURIComponent(id)}`);
     fillSwatch($("product-swatch"), product);
-    showZoomButton(product.name);
+    showProductPhotos(product);
     const category = state.categories.get(product.category_id);
     $("product-category").textContent = category || "";
     $("product-category").hidden = !category;
@@ -287,6 +303,41 @@ async function openProduct(id) {
 // wide for now, so zooming further than this only shows blur.
 const zoomStep = 2.5;
 const zoomMax = 4;
+// The photos of the product on screen, and which one is showing.
+let shownPhotos = [];
+let shownPhoto = 0;
+let shownName = "";
+
+function showProductPhotos(product) {
+  shownPhotos = photosOf(product);
+  shownPhoto = 0;
+  shownName = product.name;
+  const thumbs = shownPhotos.map((url, index) => {
+    const button = el("button", "thumb");
+    button.type = "button";
+    button.setAttribute("aria-label", `Foto ${index + 1} dari ${shownPhotos.length}`);
+    const image = el("img");
+    image.src = url;
+    image.alt = "";
+    image.decoding = "async";
+    button.append(image);
+    button.addEventListener("click", () => selectPhoto(index));
+    return button;
+  });
+  $("product-thumbs").replaceChildren(...thumbs);
+  $("product-thumbs").hidden = thumbs.length < 2;
+  showZoomButton(product.name);
+  selectPhoto(0);
+}
+
+// Shows one of the product's photos in the sheet.
+function selectPhoto(index) {
+  shownPhoto = index;
+  const photo = $("product-swatch").querySelector(".art-photo");
+  if (photo && shownPhotos[index] && photo.getAttribute("src") !== shownPhotos[index]) photo.src = shownPhotos[index];
+  $("product-thumbs").querySelectorAll(".thumb").forEach((thumb, i) => thumb.setAttribute("aria-pressed", String(i === index)));
+}
+
 const viewer = { scale: 1, x: 0, y: 0, width: 0, height: 0, pointers: new Map(), drag: null, pinch: null, moved: false };
 
 function showZoomButton(name) {
@@ -298,12 +349,26 @@ function showZoomButton(name) {
 }
 
 function openPhoto() {
-  const photo = $("product-swatch").querySelector(".art-photo");
-  if (!photo) return;
-  const image = $("photo-image");
-  if (image.getAttribute("src") !== photo.getAttribute("src")) image.src = photo.getAttribute("src");
+  if (!shownPhotos.length) return;
   $("photo-dialog").showModal();
-  if (image.complete) fitPhoto();
+  viewPhoto(shownPhoto);
+}
+
+// Shows a photo in the viewer, starting fitted. From the last one, next goes back to the first.
+function viewPhoto(index) {
+  const count = shownPhotos.length;
+  shownPhoto = (index + count) % count;
+  const image = $("photo-image");
+  const url = shownPhotos[shownPhoto];
+  image.alt = count > 1 ? `${shownName}, foto ${shownPhoto + 1} dari ${count}` : shownName;
+  $("photo-count").textContent = `${shownPhoto + 1} / ${count}`;
+  for (const id of ["photo-prev", "photo-next", "photo-count"]) $(id).hidden = count < 2;
+  if (image.getAttribute("src") !== url) {
+    // Hidden until the new photo has loaded and been fitted, so the old one doesn't jump.
+    image.style.visibility = "hidden";
+    image.src = url;
+  }
+  if (image.complete && image.naturalWidth) fitPhoto();
 }
 
 // Sizes the photo to fit the screen, which is zoom level 1.
@@ -316,6 +381,7 @@ function fitPhoto() {
   viewer.height = image.naturalHeight * ratio;
   image.style.width = `${viewer.width}px`;
   image.style.height = `${viewer.height}px`;
+  image.style.visibility = "";
   viewer.scale = 1;
   viewer.x = 0;
   viewer.y = 0;
@@ -361,6 +427,7 @@ function pinchSpan() {
 }
 
 function startDrag(point) {
+  viewer.last = point;
   viewer.drag = { x: point.x, y: point.y, fromX: viewer.x, fromY: viewer.y };
 }
 
@@ -372,9 +439,11 @@ function photoPointerDown(event) {
   viewer.pointers.set(event.pointerId, point);
   if (viewer.pointers.size === 1) {
     viewer.moved = false;
+    viewer.pinched = false;
     startDrag(point);
   } else if (viewer.pointers.size === 2) {
     viewer.moved = true;
+    viewer.pinched = true;
     viewer.pinch = pinchSpan();
     $("photo-stage").classList.add("dragging");
   }
@@ -393,6 +462,7 @@ function photoPointerMove(event) {
     viewer.pinch = span;
     return;
   }
+  viewer.last = point;
   const dx = point.x - viewer.drag.x;
   const dy = point.y - viewer.drag.y;
   if (!viewer.moved && Math.hypot(dx, dy) > 6) {
@@ -418,6 +488,13 @@ function photoPointerUp(event) {
   }
   if (viewer.pointers.size > 0) return;
   $("photo-stage").classList.remove("dragging");
+  // A sideways swipe on a photo that isn't zoomed moves to the next or previous one.
+  const dx = viewer.last.x - viewer.drag.x;
+  const dy = viewer.last.y - viewer.drag.y;
+  if (event.type === "pointerup" && viewer.moved && !viewer.pinched && viewer.scale <= 1.01 && shownPhotos.length > 1 && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+    viewPhoto(shownPhoto + (dx < 0 ? 1 : -1));
+    return;
+  }
   if (event.type === "pointerup" && !viewer.moved) {
     if (viewer.scale > 1.01) zoomAt(1);
     else zoomAt(zoomStep, point.x, point.y);
@@ -437,7 +514,9 @@ function photoKey(event) {
   if (event.key === "+" || event.key === "=") zoomAt(viewer.scale * 1.5);
   else if (event.key === "-") zoomAt(viewer.scale / 1.5);
   else if (event.key === "0") zoomAt(1);
-  else if (moves[event.key] && viewer.scale > 1.01) {
+  else if ((event.key === "ArrowLeft" || event.key === "ArrowRight") && viewer.scale <= 1.01 && shownPhotos.length > 1) {
+    viewPhoto(shownPhoto + (event.key === "ArrowRight" ? 1 : -1));
+  } else if (moves[event.key] && viewer.scale > 1.01) {
     viewer.x += moves[event.key][0];
     viewer.y += moves[event.key][1];
     showZoom();
@@ -1095,7 +1174,11 @@ document.addEventListener("keydown", (event) => {
 });
 $("photo-zoom-in").addEventListener("click", () => zoomAt(viewer.scale * 1.5));
 $("photo-zoom-out").addEventListener("click", () => zoomAt(viewer.scale / 1.5));
+$("photo-prev").addEventListener("click", () => viewPhoto(shownPhoto - 1));
+$("photo-next").addEventListener("click", () => viewPhoto(shownPhoto + 1));
 $("photo-dialog").addEventListener("close", () => {
+  // The sheet keeps showing the photo the customer ended on.
+  selectPhoto(shownPhoto);
   viewer.pointers.clear();
   $("photo-stage").classList.remove("dragging");
 });

@@ -517,3 +517,65 @@ func TestOrderPathsStayNarrow(t *testing.T) {
 		}
 	}
 }
+
+func TestProductPhotos(t *testing.T) {
+	photos := t.TempDir()
+	write := func(name, content string) {
+		t.Helper()
+		path := filepath.Join(photos, "products", name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Product 1: places 1, 3 and 4, a second file for place 1, and files that don't count.
+	for _, name := range []string{"1/4.webp", "1/1.jpg", "1/1.png", "1/3.png", "1/5.jpg", "1/0.jpg", "1/notes.txt", "1/A.jpg", "12/2.jpg", "abc/1.jpg"} {
+		write(name, name)
+	}
+	write("secret.jpg", "secret")
+	if err := os.Symlink(filepath.Join(photos, "products", "secret.jpg"), filepath.Join(photos, "products", "12", "1.jpg")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(photos, "products", "7"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(newHandler("http://127.0.0.1:1", "", "", "", "http://127.0.0.1:1", "", photos))
+	t.Cleanup(server.Close)
+
+	resp, body := do(t, "GET", server.URL+"/api/product-photos", "", "")
+	var listed map[string][]string
+	if err := json.Unmarshal([]byte(body), &listed); err != nil || resp.StatusCode != http.StatusOK || resp.Header.Get("Cache-Control") != "no-cache" {
+		t.Fatalf("status %d, body %q, err %v", resp.StatusCode, body, err)
+	}
+	want := map[string][]string{"1": {"/photos/products/1/1.jpg", "/photos/products/1/3.png", "/photos/products/1/4.webp"}, "12": {"/photos/products/12/2.jpg"}}
+	if len(listed) != len(want) {
+		t.Fatalf("listed %v", listed)
+	}
+	for id, urls := range want {
+		if len(listed[id]) != len(urls) {
+			t.Fatalf("product %s: listed %v", id, listed[id])
+		}
+		for i, url := range urls {
+			if !strings.HasPrefix(listed[id][i], url+"?v=") {
+				t.Fatalf("product %s: listed %v", id, listed[id])
+			}
+		}
+	}
+
+	resp, body = do(t, "GET", server.URL+listed["1"][1], "", "")
+	if resp.StatusCode != http.StatusOK || body != "1/3.png" || resp.Header.Get("Content-Type") != "image/png" || !strings.Contains(resp.Header.Get("Cache-Control"), "immutable") {
+		t.Fatalf("photo: status %d, body %q, headers %v", resp.StatusCode, body, resp.Header)
+	}
+	for _, path := range []string{"/photos/products/1/5.jpg", "/photos/products/1/notes.txt", "/photos/products/abc/1.jpg", "/photos/products/12/1.jpg", "/photos/products/1/..%2f..%2fsecret.jpg", "/photos/products/..%2fproducts/1.jpg", "/photos/products/2/1.jpg", "/photos/products/1/"} {
+		if resp, body := do(t, "GET", server.URL+path, "", ""); resp.StatusCode != http.StatusNotFound || strings.Contains(body, "secret") {
+			t.Fatalf("%s: status %d, body %q", path, resp.StatusCode, body)
+		}
+	}
+	empty := httptest.NewServer(newHandler("http://127.0.0.1:1", "", "", "", "http://127.0.0.1:1", "", t.TempDir()))
+	t.Cleanup(empty.Close)
+	if resp, body := do(t, "GET", empty.URL+"/api/product-photos", "", ""); resp.StatusCode != http.StatusOK || strings.TrimSpace(body) != "{}" {
+		t.Fatalf("no folder: status %d, body %q", resp.StatusCode, body)
+	}
+}

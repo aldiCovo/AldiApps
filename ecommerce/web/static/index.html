@@ -99,13 +99,16 @@
     <button class="close" type="button" data-close aria-label="Tutup">×</button>
     <div class="product-layout">
       <div class="product-media">
-        <div id="product-swatch" class="art" aria-hidden="true"></div>
-        <button id="photo-zoom" class="photo-zoom" type="button" hidden>
-          <span class="zoom-chip">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M11 8v6M8 11h6"/></svg>
-            Perbesar foto
-          </span>
-        </button>
+        <div class="media-main">
+          <div id="product-swatch" class="art" aria-hidden="true"></div>
+          <button id="photo-zoom" class="photo-zoom" type="button" hidden>
+            <span class="zoom-chip">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M11 8v6M8 11h6"/></svg>
+              Perbesar foto
+            </span>
+          </button>
+        </div>
+        <div id="product-thumbs" class="thumbs" role="group" aria-label="Pilih foto" hidden></div>
       </div>
       <div class="product-info">
         <span id="product-category" class="eyebrow" hidden></span>
@@ -139,6 +142,9 @@
       <img id="photo-image" alt="" draggable="false">
     </div>
     <button class="close" type="button" data-close aria-label="Tutup">×</button>
+    <button id="photo-prev" class="photo-nav prev" type="button" aria-label="Foto sebelumnya" hidden>‹</button>
+    <button id="photo-next" class="photo-nav next" type="button" aria-label="Foto berikutnya" hidden>›</button>
+    <p id="photo-count" class="photo-count" hidden></p>
     <div class="photo-tools">
       <p id="photo-hint" class="photo-hint" aria-live="polite"></p>
       <div class="photo-buttons">

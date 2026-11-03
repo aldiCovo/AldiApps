@@ -48,6 +48,10 @@ func run() error {
 	if len(internalToken) < minInternalTokenLength {
 		return fmt.Errorf("INTERNAL_TOKEN must have at least %d characters", minInternalTokenLength)
 	}
+	adminToken := os.Getenv("ADMIN_INTERNAL_TOKEN")
+	if len(adminToken) < minInternalTokenLength || adminToken == internalToken {
+		return fmt.Errorf("ADMIN_INTERNAL_TOKEN must have at least %d characters and differ from INTERNAL_TOKEN", minInternalTokenLength)
+	}
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -77,7 +81,7 @@ func run() error {
 
 	server := &http.Server{
 		Addr:              ":" + port,
-		Handler:           newHandler(&Store{pool: pool}, tokens, passwords, internalToken),
+		Handler:           newHandler(&Store{pool: pool}, tokens, passwords, internalToken, adminToken),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,

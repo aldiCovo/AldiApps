@@ -27,14 +27,14 @@ func main() {
 
 func run() error {
 	values := map[string]string{}
-	for _, name := range []string{"USER_URL", "ORDER_URL", "CATALOG_URL", "USER_INTERNAL_TOKEN", "ORDER_INTERNAL_TOKEN", "CATALOG_INTERNAL_TOKEN", "PHOTOS_DIR"} {
+	for _, name := range []string{"USER_URL", "ORDER_URL", "CATALOG_URL", "USER_INTERNAL_TOKEN", "ORDER_INTERNAL_TOKEN", "CATALOG_INTERNAL_TOKEN", "USER_ADMIN_TOKEN", "PHOTOS_DIR"} {
 		value := os.Getenv(name)
 		if value == "" {
 			return fmt.Errorf("%s is required", name)
 		}
 		values[name] = value
 	}
-	for _, name := range []string{"USER_INTERNAL_TOKEN", "ORDER_INTERNAL_TOKEN", "CATALOG_INTERNAL_TOKEN"} {
+	for _, name := range []string{"USER_INTERNAL_TOKEN", "ORDER_INTERNAL_TOKEN", "CATALOG_INTERNAL_TOKEN", "USER_ADMIN_TOKEN"} {
 		if len(values[name]) < minInternalTokenLength {
 			return fmt.Errorf("%s must have at least %d characters", name, minInternalTokenLength)
 		}
@@ -57,6 +57,7 @@ func run() error {
 			userInternalToken:    values["USER_INTERNAL_TOKEN"],
 			orderInternalToken:   values["ORDER_INTERNAL_TOKEN"],
 			photosDir:            values["PHOTOS_DIR"],
+			userAdminToken:       values["USER_ADMIN_TOKEN"],
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 		// Long enough to receive a photo over a slow connection.

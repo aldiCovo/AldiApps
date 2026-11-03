@@ -20,6 +20,7 @@ const statusNames = {
 const tabNames = { paid: "Perlu dikemas", packed: "Dikemas", shipped: "Dikirim", completed: "Selesai" };
 
 let filter = "paid";
+let currentAdmin = null;
 let shown = [];
 let loadToken = 0;
 
@@ -75,6 +76,7 @@ function show(view) {
   $("login-view").hidden = view !== "login";
   $("orders-view").hidden = view !== "orders";
   $("products-view").hidden = view !== "products";
+  $("users-view").hidden = view !== "users";
   $("who").hidden = view === "login";
   $("nav").hidden = view === "login";
   for (const link of document.querySelectorAll(".nav-link")) {
@@ -83,11 +85,14 @@ function show(view) {
   }
 }
 
-// The page to open: #produk opens the products, anything else the orders.
+// The page to open: #produk opens the products, #pengguna the users, anything else the orders.
 function openView(view) {
   if (view === "products") {
     show("products");
     loadProducts();
+  } else if (view === "users") {
+    show("users");
+    loadUsers(true);
   } else {
     show("orders");
     loadOrders(true);
@@ -129,8 +134,10 @@ async function start() {
 }
 
 function loggedIn(me) {
+  currentAdmin = me;
   $("who-name").textContent = `${me.name} (${me.email})`;
-  openView(location.hash === "#produk" ? "products" : "orders");
+  const views = { "#produk": "products", "#pengguna": "users" };
+  openView(views[location.hash] || "orders");
 }
 
 $("login-form").addEventListener("submit", async (event) => {
@@ -164,15 +171,17 @@ $("logout").addEventListener("click", async () => {
     await post("/logout", {});
   } finally {
     shown = [];
+    currentAdmin = null;
     $("orders-list").replaceChildren();
+    $("user-list").replaceChildren();
     showLogin("");
   }
 });
 
-for (const tab of document.querySelectorAll(".tab")) {
+for (const tab of document.querySelectorAll("#orders-view .tab")) {
   tab.addEventListener("click", () => {
     filter = tab.dataset.status;
-    for (const other of document.querySelectorAll(".tab")) other.setAttribute("aria-pressed", String(other === tab));
+    for (const other of document.querySelectorAll("#orders-view .tab")) other.setAttribute("aria-pressed", String(other === tab));
     loadOrders(true);
   });
 }

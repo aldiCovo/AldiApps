@@ -9,6 +9,7 @@
   <script src="/admin/admin.js" defer></script>
   <script src="/admin/products.js" defer></script>
   <script src="/admin/photos.js" defer></script>
+  <script src="/admin/users.js" defer></script>
 </head>
 <body>
   <header class="bar">
@@ -16,6 +17,7 @@
     <nav id="nav" class="nav" aria-label="Menu admin" hidden>
       <a class="nav-link" href="#pesanan" data-view="orders">Pesanan</a>
       <a class="nav-link" href="#produk" data-view="products">Produk</a>
+      <a class="nav-link" href="#pengguna" data-view="users">Pengguna</a>
     </nav>
     <div id="who" class="who" hidden>
       <span id="who-name"></span>
@@ -82,6 +84,25 @@
       <p id="products-status" class="status" role="status" aria-live="polite"></p>
       <div id="product-list" class="orders"></div>
       <button id="more-products" class="secondary more" type="button" hidden>Muat lebih banyak</button>
+    </section>
+
+    <section id="users-view" hidden aria-labelledby="users-title">
+      <div class="view-head">
+        <h1 id="users-title">Pengguna</h1>
+      </div>
+      <p class="muted small intro">Admin bisa mengubah pesanan, produk, foto, dan role pengguna lain. Role akunmu sendiri tidak bisa diubah dari sini, dan toko selalu punya setidaknya satu admin.</p>
+      <form id="user-search" class="inline-form" role="search" novalidate>
+        <label>Cari nama atau email <input id="user-q" type="search" maxlength="200" autocomplete="off"></label>
+        <button class="secondary" type="submit">Cari</button>
+      </form>
+      <div class="tabs" role="group" aria-label="Role">
+        <button class="tab user-tab" type="button" data-role="" aria-pressed="true">Semua</button>
+        <button class="tab user-tab" type="button" data-role="admin" aria-pressed="false">Admin</button>
+        <button class="tab user-tab" type="button" data-role="customer" aria-pressed="false">Pelanggan</button>
+      </div>
+      <p id="users-status" class="status" role="status" aria-live="polite"></p>
+      <div id="user-list" class="user-list"></div>
+      <button id="more-users" class="secondary more" type="button" hidden>Muat lebih banyak</button>
     </section>
   </main>
 </body>

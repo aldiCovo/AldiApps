@@ -682,6 +682,10 @@ function orderCard(order) {
   for (const item of order.items) {
     card.append(el("p", "order-item", `${item.product_name} · ${item.size} · ${item.color} × ${item.quantity}`));
   }
+  const shipping = order.shipping;
+  if (shipping) {
+    card.append(el("p", "order-item", `Kurir ${shipping.courier} ${shipping.service} · estimasi ${shipping.estimate} · ongkir ${rupiah.format(shipping.cost)}`));
+  }
   const address = order.shipping_address;
   if (address) {
     card.append(el("p", "order-item order-address", `Dikirim ke ${address.recipient} (${address.phone})\n${address.street}, ${address.district}, ${address.city}, ${address.province} ${address.postal_code}`));
@@ -1136,6 +1140,10 @@ let checkoutFromCart = false;
 let checkoutBlocked = true;
 let savedAddress = null;
 let latestCheckout = 0;
+// Courier prices by province, from order-service, which prices the order again itself.
+let shippingTable = null;
+let chosenShipping = "";
+let checkoutSubtotal = 0;
 
 async function openCheckout(items, fromCart) {
   if (!loggedIn) {
@@ -1151,9 +1159,10 @@ async function openCheckout(items, fromCart) {
   $("checkout-status").textContent = "Memuat…";
   $("checkout-dialog").showModal();
   const ids = [...new Set(checkoutItems.map((item) => item.product_id))];
-  const [address, products] = await Promise.allSettled([
+  const [address, products, table] = await Promise.allSettled([
     api("/me/address"),
     Promise.allSettled(ids.map((id) => api(`/products/${id}`))),
+    shippingTable || api("/shipping"),
   ]);
   if (request !== latestCheckout || !$("checkout-dialog").open) return;
   if (address.status === "rejected" && address.reason.status === 401) {
@@ -1162,24 +1171,39 @@ async function openCheckout(items, fromCart) {
     return;
   }
   const failed = products.value.some((result) => result.status === "rejected" && result.reason.status !== 404);
-  if (failed || (address.status === "rejected" && address.reason.status !== 404)) {
+  if (failed || table.status === "rejected" || (address.status === "rejected" && address.reason.status !== 404)) {
     $("checkout-status").textContent = "Checkout belum bisa dimuat. Tutup lalu coba lagi sebentar lagi.";
     return;
   }
   savedAddress = address.status === "fulfilled" ? address.value : null;
+  if (!shippingTable) {
+    shippingTable = table.value;
+    const select = $("address-province");
+    select.append(...shippingTable.provinces.map(({ name }) => {
+      const option = el("option", "", name);
+      option.value = name;
+      return option;
+    }));
+  }
   const variants = new Map();
   for (const result of products.value) {
     if (result.status !== "fulfilled") continue;
     for (const variant of result.value.variants || []) variants.set(variant.id, { product: result.value, variant });
   }
   renderCheckoutItems(variants);
-  showAddress(!savedAddress);
+  // An address saved before provinces came from a list may need its province picked again.
+  const knownProvince = savedAddress && zoneOf(savedAddress.province);
+  showAddress(!knownProvince);
+  if (savedAddress && !knownProvince) {
+    $("address-error").textContent = "Pilih provinsi dari daftar supaya ongkir bisa dihitung.";
+    $("address-error").hidden = false;
+  }
   $("checkout-status").textContent = "";
   $("checkout-body").hidden = false;
 }
 
 function renderCheckoutItems(variants) {
-  let total = 0;
+  let subtotal = 0;
   let problem = "";
   const rows = checkoutItems.map((item) => {
     const row = el("div", "cart-row");
@@ -1199,13 +1223,13 @@ function renderCheckoutItems(variants) {
       problem = "Stok ada yang kurang dari jumlah pesananmu. Ubah jumlahnya di keranjang dulu.";
       about.append(el("p", "error", variant.stock === 0 ? "Stok habis" : `Stok tinggal ${variant.stock}`));
     }
-    const subtotal = product.price * item.quantity;
-    total += subtotal;
-    row.append(art, about, el("div", "cart-subtotal", rupiah.format(subtotal)));
+    const lineTotal = product.price * item.quantity;
+    subtotal += lineTotal;
+    row.append(art, about, el("div", "cart-subtotal", rupiah.format(lineTotal)));
     return row;
   });
   $("checkout-items").replaceChildren(...rows);
-  $("checkout-total").textContent = rupiah.format(total);
+  checkoutSubtotal = subtotal;
   $("checkout-problem").textContent = problem;
   $("checkout-problem").hidden = !problem;
   checkoutBlocked = Boolean(problem);
@@ -1216,15 +1240,75 @@ function renderCheckoutItems(variants) {
 function showAddress(editing) {
   $("address-form").hidden = !editing;
   $("address-view").hidden = editing;
-  $("address-cancel").hidden = !savedAddress;
+  $("address-cancel").hidden = !(savedAddress && zoneOf(savedAddress.province));
   $("address-error").hidden = true;
   if (editing) {
     const address = savedAddress || { recipient: currentUser ? currentUser.name : "" };
     for (const field of addressFields) $(`address-${field}`).value = address[field] || "";
+    // A province that isn't in the list leaves the choice empty.
+    if (!zoneOf($("address-province").value)) $("address-province").value = "";
+  } else {
+    const a = savedAddress;
+    $("address-text").replaceChildren(...[`${a.recipient} · ${a.phone}`, a.street, `${a.district}, ${a.city}`, `${a.province} ${a.postal_code}`].map((line) => el("span", "", line)));
+  }
+  renderShipping();
+}
+
+function zoneOf(province) {
+  const found = shippingTable && shippingTable.provinces.find(({ name }) => name === province);
+  return found ? found.zone : 0;
+}
+
+// The province the order would go to: the one in the form while it's open.
+function checkoutProvince() {
+  return $("address-form").hidden ? (savedAddress && savedAddress.province) : $("address-province").value;
+}
+
+function shippingQuote() {
+  const zone = zoneOf(checkoutProvince());
+  const option = zone && shippingTable.options.find(({ id }) => id === chosenShipping);
+  return option ? { ...option, cost: option.costs[zone - 1], estimate: option.estimates[zone - 1] } : null;
+}
+
+// Lists each courier's price to the chosen province. The cheapest is picked until the customer
+// picks one, and a pick stays when the province changes.
+function renderShipping() {
+  const zone = zoneOf(checkoutProvince());
+  const note = $("shipping-note");
+  if (!zone) {
+    $("shipping-options").replaceChildren();
+    note.textContent = "Pilih provinsi di alamat untuk melihat pilihan kurir.";
+    note.hidden = false;
+    updateCheckoutSums();
     return;
   }
-  const a = savedAddress;
-  $("address-text").replaceChildren(...[`${a.recipient} · ${a.phone}`, a.street, `${a.district}, ${a.city}`, `${a.province} ${a.postal_code}`].map((line) => el("span", "", line)));
+  note.hidden = true;
+  const options = shippingTable.options;
+  if (!options.some(({ id }) => id === chosenShipping)) {
+    chosenShipping = options.reduce((cheapest, option) => (option.costs[zone - 1] < cheapest.costs[zone - 1] ? option : cheapest)).id;
+  }
+  $("shipping-options").replaceChildren(...options.map((option) => {
+    const label = el("label", "shipping-option");
+    const input = el("input");
+    input.type = "radio";
+    input.name = "shipping";
+    input.value = option.id;
+    input.checked = option.id === chosenShipping;
+    input.addEventListener("change", () => {
+      chosenShipping = option.id;
+      updateCheckoutSums();
+    });
+    label.append(input, el("span", "shipping-name", `${option.courier} ${option.service}`), el("span", "shipping-estimate", `Estimasi ${option.estimates[zone - 1]}`), el("span", "shipping-cost", rupiah.format(option.costs[zone - 1])));
+    return label;
+  }));
+  updateCheckoutSums();
+}
+
+function updateCheckoutSums() {
+  const quote = shippingQuote();
+  $("checkout-subtotal").textContent = rupiah.format(checkoutSubtotal);
+  $("checkout-shipping").textContent = quote ? rupiah.format(quote.cost) : "—";
+  $("checkout-total").textContent = rupiah.format(checkoutSubtotal + (quote ? quote.cost : 0));
 }
 
 async function saveAddress() {
@@ -1265,11 +1349,16 @@ async function submitCheckout() {
   if (checkoutBlocked) return;
   const editing = !$("address-form").hidden;
   if (editing && !$("address-form").reportValidity()) return;
+  if (!shippingQuote()) {
+    $("checkout-error").textContent = "Pilih kurir dulu.";
+    $("checkout-error").hidden = false;
+    return;
+  }
   $("checkout-submit").disabled = true;
   $("checkout-error").hidden = true;
   try {
     if (editing && !(await trySaveAddress())) return;
-    await post("/orders", { items: checkoutItems.map(({ variant_id, quantity }) => ({ variant_id, quantity })), shipping_address: savedAddress });
+    await post("/orders", { items: checkoutItems.map(({ variant_id, quantity }) => ({ variant_id, quantity })), shipping_address: savedAddress, shipping_option: chosenShipping });
   } catch (error) {
     const message = orderError(error);
     if (error.status === 401) {
@@ -1344,6 +1433,7 @@ $("address-edit").addEventListener("click", () => {
   $("address-recipient").focus();
 });
 $("address-cancel").addEventListener("click", () => showAddress(false));
+$("address-province").addEventListener("change", renderShipping);
 document.addEventListener("visibilitychange", checkAccountAgain);
 // Keeps a guest's second tab showing the same cart.
 window.addEventListener("storage", (event) => {

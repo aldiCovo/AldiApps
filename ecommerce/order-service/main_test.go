@@ -195,9 +195,9 @@ func (h *harness) apply(t *testing.T, eventType string, orderID int64) {
 
 const testAddress = `{"recipient":"Sari Dewi","phone":"+62 812-3456-7890","street":"Jl. Melati No. 5","district":"Coblong","city":"Kota Bandung","province":"Jawa Barat","postal_code":"40132"}`
 
-// addressed puts the test address into an order body that has none.
+// addressed puts the test address and JNE Reguler, Rp 10.000 to Jawa Barat, into an order body.
 func addressed(body string) string {
-	return strings.Replace(body, "{", `{"shipping_address":`+testAddress+",", 1)
+	return strings.Replace(body, "{", `{"shipping_option":"jne-reg","shipping_address":`+testAddress+",", 1)
 }
 
 var oneDress = addressed(`{"items":[{"variant_id":1,"quantity":2}]}`)
@@ -207,11 +207,14 @@ var testStoredAddress = Address{Recipient: "Sari Dewi", Phone: "081234567890", S
 func TestCreateCopiesPricesAndAsksForStock(t *testing.T) {
 	h := newHarness(t)
 	order := h.create(t, 1, addressed(`{"items":[{"variant_id":1,"quantity":2},{"variant_id":2,"quantity":1}]}`))
-	if order.Status != statusPending || order.Total != 800000 || len(order.Items) != 2 {
+	if order.Status != statusPending || order.Total != 810000 || len(order.Items) != 2 {
 		t.Fatalf("order %+v", order)
 	}
 	if order.ShippingAddress == nil || *order.ShippingAddress != testStoredAddress {
 		t.Fatalf("address %+v", order.ShippingAddress)
+	}
+	if want := (Shipping{Option: "jne-reg", Courier: "JNE", Service: "Reguler", Estimate: "2–3 hari", Cost: 10000}); order.Shipping == nil || *order.Shipping != want {
+		t.Fatalf("shipping %+v", order.Shipping)
 	}
 	if read := h.status(t, 1, order.ID); read.ShippingAddress == nil || *read.ShippingAddress != testStoredAddress {
 		t.Fatalf("read address %+v", read.ShippingAddress)
@@ -235,22 +238,26 @@ func TestCreateValidation(t *testing.T) {
 		many[i] = fmt.Sprintf(`{"variant_id":%d,"quantity":1}`, i+1)
 	}
 	for name, body := range map[string]string{
-		"no items":        addressed(`{"items":[]}`),
-		"too many items":  addressed(`{"items":[` + strings.Join(many, ",") + `]}`),
-		"zero quantity":   addressed(`{"items":[{"variant_id":1,"quantity":0}]}`),
-		"large quantity":  addressed(`{"items":[{"variant_id":1,"quantity":21}]}`),
-		"bad variant":     addressed(`{"items":[{"variant_id":0,"quantity":1}]}`),
-		"same twice":      addressed(`{"items":[{"variant_id":1,"quantity":1},{"variant_id":1,"quantity":1}]}`),
-		"unknown":         addressed(`{"items":[{"variant_id":999,"quantity":1}]}`),
-		"price sent":      addressed(`{"items":[{"variant_id":1,"quantity":1,"price":1}]}`),
-		"user sent":       addressed(`{"user_id":9,"items":[{"variant_id":1,"quantity":1}]}`),
-		"not JSON":        `nope`,
-		"no address":      `{"items":[{"variant_id":1,"quantity":1}]}`,
-		"null address":    `{"shipping_address":null,"items":[{"variant_id":1,"quantity":1}]}`,
-		"bad phone":       strings.Replace(oneDress, "+62 812-3456-7890", "022 123456", 1),
-		"bad postal code": strings.Replace(oneDress, "40132", "401", 1),
-		"no recipient":    strings.Replace(oneDress, "Sari Dewi", " ", 1),
-		"address extra":   strings.Replace(oneDress, `"recipient"`, `"country":"ID","recipient"`, 1),
+		"no items":         addressed(`{"items":[]}`),
+		"too many items":   addressed(`{"items":[` + strings.Join(many, ",") + `]}`),
+		"zero quantity":    addressed(`{"items":[{"variant_id":1,"quantity":0}]}`),
+		"large quantity":   addressed(`{"items":[{"variant_id":1,"quantity":21}]}`),
+		"bad variant":      addressed(`{"items":[{"variant_id":0,"quantity":1}]}`),
+		"same twice":       addressed(`{"items":[{"variant_id":1,"quantity":1},{"variant_id":1,"quantity":1}]}`),
+		"unknown":          addressed(`{"items":[{"variant_id":999,"quantity":1}]}`),
+		"price sent":       addressed(`{"items":[{"variant_id":1,"quantity":1,"price":1}]}`),
+		"user sent":        addressed(`{"user_id":9,"items":[{"variant_id":1,"quantity":1}]}`),
+		"not JSON":         `nope`,
+		"no address":       `{"items":[{"variant_id":1,"quantity":1}]}`,
+		"null address":     `{"shipping_address":null,"items":[{"variant_id":1,"quantity":1}]}`,
+		"bad phone":        strings.Replace(oneDress, "+62 812-3456-7890", "022 123456", 1),
+		"bad postal code":  strings.Replace(oneDress, "40132", "401", 1),
+		"no recipient":     strings.Replace(oneDress, "Sari Dewi", " ", 1),
+		"address extra":    strings.Replace(oneDress, `"recipient"`, `"country":"ID","recipient"`, 1),
+		"no shipping":      strings.Replace(oneDress, `"shipping_option":"jne-reg",`, "", 1),
+		"unknown shipping": strings.Replace(oneDress, `"jne-reg"`, `"pos-kilat"`, 1),
+		"unknown province": strings.Replace(oneDress, "Jawa Barat", "Jawa Utara", 1),
+		"cost sent":        strings.Replace(oneDress, `"shipping_option":"jne-reg",`, `"shipping_option":"jne-reg","shipping_cost":0,`, 1),
 	} {
 		t.Run(name, func(t *testing.T) {
 			if status, data := h.do(t, http.MethodPost, "/orders", body, h.token(t, 1)); status != http.StatusBadRequest {
@@ -522,7 +529,7 @@ func TestStatusChangesSendOneSignalToTheOwner(t *testing.T) {
 	}
 	create := func() int64 {
 		t.Helper()
-		order, err := h.store.Create(ctx, 7, []OrderItem{{VariantID: 1, Price: 100, Quantity: 1}}, testStoredAddress)
+		order, err := h.store.Create(ctx, 7, []OrderItem{{VariantID: 1, Price: 100, Quantity: 1}}, testStoredAddress, Shipping{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -596,7 +603,7 @@ func TestFinishedOrdersSendAnEventForTheirEmail(t *testing.T) {
 	}
 	create := func() int64 {
 		t.Helper()
-		order, err := h.store.Create(ctx, 7, []OrderItem{{VariantID: 1, ProductName: "Dress", Size: "M", Color: "Merah", Price: 100, Quantity: 2}}, testStoredAddress)
+		order, err := h.store.Create(ctx, 7, []OrderItem{{VariantID: 1, ProductName: "Dress", Size: "M", Color: "Merah", Price: 100, Quantity: 2}}, testStoredAddress, Shipping{})
 		check(err)
 		return order.ID
 	}
@@ -670,5 +677,56 @@ func TestOldOrdersWithoutAddressStillRead(t *testing.T) {
 	status, data := h.do(t, http.MethodGet, "/orders", "", h.token(t, 1))
 	if status != http.StatusOK || !strings.Contains(string(data), `"shipping_address":null`) {
 		t.Fatalf("status %d: %s", status, data)
+	}
+}
+
+func TestShippingIsPricedByProvince(t *testing.T) {
+	h := newHarness(t)
+	toPapua := strings.Replace(strings.Replace(oneDress, "Jawa Barat", "papua selatan", 1), `"jne-reg"`, `"jnt-express"`, 1)
+	order := h.create(t, 1, toPapua)
+	// Two dresses at 350.000, and J&T Express to zone 4.
+	if order.Total != 700000+78000 || order.Shipping == nil || order.Shipping.Cost != 78000 || order.Shipping.Courier != "J&T" || order.Shipping.Estimate != "2–4 hari" {
+		t.Fatalf("order total %d, shipping %+v", order.Total, order.Shipping)
+	}
+	if order.ShippingAddress.Province != "Papua Selatan" {
+		t.Fatalf("province %q", order.ShippingAddress.Province)
+	}
+	if read := h.status(t, 1, order.ID); read.Shipping == nil || *read.Shipping != *order.Shipping || read.Total != order.Total {
+		t.Fatalf("read %+v", read)
+	}
+
+	status, data := h.do(t, http.MethodGet, "/shipping", "", "")
+	var table struct {
+		Provinces []shippingProvince `json:"provinces"`
+		Options   []shippingOption   `json:"options"`
+	}
+	if err := json.Unmarshal(data, &table); err != nil || status != http.StatusOK {
+		t.Fatalf("status %d: %s", status, data)
+	}
+	if len(table.Provinces) != 38 || len(table.Options) != 6 {
+		t.Fatalf("%d provinces, %d options", len(table.Provinces), len(table.Options))
+	}
+	for _, province := range table.Provinces {
+		if province.Zone < 1 || province.Zone > 4 {
+			t.Fatalf("province %+v", province)
+		}
+	}
+}
+
+func TestEveryProvinceHasAZone(t *testing.T) {
+	if len(zones) != len(provinces) {
+		t.Fatalf("%d zones for %d provinces", len(zones), len(provinces))
+	}
+	for _, province := range provinces {
+		if zones[province] == 0 {
+			t.Fatalf("%s has no zone", province)
+		}
+	}
+	for _, option := range shippingOptions {
+		for zone := 1; zone < 4; zone++ {
+			if option.Costs[zone] <= option.Costs[zone-1] || option.Estimates[zone] == "" {
+				t.Fatalf("%s: prices must rise with distance", option.ID)
+			}
+		}
 	}
 }

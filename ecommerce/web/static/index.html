@@ -160,7 +160,8 @@
     <p id="cart-status" class="status" role="status" aria-live="polite"></p>
     <div id="cart-list" class="cart-list"></div>
     <div id="cart-footer" hidden>
-      <p class="cart-total"><span>Total</span> <strong id="cart-total"></strong></p>
+      <p class="cart-total"><span>Subtotal</span> <strong id="cart-total"></strong></p>
+      <p class="hint cart-hint">Ongkir dipilih saat checkout.</p>
       <p id="cart-error" class="error" role="alert" hidden></p>
       <button id="cart-checkout" class="primary" type="button">Pesan sekarang</button>
     </div>
@@ -183,7 +184,7 @@
           <label class="wide">Alamat lengkap <textarea id="address-street" rows="3" maxlength="300" required autocomplete="street-address" placeholder="Nama jalan, nomor rumah, RT/RW, patokan"></textarea></label>
           <label>Kecamatan <input id="address-district" type="text" maxlength="100" required></label>
           <label>Kota/Kabupaten <input id="address-city" type="text" maxlength="100" required autocomplete="address-level2"></label>
-          <label>Provinsi <input id="address-province" type="text" maxlength="100" required autocomplete="address-level1"></label>
+          <label>Provinsi <select id="address-province" required autocomplete="address-level1"><option value="">Pilih provinsi</option></select></label>
           <label>Kode pos <input id="address-postal_code" type="text" maxlength="5" required autocomplete="postal-code" inputmode="numeric" pattern="[0-9]{5}" title="5 angka"></label>
           <p class="hint wide">Alamat ini disimpan di akunmu, jadi tidak perlu diketik lagi lain kali.</p>
           <p id="address-error" class="error wide" role="alert" hidden></p>
@@ -198,8 +199,17 @@
         <div id="checkout-items" class="checkout-items"></div>
         <p id="checkout-problem" class="error" role="alert" hidden></p>
       </section>
-      <p class="cart-total checkout-total"><span>Total</span> <strong id="checkout-total"></strong></p>
-      <p class="demo-note">Pembayaran masih simulasi. Tidak ada uang yang ditarik dan tidak ada barang yang dikirim.</p>
+      <section class="checkout-section" aria-labelledby="shipping-title">
+        <h3 id="shipping-title">Pengiriman</h3>
+        <p id="shipping-note" class="hint shipping-note" hidden></p>
+        <div id="shipping-options" class="shipping-options" role="radiogroup" aria-labelledby="shipping-title"></div>
+      </section>
+      <div class="checkout-sums">
+        <p class="sum-row"><span>Subtotal</span> <span id="checkout-subtotal"></span></p>
+        <p class="sum-row"><span>Ongkir</span> <span id="checkout-shipping"></span></p>
+        <p class="cart-total"><span>Total</span> <strong id="checkout-total"></strong></p>
+      </div>
+      <p class="demo-note">Pembayaran dan ongkir masih simulasi. Tidak ada uang yang ditarik dan tidak ada barang yang dikirim.</p>
       <p id="checkout-error" class="error" role="alert" hidden></p>
       <button id="checkout-submit" class="primary checkout-submit" type="button">Buat pesanan</button>
     </div>

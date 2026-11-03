@@ -49,10 +49,12 @@ type Order struct {
 	Total     int64      `json:"total"`
 	ExpiresAt *time.Time `json:"expires_at"`
 	// Nil only on orders made before addresses existed.
-	ShippingAddress *Address    `json:"shipping_address"`
-	Items           []OrderItem `json:"items"`
-	CreatedAt       time.Time   `json:"created_at"`
-	UpdatedAt       time.Time   `json:"updated_at"`
+	ShippingAddress *Address `json:"shipping_address"`
+	// Nil only on orders made before shipping was charged. Total includes its cost.
+	Shipping  *Shipping   `json:"shipping"`
+	Items     []OrderItem `json:"items"`
+	CreatedAt time.Time   `json:"created_at"`
+	UpdatedAt time.Time   `json:"updated_at"`
 }
 
 type reservationItem struct {
@@ -81,11 +83,11 @@ type paymentRequestedEvent struct {
 	Outcome string `json:"outcome"`
 }
 
-const orderColumns = "id, status, reason, total, expires_at, shipping_address, created_at, updated_at"
+const orderColumns = "id, status, reason, total, expires_at, shipping_address, shipping, created_at, updated_at"
 
 func scanOrder(row pgx.Row) (Order, error) {
 	var o Order
-	err := row.Scan(&o.ID, &o.Status, &o.Reason, &o.Total, &o.ExpiresAt, &o.ShippingAddress, &o.CreatedAt, &o.UpdatedAt)
+	err := row.Scan(&o.ID, &o.Status, &o.Reason, &o.Total, &o.ExpiresAt, &o.ShippingAddress, &o.Shipping, &o.CreatedAt, &o.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Order{}, errNotFound
 	}
@@ -151,8 +153,8 @@ func attachItems(ctx context.Context, q querier, orders []Order) error {
 }
 
 // Create saves the order and its event together, so the stock request can't get lost.
-func (s *Store) Create(ctx context.Context, userID int64, items []OrderItem, address Address) (o Order, err error) {
-	var total int64
+func (s *Store) Create(ctx context.Context, userID int64, items []OrderItem, address Address, shipping Shipping) (o Order, err error) {
+	total := shipping.Cost
 	reserve := make([]reservationItem, len(items))
 	for i, item := range items {
 		total += item.Price * int64(item.Quantity)
@@ -173,8 +175,8 @@ func (s *Store) Create(ctx context.Context, userID int64, items []OrderItem, add
 			return errTooManyOrders
 		}
 		o, err = scanOrder(tx.QueryRow(ctx,
-			`INSERT INTO orders (user_id, status, total, shipping_address) VALUES ($1, 'pending', $2, $3) RETURNING `+orderColumns,
-			userID, total, address))
+			`INSERT INTO orders (user_id, status, total, shipping_address, shipping) VALUES ($1, 'pending', $2, $3, $4) RETURNING `+orderColumns,
+			userID, total, address, shipping))
 		if err != nil {
 			return err
 		}

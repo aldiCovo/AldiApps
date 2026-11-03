@@ -7,10 +7,15 @@
   <title>Prastika Admin</title>
   <link rel="stylesheet" href="/admin/admin.css">
   <script src="/admin/admin.js" defer></script>
+  <script src="/admin/products.js" defer></script>
 </head>
 <body>
   <header class="bar">
     <div class="bar-brand"><span class="brand">Prastika</span><span class="badge-admin">Admin</span></div>
+    <nav id="nav" class="nav" aria-label="Menu admin" hidden>
+      <a class="nav-link" href="#pesanan" data-view="orders">Pesanan</a>
+      <a class="nav-link" href="#produk" data-view="products">Produk</a>
+    </nav>
     <div id="who" class="who" hidden>
       <span id="who-name"></span>
       <button id="logout" class="link" type="button">Keluar</button>
@@ -46,6 +51,36 @@
       <p id="orders-status" class="status" role="status" aria-live="polite"></p>
       <div id="orders-list" class="orders"></div>
       <button id="more" class="secondary more" type="button" hidden>Muat lebih banyak</button>
+    </section>
+    <section id="products-view" hidden aria-labelledby="products-title">
+      <div class="view-head">
+        <h1 id="products-title">Produk</h1>
+        <div class="head-actions">
+          <button id="toggle-categories" class="secondary" type="button" aria-expanded="false" aria-controls="categories-panel">Kelola kategori</button>
+          <button id="toggle-new-product" class="primary" type="button" aria-expanded="false" aria-controls="new-product-panel">Tambah produk</button>
+        </div>
+      </div>
+
+      <section id="categories-panel" class="panel" hidden aria-labelledby="categories-title">
+        <h2 id="categories-title">Kategori</h2>
+        <p class="muted small">Kategori yang masih punya produk tidak bisa dihapus.</p>
+        <div id="category-rows" class="category-rows"></div>
+        <form id="new-category" class="inline-form" novalidate>
+          <label>Kategori baru <input id="new-category-name" type="text" maxlength="200" required></label>
+          <button class="primary" type="submit">Tambah kategori</button>
+        </form>
+        <p id="categories-status" class="status" role="status" aria-live="polite"></p>
+      </section>
+
+      <section id="new-product-panel" class="panel" hidden aria-labelledby="new-product-title">
+        <h2 id="new-product-title">Produk baru</h2>
+        <div id="new-product-form"></div>
+      </section>
+
+      <div class="tabs" id="category-filter" role="group" aria-label="Kategori"></div>
+      <p id="products-status" class="status" role="status" aria-live="polite"></p>
+      <div id="product-list" class="orders"></div>
+      <button id="more-products" class="secondary more" type="button" hidden>Muat lebih banyak</button>
     </section>
   </main>
 </body>

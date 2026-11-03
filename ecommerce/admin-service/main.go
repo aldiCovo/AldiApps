@@ -27,14 +27,14 @@ func main() {
 
 func run() error {
 	values := map[string]string{}
-	for _, name := range []string{"USER_URL", "ORDER_URL", "USER_INTERNAL_TOKEN", "ORDER_INTERNAL_TOKEN"} {
+	for _, name := range []string{"USER_URL", "ORDER_URL", "CATALOG_URL", "USER_INTERNAL_TOKEN", "ORDER_INTERNAL_TOKEN", "CATALOG_INTERNAL_TOKEN"} {
 		value := os.Getenv(name)
 		if value == "" {
 			return fmt.Errorf("%s is required", name)
 		}
 		values[name] = value
 	}
-	for _, name := range []string{"USER_INTERNAL_TOKEN", "ORDER_INTERNAL_TOKEN"} {
+	for _, name := range []string{"USER_INTERNAL_TOKEN", "ORDER_INTERNAL_TOKEN", "CATALOG_INTERNAL_TOKEN"} {
 		if len(values[name]) < minInternalTokenLength {
 			return fmt.Errorf("%s must have at least %d characters", name, minInternalTokenLength)
 		}
@@ -50,10 +50,12 @@ func run() error {
 	server := &http.Server{
 		Addr: ":" + port,
 		Handler: newHandler(services{
-			userURL:            values["USER_URL"],
-			orderURL:           values["ORDER_URL"],
-			userInternalToken:  values["USER_INTERNAL_TOKEN"],
-			orderInternalToken: values["ORDER_INTERNAL_TOKEN"],
+			userURL:              values["USER_URL"],
+			orderURL:             values["ORDER_URL"],
+			catalogURL:           values["CATALOG_URL"],
+			catalogInternalToken: values["CATALOG_INTERNAL_TOKEN"],
+			userInternalToken:    values["USER_INTERNAL_TOKEN"],
+			orderInternalToken:   values["ORDER_INTERNAL_TOKEN"],
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,

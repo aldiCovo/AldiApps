@@ -11,16 +11,19 @@ import (
 )
 
 const (
-	userToken  = "user-internal-token-0123456789abcdef"
-	orderToken = "order-internal-token-0123456789abcdef"
+	userToken    = "user-internal-token-0123456789abcdef"
+	orderToken   = "order-internal-token-0123456789abcdef"
+	catalogToken = "catalog-internal-token-0123456789abcdef"
 )
 
 // fakes stands in for user-service and order-service, and records what reached order-service.
 type fakes struct {
-	mu        sync.Mutex
-	roles     map[string]string // bearer token -> role
-	orderHits []string
-	advance   int // status order-service answers to a status change
+	mu          sync.Mutex
+	roles       map[string]string // bearer token -> role
+	orderHits   []string
+	catalogHits []string
+	catalogAuth int // status catalog-service answers to any token, to fake a wrong one
+	advance     int // status order-service answers to a status change
 }
 
 func newTestServer(t *testing.T) (*httptest.Server, *fakes) {
@@ -86,7 +89,35 @@ func newTestServer(t *testing.T) (*httptest.Server, *fakes) {
 		}
 	}))
 	t.Cleanup(orders.Close)
-	server := httptest.NewServer(newHandler(services{userURL: users.URL, orderURL: orders.URL, userInternalToken: userToken, orderInternalToken: orderToken}))
+	catalog := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		f.mu.Lock()
+		f.catalogHits = append(f.catalogHits, r.Method+" "+r.URL.RequestURI()+" "+r.Header.Get("Authorization")+" "+string(body))
+		auth := f.catalogAuth
+		f.mu.Unlock()
+		if auth != 0 {
+			w.WriteHeader(auth)
+			return
+		}
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/products":
+			io.WriteString(w, `{"products":[{"id":5,"name":"Dress","price":350000,"variants":[]}]}`)
+		case r.Method == http.MethodPost && r.URL.Path == "/products":
+			w.WriteHeader(http.StatusCreated)
+			io.WriteString(w, `{"id":6,"name":"Rok","price":150000,"variants":[]}`)
+		case r.Method == http.MethodDelete && r.URL.Path == "/products/5":
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == http.MethodPatch && r.URL.Path == "/variants/3/stock":
+			w.WriteHeader(http.StatusConflict)
+			io.WriteString(w, `{"error":"stock would leave its range"}`)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+			io.WriteString(w, `{"error":"product not found"}`)
+		}
+	}))
+	t.Cleanup(catalog.Close)
+	server := httptest.NewServer(newHandler(services{userURL: users.URL, orderURL: orders.URL, catalogURL: catalog.URL,
+		userInternalToken: userToken, orderInternalToken: orderToken, catalogInternalToken: catalogToken}))
 	t.Cleanup(server.Close)
 	return server, f
 }
@@ -204,5 +235,69 @@ func TestStatusChangesPassOnOnlyKnownFields(t *testing.T) {
 	f.mu.Unlock()
 	if status, body := do(t, server, http.MethodPost, "/orders/9/status", "admin-token", `{"status":"packed"}`); status != http.StatusBadGateway || strings.Contains(body, "step") {
 		t.Fatalf("failure: %d %s", status, body)
+	}
+}
+
+func TestCatalogChangesNeedAnAdminAndCarryTheInternalToken(t *testing.T) {
+	server, f := newTestServer(t)
+	routes := []struct{ method, path, body string }{
+		{http.MethodGet, "/categories", ""},
+		{http.MethodPost, "/categories", `{"name":"Kaftan"}`},
+		{http.MethodPut, "/categories/1", `{"name":"Kaftan"}`},
+		{http.MethodDelete, "/categories/1", ""},
+		{http.MethodGet, "/products", ""},
+		{http.MethodGet, "/products/5", ""},
+		{http.MethodPost, "/products", `{"name":"Rok","price":150000}`},
+		{http.MethodPut, "/products/5", `{"name":"Rok","price":150000}`},
+		{http.MethodDelete, "/products/5", ""},
+		{http.MethodPost, "/products/5/variants", `{"size":"M","color":"Hitam"}`},
+		{http.MethodPut, "/variants/3", `{"size":"M","color":"Hitam"}`},
+		{http.MethodDelete, "/variants/3", ""},
+		{http.MethodPatch, "/variants/3/stock", `{"delta":1}`},
+	}
+	for _, token := range []string{"", "customer-token"} {
+		for _, route := range routes {
+			if status, _ := do(t, server, route.method, route.path, token, route.body); status != http.StatusUnauthorized && status != http.StatusForbidden {
+				t.Fatalf("%s %s with %q: %d", route.method, route.path, token, status)
+			}
+		}
+	}
+	if len(f.catalogHits) != 0 {
+		t.Fatalf("catalog-service was called: %v", f.catalogHits)
+	}
+	if status, body := do(t, server, http.MethodGet, "/products?limit=100&offset=0&category_id=2&x=1", "admin-token", ""); status != http.StatusOK || !strings.Contains(body, `"Dress"`) {
+		t.Fatalf("list: %d %s", status, body)
+	}
+	if want := "GET /products?category_id=2&limit=100&offset=0 Bearer " + catalogToken + " "; f.catalogHits[0] != want {
+		t.Fatalf("sent %q", f.catalogHits[0])
+	}
+	if status, body := do(t, server, http.MethodPost, "/products", "admin-token", `{"name":"Rok","price":150000}`); status != http.StatusCreated || !strings.Contains(body, `"id":6`) {
+		t.Fatalf("create: %d %s", status, body)
+	}
+	if want := `POST /products Bearer ` + catalogToken + ` {"name":"Rok","price":150000}`; f.catalogHits[1] != want {
+		t.Fatalf("sent %q", f.catalogHits[1])
+	}
+	if status, _ := do(t, server, http.MethodDelete, "/products/5", "admin-token", ""); status != http.StatusNoContent {
+		t.Fatalf("delete: %d", status)
+	}
+	if status, body := do(t, server, http.MethodPatch, "/variants/3/stock", "admin-token", `{"delta":999}`); status != http.StatusConflict || !strings.Contains(body, "range") {
+		t.Fatalf("stock: %d %s", status, body)
+	}
+	for _, c := range []struct{ method, path, body string }{
+		{http.MethodPost, "/products", `not json`},
+		{http.MethodPost, "/products", `[1]`},
+		{http.MethodPut, "/products/abc", `{}`},
+		{http.MethodDelete, "/variants/0", ""},
+	} {
+		if status, _ := do(t, server, c.method, c.path, "admin-token", c.body); status != http.StatusBadRequest && status != http.StatusNotFound {
+			t.Fatalf("%s %s: %d", c.method, c.path, status)
+		}
+	}
+	// A wrong internal token must not look like a logged-out admin.
+	f.mu.Lock()
+	f.catalogAuth = http.StatusUnauthorized
+	f.mu.Unlock()
+	if status, _ := do(t, server, http.MethodGet, "/products", "admin-token", ""); status != http.StatusBadGateway {
+		t.Fatalf("wrong internal token: %d", status)
 	}
 }

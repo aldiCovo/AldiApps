@@ -41,6 +41,10 @@ func run() error {
 	if rabbitmqURL == "" {
 		return errors.New("RABBITMQ_URL is required")
 	}
+	internalToken := os.Getenv("INTERNAL_TOKEN")
+	if len(internalToken) < minInternalTokenLength {
+		return fmt.Errorf("INTERNAL_TOKEN must have at least %d characters", minInternalTokenLength)
+	}
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -85,7 +89,7 @@ func run() error {
 
 	server := &http.Server{
 		Addr:              ":" + port,
-		Handler:           newHandler(store),
+		Handler:           newHandler(store, internalToken),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,

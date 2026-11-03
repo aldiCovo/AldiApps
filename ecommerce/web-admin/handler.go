@@ -83,6 +83,58 @@ func newHandler(adminURL string) http.Handler {
 			g.withSession(w, r, http.MethodPost, "/orders/"+id+"/status", body)
 		}
 	})
+	// Products, variants, prices and stock.
+	for _, route := range []struct {
+		method, path string
+		body         bool
+	}{
+		{http.MethodGet, "/categories", false},
+		{http.MethodPost, "/categories", true},
+		{http.MethodPut, "/categories/{id}", true},
+		{http.MethodDelete, "/categories/{id}", false},
+		{http.MethodGet, "/products", false},
+		{http.MethodGet, "/products/{id}", false},
+		{http.MethodPost, "/products", true},
+		{http.MethodPut, "/products/{id}", true},
+		{http.MethodDelete, "/products/{id}", false},
+		{http.MethodPost, "/products/{id}/variants", true},
+		{http.MethodPut, "/variants/{id}", true},
+		{http.MethodDelete, "/variants/{id}", false},
+		{http.MethodPatch, "/variants/{id}/stock", true},
+	} {
+		mux.HandleFunc(route.method+" /admin/api"+route.path, func(w http.ResponseWriter, r *http.Request) {
+			path := route.path
+			if strings.Contains(path, "{id}") {
+				id, ok := pathID(w, r)
+				if !ok {
+					return
+				}
+				path = strings.Replace(path, "{id}", id, 1)
+			}
+			var body []byte
+			if route.body {
+				var ok bool
+				if body, ok = readBody(w, r); !ok {
+					return
+				}
+			} else if route.method != http.MethodGet && !isJSON(w, r) {
+				// A DELETE also needs the JSON header, so a form on another site can't send one.
+				return
+			}
+			if route.method == http.MethodGet {
+				query := url.Values{}
+				for _, name := range []string{"limit", "offset", "category_id"} {
+					if value := r.URL.Query().Get(name); value != "" {
+						query.Set(name, value)
+					}
+				}
+				if len(query) > 0 {
+					path += "?" + query.Encode()
+				}
+			}
+			g.withSession(w, r, route.method, path, body)
+		})
+	}
 	mux.HandleFunc("/admin/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 	})
@@ -129,7 +181,7 @@ func versionedPage(files fs.FS) ([]byte, map[string]string) {
 		panic(err)
 	}
 	assets := make(map[string]string)
-	for _, name := range []string{"admin.css", "admin.js"} {
+	for _, name := range []string{"admin.css", "admin.js", "products.js"} {
 		content, err := fs.ReadFile(files, name)
 		if err != nil {
 			panic(err)
@@ -161,7 +213,7 @@ func securityHeaders(next http.Handler) http.Handler {
 func pathID(w http.ResponseWriter, r *http.Request) (string, bool) {
 	id := r.PathValue("id")
 	if !numericID.MatchString(id) {
-		writeError(w, http.StatusNotFound, "order not found")
+		writeError(w, http.StatusNotFound, "not found")
 		return "", false
 	}
 	return id, true
@@ -282,6 +334,10 @@ func setSession(w http.ResponseWriter, token string, maxAge int) {
 }
 
 func writeRaw(w http.ResponseWriter, status int, data []byte) {
+	if status == http.StatusNoContent {
+		w.WriteHeader(status)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if _, err := w.Write(data); err != nil {

@@ -25,8 +25,8 @@ const (
 var numericID = regexp.MustCompile(`^[1-9][0-9]{0,17}$`)
 
 type services struct {
-	userURL, orderURL                     string
-	userInternalToken, orderInternalToken string
+	userURL, orderURL, catalogURL                               string
+	userInternalToken, orderInternalToken, catalogInternalToken string
 }
 
 // User is an account as user-service describes it.
@@ -163,6 +163,7 @@ func newHandler(s services) http.Handler {
 		writeJSON(w, http.StatusOK, order)
 	}))
 
+	a.addCatalogRoutes(mux)
 	return mux
 }
 
@@ -290,4 +291,112 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 
 func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
+}
+
+// addCatalogRoutes passes the admin pages' product, variant, price and stock changes to
+// catalog-service, which checks them. Each change is logged with the admin who made it.
+func (a *admin) addCatalogRoutes(mux *http.ServeMux) {
+	ids := func(w http.ResponseWriter, r *http.Request) bool {
+		if !numericID.MatchString(r.PathValue("id")) {
+			writeError(w, http.StatusNotFound, "not found")
+			return false
+		}
+		return true
+	}
+	forward := func(method, path string, withBody bool) http.HandlerFunc {
+		return a.onlyAdmins(func(w http.ResponseWriter, r *http.Request, me User) {
+			if strings.Contains(path, "{id}") && !ids(w, r) {
+				return
+			}
+			target := strings.Replace(path, "{id}", r.PathValue("id"), 1)
+			var body []byte
+			if withBody {
+				var ok bool
+				if body, ok = readRawJSON(w, r); !ok {
+					return
+				}
+			}
+			if method == http.MethodGet {
+				query := url.Values{}
+				for _, name := range []string{"limit", "offset", "category_id"} {
+					if value := r.URL.Query().Get(name); value != "" {
+						query.Set(name, value)
+					}
+				}
+				if len(query) > 0 {
+					target += "?" + query.Encode()
+				}
+			}
+			status, data, err := a.raw(r.Context(), method, a.catalogURL+target, a.catalogInternalToken, body)
+			if err != nil {
+				a.fail(w, err)
+				return
+			}
+			if method != http.MethodGet {
+				slog.Info("catalog changed", "admin_id", me.ID, "method", method, "path", target, "status", status)
+			}
+			switch {
+			case status == http.StatusNoContent:
+				w.WriteHeader(status)
+			case status == http.StatusOK || status == http.StatusCreated:
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(status)
+				w.Write(data)
+			case status == http.StatusUnauthorized:
+				// The internal token is wrong, which the admin can't fix by logging in again.
+				a.fail(w, errors.New("catalog-service refused the internal token"))
+			default:
+				a.fail(w, &upstreamError{status: status, body: data})
+			}
+		})
+	}
+	mux.HandleFunc("GET /categories", forward(http.MethodGet, "/categories", false))
+	mux.HandleFunc("POST /categories", forward(http.MethodPost, "/categories", true))
+	mux.HandleFunc("PUT /categories/{id}", forward(http.MethodPut, "/categories/{id}", true))
+	mux.HandleFunc("DELETE /categories/{id}", forward(http.MethodDelete, "/categories/{id}", false))
+	mux.HandleFunc("GET /products", forward(http.MethodGet, "/products", false))
+	mux.HandleFunc("GET /products/{id}", forward(http.MethodGet, "/products/{id}", false))
+	mux.HandleFunc("POST /products", forward(http.MethodPost, "/products", true))
+	mux.HandleFunc("PUT /products/{id}", forward(http.MethodPut, "/products/{id}", true))
+	mux.HandleFunc("DELETE /products/{id}", forward(http.MethodDelete, "/products/{id}", false))
+	mux.HandleFunc("POST /products/{id}/variants", forward(http.MethodPost, "/products/{id}/variants", true))
+	mux.HandleFunc("PUT /variants/{id}", forward(http.MethodPut, "/variants/{id}", true))
+	mux.HandleFunc("DELETE /variants/{id}", forward(http.MethodDelete, "/variants/{id}", false))
+	mux.HandleFunc("PATCH /variants/{id}/stock", forward(http.MethodPatch, "/variants/{id}/stock", true))
+}
+
+// raw sends a request and returns any answer, for services whose success status varies.
+func (a *admin) raw(ctx context.Context, method, target, bearer string, body []byte) (int, []byte, error) {
+	var reader io.Reader
+	if body != nil {
+		reader = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, target, reader)
+	if err != nil {
+		return 0, nil, err
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if bearer != "" {
+		req.Header.Set("Authorization", "Bearer "+bearer)
+	}
+	resp, err := a.client.Do(req)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxUpstreamBytes))
+	return resp.StatusCode, data, err
+}
+
+// readRawJSON reads a JSON object as it is, for a service that checks its fields itself.
+func readRawJSON(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBodyBytes))
+	var object map[string]json.RawMessage
+	if err != nil || json.Unmarshal(body, &object) != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON")
+		return nil, false
+	}
+	return body, true
 }

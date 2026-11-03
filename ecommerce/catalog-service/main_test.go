@@ -41,7 +41,7 @@ func newTestServer(t *testing.T) *httptest.Server {
 	if _, err := pool.Exec(ctx, "TRUNCATE categories, products, product_variants, outbox_events, stock_reservations RESTART IDENTITY"); err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewServer(newHandler(&Store{pool: pool}))
+	server := httptest.NewServer(newHandler(&Store{pool: pool}, testInternalToken))
 	t.Cleanup(server.Close)
 	return server
 }
@@ -52,6 +52,7 @@ func request(t *testing.T, method, url, body string) (int, []byte) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	req.Header.Set("Authorization", "Bearer "+testInternalToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -443,6 +444,7 @@ func TestConcurrentOrdersCannotOversell(t *testing.T) {
 				t.Error(err)
 				return
 			}
+			req.Header.Set("Authorization", "Bearer "+testInternalToken)
 			resp, err := http.DefaultClient.Do(req)
 			if err != nil {
 				t.Error(err)
@@ -467,5 +469,55 @@ func TestConcurrentOrdersCannotOversell(t *testing.T) {
 	}
 	if sold != 10 {
 		t.Fatalf("sold %d, want 10", sold)
+	}
+}
+
+const testInternalToken = "catalog-test-token-0123456789abcdef"
+
+func TestChangesNeedTheInternalToken(t *testing.T) {
+	server := newTestServer(t)
+	for _, c := range []struct{ method, path, body string }{
+		{http.MethodPost, "/categories", `{"name":"Tanpa Token"}`},
+		{http.MethodPut, "/categories/1", `{"name":"x"}`},
+		{http.MethodDelete, "/categories/1", ""},
+		{http.MethodPost, "/products", `{"name":"x","price":1}`},
+		{http.MethodPut, "/products/1", `{"name":"x","price":1}`},
+		{http.MethodDelete, "/products/1", ""},
+		{http.MethodPost, "/products/1/variants", `{"size":"M","color":"Merah"}`},
+		{http.MethodPut, "/variants/1", `{"size":"M","color":"Merah"}`},
+		{http.MethodDelete, "/variants/1", ""},
+		{http.MethodPatch, "/variants/1/stock", `{"delta":1}`},
+	} {
+		for _, token := range []string{"", "wrong"} {
+			req, _ := http.NewRequest(c.method, server.URL+c.path, strings.NewReader(c.body))
+			if token != "" {
+				req.Header.Set("Authorization", "Bearer "+token)
+			}
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			resp.Body.Close()
+			if resp.StatusCode != http.StatusUnauthorized {
+				t.Fatalf("%s %s with %q: %d", c.method, c.path, token, resp.StatusCode)
+			}
+		}
+	}
+	// Reading stays open.
+	resp, err := http.Get(server.URL + "/products")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("reading: %d", resp.StatusCode)
+	}
+}
+
+func TestDescriptionHasALimit(t *testing.T) {
+	server := newTestServer(t)
+	long := strings.Repeat("a", maxDescription+1)
+	if status, body := request(t, http.MethodPost, server.URL+"/products", `{"name":"x","price":1,"description":"`+long+`"}`); status != http.StatusBadRequest {
+		t.Fatalf("%d %s", status, body)
 	}
 }

@@ -30,6 +30,18 @@ It pushes `ghcr.io/aldicovo/<folder name>:<commit>`, using the last commit that 
 
 A new image is private on GHCR, and the cluster pulls without credentials. After an application's first build, set its package to public in the package settings on GitHub.
 
+## Metrics
+
+Every Go service answers `GET /metrics` for Prometheus on port 9091, or `METRICS_PORT`. That port is separate from the main one, so no Service or Ingress reaches it, and only Prometheus reads it, through the Pod's address. It has:
+
+| Metric | Labels |
+|---|---|
+| `http_requests_total` | `route`, the ServeMux pattern such as `GET /products/{id}` or `unmatched`, and `code` |
+| `http_request_duration_seconds` | `route`. WebSockets aren't timed, because they last as long as the visitor stays |
+| `go_*`, `process_*` | Memory, goroutines, garbage collection and CPU |
+
+The code is `metrics.go` with `metrics_test.go`, the same in each service. Change all copies together.
+
 ## catalog-service
 
 | Request | Does |

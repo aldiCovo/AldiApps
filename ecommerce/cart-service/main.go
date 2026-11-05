@@ -65,6 +65,9 @@ func run() error {
 		WriteTimeout:      20 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
+	server.Handler = instrument(server.Handler)
+	defer serveMetrics()()
+
 	serveErr := make(chan error, 1)
 	go func() {
 		slog.Info("listening", "addr", server.Addr)

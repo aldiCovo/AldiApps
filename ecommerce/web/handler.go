@@ -89,6 +89,16 @@ func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, 
 		}
 	})
 	mux.HandleFunc("POST /api/login", g.login)
+	mux.HandleFunc("POST /api/password/forgot", func(w http.ResponseWriter, r *http.Request) {
+		if body, ok := readBody(w, r); ok {
+			g.pass(w, r, g.userURL+"/password/forgot", body, "")
+		}
+	})
+	mux.HandleFunc("POST /api/password/reset", func(w http.ResponseWriter, r *http.Request) {
+		if body, ok := readBody(w, r); ok {
+			g.pass(w, r, g.userURL+"/password/reset", body, "")
+		}
+	})
 	mux.HandleFunc("POST /api/logout", func(w http.ResponseWriter, r *http.Request) {
 		if !isJSON(w, r) {
 			return

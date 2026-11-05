@@ -117,6 +117,8 @@ func TestAllowedRequestsReachTheRightService(t *testing.T) {
 		{"GET", "/api/products/12", "", "catalog GET /products/12"},
 		{"GET", "/api/search?q=dress+merah&in_stock=true", "", "search GET /search?q=dress+merah&in_stock=true"},
 		{"POST", "/api/register", `{"email":"a@b.c"}`, "user POST /register"},
+		{"POST", "/api/password/forgot", `{"email":"a@b.c"}`, "user POST /password/forgot"},
+		{"POST", "/api/password/reset", `{"token":"t","password":"p"}`, "user POST /password/reset"},
 		{"GET", "/api/shipping?x=1", "", "order GET /shipping"},
 	}
 	for _, c := range cases {
@@ -261,7 +263,7 @@ func TestLogoutClearsTheCookie(t *testing.T) {
 
 func TestFormsFromOtherSitesAreRefused(t *testing.T) {
 	server, f := newTestGateway(t)
-	for _, path := range []string{"/api/login", "/api/register", "/api/logout"} {
+	for _, path := range []string{"/api/login", "/api/register", "/api/logout", "/api/password/forgot", "/api/password/reset"} {
 		for _, contentType := range []string{"text/plain", "application/x-www-form-urlencoded", "multipart/form-data; boundary=x", ""} {
 			before := len(f.seen())
 			resp, _ := do(t, "POST", server.URL+path, contentType, `{"email":"a@b.c","password":"benar"}`)

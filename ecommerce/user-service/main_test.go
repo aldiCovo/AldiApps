@@ -49,6 +49,8 @@ type testServer struct {
 	*httptest.Server
 	pool   *pgxpool.Pool
 	tokens *Tokens
+	resets *Resets
+	mail   *fakeMailer
 }
 
 // newTestServer needs a throwaway database, because it empties the table.
@@ -67,7 +69,7 @@ func newTestServer(t *testing.T, passwords *Passwords) *testServer {
 	if err := migrate(ctx, pool); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, "TRUNCATE users, addresses RESTART IDENTITY"); err != nil {
+	if _, err := pool.Exec(ctx, "TRUNCATE users, addresses, password_resets RESTART IDENTITY"); err != nil {
 		t.Fatal(err)
 	}
 	if passwords == nil {
@@ -76,9 +78,13 @@ func newTestServer(t *testing.T, passwords *Passwords) *testServer {
 		}
 	}
 	tokens := newTestTokens(t, time.Hour)
-	server := httptest.NewServer(newHandler(&Store{pool: pool}, tokens, passwords, testInternalToken, testAdminToken))
+	store := &Store{pool: pool}
+	mail := &fakeMailer{}
+	resets := newResets(store, passwords, mail, "https://shop.test/")
+	server := httptest.NewServer(newHandler(store, tokens, passwords, resets, testInternalToken, testAdminToken))
 	t.Cleanup(server.Close)
-	return &testServer{Server: server, pool: pool, tokens: tokens}
+	t.Cleanup(resets.Wait)
+	return &testServer{Server: server, pool: pool, tokens: tokens, resets: resets, mail: mail}
 }
 
 func request(t *testing.T, method, url, body, bearer string) (int, []byte) {

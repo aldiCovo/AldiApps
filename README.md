@@ -120,12 +120,16 @@ TEST_RABBITMQ_URL='amqp://guest:guest@127.0.0.1:5672/' go test -race ./...
 | `POST /register` | Creates a customer from `{"email", "name", "password"}`. The password has 8 to 128 characters. Answers 409 if the email exists, ignoring case |
 | `POST /login` | Checks `{"email", "password"}` and answers `{"token", "token_type", "expires_in", "user"}`, or 401 |
 | `GET /me` | Returns the user that the `Authorization: Bearer <token>` header belongs to |
+| `POST /password/forgot` | Emails a link for setting a new password to `{"email"}`, if it has an account. Always answers 204, before looking the email up, so it can't tell anyone which emails have accounts |
+| `POST /password/reset` | Sets `{"password"}` with the `{"token"}` from a link, and answers 204. Answers 410 if the link is unknown, used or expired |
 | `GET /.well-known/jwks.json` | Returns the public key that checks tokens |
 | `GET /internal/users/{id}` | Returns one user, for other services. It needs `Authorization: Bearer <INTERNAL_TOKEN>`, and web has no route to it |
 | `GET /internal/users?q=&role=&limit=&offset=` | Accounts, newest first, whose email or name contains `q`, with `role` `admin` or `customer` if given, as `{"users", "total"}`. `limit` is 1 to 100, 50 if left out. Needs `Authorization: Bearer <ADMIN_INTERNAL_TOKEN>` |
 | `PUT /internal/users/{id}/role` | Sets `{"role"}` to `admin` or `customer`. Answers 409 rather than take the role from the last admin. Needs `ADMIN_INTERNAL_TOKEN` |
 
 `ADMIN_INTERNAL_TOKEN` is only admin-service's, and must differ from `INTERNAL_TOKEN`, so a service that looks up customers can't make anyone an admin. A role change locks every admin's row first, so two admins taking each other's role at once still leave one.
+
+A reset link is `SHOP_URL/#reset=<token>`. The token is after `#`, so the browser never sends it to a server or a log. Only its SHA-256 is stored. A link lasts 30 minutes and works once, and using one ends the account's other links. An account gets at most 3 links an hour, so the form can't fill someone's inbox. The email goes out after the answer, through `SMTP_ADDR` as `MAIL_FROM`, which is Mailpit for now. A new password doesn't end tokens already issued, which still last up to an hour.
 
 Passwords are stored as Argon2id hashes. Only 3 are computed at once, which keeps a burst of logins inside the memory limit, and a request that waits over 5 seconds gets 503.
 
@@ -345,7 +349,7 @@ Serves the pages in `static/`, and passes on only these requests:
 |---|---|
 | `GET /api/categories`, `GET /api/products/{id}` | catalog-service |
 | `GET /api/search` | search-service |
-| `POST /api/register`, `POST /api/login`, `GET /api/me` | user-service |
+| `POST /api/register`, `POST /api/login`, `GET /api/me`, `POST /api/password/forgot`, `POST /api/password/reset` | user-service |
 | `POST /api/logout` | Handled here. It only clears the cookie |
 | `GET /api/events` | realtime-service, as a WebSocket with the token from the cookie. Answers 403 if `Origin` isn't this site |
 | `POST /api/orders`, `GET /api/orders`, `GET /api/orders/{id}`, `POST /api/orders/{id}/pay` | order-service, with the token from the cookie |

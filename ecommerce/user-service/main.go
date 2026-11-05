@@ -52,6 +52,14 @@ func run() error {
 	if len(adminToken) < minInternalTokenLength || adminToken == internalToken {
 		return fmt.Errorf("ADMIN_INTERNAL_TOKEN must have at least %d characters and differ from INTERNAL_TOKEN", minInternalTokenLength)
 	}
+	smtpAddr, mailFrom, shopURL := os.Getenv("SMTP_ADDR"), os.Getenv("MAIL_FROM"), os.Getenv("SHOP_URL")
+	if smtpAddr == "" || mailFrom == "" || shopURL == "" {
+		return errors.New("SMTP_ADDR, MAIL_FROM and SHOP_URL are required")
+	}
+	mailer, err := newSMTPMailer(smtpAddr, mailFrom)
+	if err != nil {
+		return err
+	}
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -79,9 +87,14 @@ func run() error {
 		return fmt.Errorf("migrating database: %w", err)
 	}
 
+	store := &Store{pool: pool}
+	resets := newResets(store, passwords, mailer, shopURL)
+	// Links still being sent need the pool, which closes after this.
+	defer resets.Wait()
+
 	server := &http.Server{
 		Addr:              ":" + port,
-		Handler:           newHandler(&Store{pool: pool}, tokens, passwords, internalToken, adminToken),
+		Handler:           newHandler(store, tokens, passwords, resets, internalToken, adminToken),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,

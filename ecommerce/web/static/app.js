@@ -539,13 +539,86 @@ function setAuthMode(mode) {
   $("auth-name").required = registering;
   $("password-hint").hidden = !registering;
   $("auth-password").autocomplete = registering ? "new-password" : "current-password";
+  $("forgot-row").hidden = registering;
+  $("auth-note").hidden = true;
   $("auth-error").hidden = true;
 }
 
-function openAuth() {
+function openAuth(note = "") {
   $("auth-form").reset();
   setAuthMode("login");
+  $("auth-note").textContent = note;
+  $("auth-note").hidden = !note;
   $("auth-dialog").showModal();
+}
+
+function openForgot() {
+  const email = $("auth-email").value.trim();
+  $("auth-dialog").close();
+  $("forgot-form").reset();
+  $("forgot-email").value = email;
+  $("forgot-form").hidden = false;
+  $("forgot-done").hidden = true;
+  $("forgot-error").hidden = true;
+  $("forgot-dialog").showModal();
+}
+
+async function submitForgot(event) {
+  event.preventDefault();
+  $("forgot-submit").disabled = true;
+  $("forgot-error").hidden = true;
+  try {
+    await post("/password/forgot", { email: $("forgot-email").value.trim() });
+    $("forgot-form").hidden = true;
+    $("forgot-done").hidden = false;
+  } catch (error) {
+    $("forgot-error").textContent = error.status === 400 ? "Periksa kembali alamat email kamu." : authMessage(error);
+    $("forgot-error").hidden = false;
+  } finally {
+    $("forgot-submit").disabled = false;
+  }
+}
+
+// The token comes in the part of the link after #, which browsers never send to a server.
+// It's taken off the address bar at once, so it doesn't stay in the history.
+let resetToken = "";
+
+function openResetFromLink() {
+  const match = location.hash.match(/^#reset=([A-Za-z0-9_-]+)$/);
+  if (!match) return;
+  resetToken = match[1];
+  history.replaceState(null, "", location.pathname + location.search);
+  $("reset-form").reset();
+  $("reset-error").hidden = true;
+  $("reset-dialog").showModal();
+}
+
+function showResetError(text) {
+  $("reset-error").textContent = text;
+  $("reset-error").hidden = false;
+}
+
+async function submitReset(event) {
+  event.preventDefault();
+  const password = $("reset-password").value;
+  if (password !== $("reset-confirm").value) {
+    showResetError("Kedua password tidak sama.");
+    return;
+  }
+  $("reset-submit").disabled = true;
+  $("reset-error").hidden = true;
+  try {
+    await post("/password/reset", { token: resetToken, password });
+    resetToken = "";
+    $("reset-form").reset();
+    $("reset-dialog").close();
+    openAuth("Password baru sudah disimpan. Silakan masuk.");
+  } catch (error) {
+    if (error.status === 410) showResetError("Link ini sudah tidak berlaku. Minta link baru lewat \"Lupa password?\".");
+    else showResetError(authMessage(error));
+  } finally {
+    $("reset-submit").disabled = false;
+  }
 }
 
 function authMessage(error) {
@@ -600,7 +673,7 @@ function renderAccount(user) {
   if (!user) {
     const login = el("button", "secondary", "Masuk");
     login.type = "button";
-    login.addEventListener("click", openAuth);
+    login.addEventListener("click", () => openAuth());
     account.replaceChildren(login);
     return;
   }
@@ -1636,6 +1709,14 @@ $("stock-filter").addEventListener("change", (event) => { state.inStock = event.
 $("more").addEventListener("click", () => loadProducts(true));
 $("auth-form").addEventListener("submit", submitAuth);
 $("auth-switch").addEventListener("click", () => setAuthMode(authMode === "login" ? "register" : "login"));
+$("forgot-open").addEventListener("click", openForgot);
+$("forgot-form").addEventListener("submit", submitForgot);
+$("forgot-back").addEventListener("click", () => {
+  $("forgot-dialog").close();
+  openAuth();
+});
+$("reset-form").addEventListener("submit", submitReset);
+window.addEventListener("hashchange", openResetFromLink);
 for (const button of document.querySelectorAll("[data-close]")) {
   button.addEventListener("click", () => button.closest("dialog").close());
 }
@@ -1644,6 +1725,7 @@ addStepper($("order-quantity"));
 showCartCount();
 renderCategories();
 loadAccount();
+openResetFromLink();
 loadFilterChoices();
 // Category names appear on the cards, so the list loads after them.
 loadCategories().then(() => loadProducts());

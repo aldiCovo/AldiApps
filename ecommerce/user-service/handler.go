@@ -61,8 +61,12 @@ func (in *registerInput) validate() (err error) {
 	case strings.ContainsRune(in.Name, 0):
 		return errors.New("name must not contain NUL characters")
 	}
-	// The password isn't trimmed, because spaces are allowed to be part of it.
-	switch length := utf8.RuneCountInString(in.Password); {
+	return checkPassword(in.Password)
+}
+
+// checkPassword doesn't trim the password, because spaces are allowed to be part of it.
+func checkPassword(password string) error {
+	switch length := utf8.RuneCountInString(password); {
 	case length < minPasswordLength:
 		return fmt.Errorf("password must be at least %d characters", minPasswordLength)
 	case length > maxPasswordLength:
@@ -83,7 +87,7 @@ type loginResponse struct {
 	User      User   `json:"user"`
 }
 
-func newHandler(store *Store, tokens *Tokens, passwords *Passwords, internalToken, adminToken string) http.Handler {
+func newHandler(store *Store, tokens *Tokens, passwords *Passwords, resets *Resets, internalToken, adminToken string) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -188,6 +192,7 @@ func newHandler(store *Store, tokens *Tokens, passwords *Passwords, internalToke
 	})
 
 	addAdminRoutes(mux, store, adminToken)
+	addResetRoutes(mux, resets)
 
 	// tokenUser answers 401 itself when the request has no valid token.
 	tokenUser := func(w http.ResponseWriter, r *http.Request) (int64, bool) {

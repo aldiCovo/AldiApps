@@ -351,12 +351,16 @@ legend { margin-bottom: 10px; padding: 0; font-size: .92rem; font-weight: 600; }
 .detail-print { min-height: 40px; margin-top: 12px; padding: 0 18px; font-size: .9rem; }
 
 /* Login */
-#auth-form { display: grid; gap: 14px; margin-top: 18px; }
-#auth-form label { display: grid; gap: 5px; font-size: .92rem; font-weight: 600; }
-#auth-form input { width: 100%; height: 46px; padding: 0 14px; border: 1px solid var(--line); border-radius: 8px; background: #fff; font-weight: 400; }
-#auth-form input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px rgb(138 59 50 / .14); }
-#auth-submit { width: 100%; }
+#auth-form, #forgot-form, #reset-form { display: grid; gap: 14px; margin-top: 18px; }
+#auth-form label, #forgot-form label, #reset-form label { display: grid; gap: 5px; font-size: .92rem; font-weight: 600; }
+#auth-form input, #forgot-form input, #reset-form input { width: 100%; height: 46px; padding: 0 14px; border: 1px solid var(--line); border-radius: 8px; background: #fff; font-weight: 400; }
+#auth-form input:focus, #forgot-form input:focus, #reset-form input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px rgb(138 59 50 / .14); }
+#auth-submit, #forgot-submit, #reset-submit { width: 100%; }
 .hint { margin-top: -8px; color: var(--muted); font-size: .86rem; }
+.forgot-row { margin: -8px 0 0; text-align: right; font-size: .9rem; }
+.good-note { padding: 10px 14px; border-radius: 8px; background: var(--good-soft); color: var(--good); font-size: .92rem; }
+#forgot-done { margin-top: 18px; }
+.hint-text { margin: 0; color: var(--muted); font-size: .94rem; }
 .error { color: var(--accent-dark); }
 .switch { margin-top: 18px; color: var(--muted); font-size: .94rem; text-align: center; }
 

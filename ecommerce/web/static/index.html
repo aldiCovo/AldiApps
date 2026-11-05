@@ -231,10 +231,40 @@
       <label>Email <input id="auth-email" type="email" maxlength="254" required autocomplete="email"></label>
       <label>Password <input id="auth-password" type="password" minlength="8" maxlength="128" required autocomplete="current-password"></label>
       <p id="password-hint" class="hint" hidden>Minimal 8 karakter.</p>
+      <p id="forgot-row" class="forgot-row"><button id="forgot-open" class="link" type="button">Lupa password?</button></p>
+      <p id="auth-note" class="good-note" role="status" hidden></p>
       <p id="auth-error" class="error" role="alert" hidden></p>
       <button id="auth-submit" type="submit">Masuk</button>
     </form>
     <p class="switch"><span id="auth-switch-text">Belum punya akun?</span> <button id="auth-switch" class="link" type="button">Daftar</button></p>
+  </dialog>
+
+  <dialog id="forgot-dialog" class="sheet narrow" aria-labelledby="forgot-title">
+    <button class="close" type="button" data-close aria-label="Tutup">×</button>
+    <h2 id="forgot-title">Lupa password</h2>
+    <form id="forgot-form">
+      <p class="hint-text">Masukkan email akunmu. Kami akan mengirim link untuk membuat password baru.</p>
+      <label>Email <input id="forgot-email" type="email" maxlength="254" required autocomplete="email"></label>
+      <p id="forgot-error" class="error" role="alert" hidden></p>
+      <button id="forgot-submit" type="submit">Kirim link</button>
+    </form>
+    <div id="forgot-done" hidden>
+      <p class="good-note" role="status">Kalau email itu terdaftar, link untuk membuat password baru sudah kami kirim. Link berlaku 30 menit.</p>
+      <p class="demo-note">Prastika masih toko latihan, jadi emailnya ditangkap server tes dan tidak sampai ke inbox sungguhan.</p>
+    </div>
+    <p class="switch"><button id="forgot-back" class="link" type="button">Kembali ke Masuk</button></p>
+  </dialog>
+
+  <dialog id="reset-dialog" class="sheet narrow" aria-labelledby="reset-title">
+    <button class="close" type="button" data-close aria-label="Tutup">×</button>
+    <h2 id="reset-title">Buat password baru</h2>
+    <form id="reset-form">
+      <label>Password baru <input id="reset-password" type="password" minlength="8" maxlength="128" required autocomplete="new-password"></label>
+      <label>Ulangi password baru <input id="reset-confirm" type="password" minlength="8" maxlength="128" required autocomplete="new-password"></label>
+      <p class="hint">Minimal 8 karakter.</p>
+      <p id="reset-error" class="error" role="alert" hidden></p>
+      <button id="reset-submit" type="submit">Simpan password</button>
+    </form>
   </dialog>
 </body>
 </html>

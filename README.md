@@ -40,6 +40,8 @@ Every Go service answers `GET /metrics` for Prometheus on port 9091, or `METRICS
 | `http_request_duration_seconds` | `route`. WebSockets aren't timed, because they last as long as the visitor stays |
 | `go_*`, `process_*` | Memory, goroutines, garbage collection and CPU |
 
+The same middleware logs every request as one JSON line with `msg` `request`, `method`, `path`, `route`, `status` and `ms`. A 5xx answer is logged at `ERROR` and anything else at `INFO`, so 5xx answers count toward the ErrorLogsSpike alert in AldiDevOps. The kubelet's `/healthz` and `/readyz` checks aren't logged. Only the path is written, cut at 200 characters, and never the query, which can hold a search or a token. The logs are kept in Loki and shown in Grafana's **Log** dashboard.
+
 The code is `metrics.go` with `metrics_test.go`, the same in each service. Change all copies together.
 
 ## catalog-service

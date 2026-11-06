@@ -2,6 +2,9 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -85,5 +88,56 @@ func TestMetricsEndpointServesTheCounters(t *testing.T) {
 	}
 	if len(found) != 3 {
 		t.Fatalf("/metrics has only %v", found)
+	}
+}
+
+func TestRequestsAreLogged(t *testing.T) {
+	var out bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&out, nil)))
+	defer slog.SetDefault(previous)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {})
+	mux.HandleFunc("GET /things/{id}", func(w http.ResponseWriter, r *http.Request) {})
+	mux.HandleFunc("POST /broken", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+	})
+	handler := instrument(mux)
+	for _, req := range []*http.Request{
+		httptest.NewRequest(http.MethodGet, "/healthz", nil),
+		httptest.NewRequest(http.MethodGet, "/things/7?token=secret", nil),
+		httptest.NewRequest(http.MethodPost, "/broken", nil),
+		httptest.NewRequest(http.MethodGet, "/"+strings.Repeat("a", 300), nil),
+	} {
+		handler.ServeHTTP(httptest.NewRecorder(), req)
+	}
+
+	if strings.Contains(out.String(), "secret") {
+		t.Error("the query was logged")
+	}
+	var lines []map[string]any
+	for _, line := range strings.Split(strings.TrimSpace(out.String()), "\n") {
+		var entry map[string]any
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			t.Fatalf("not JSON: %q", line)
+		}
+		lines = append(lines, entry)
+	}
+	if len(lines) != 3 {
+		t.Fatalf("logged %d lines, want 3 without the health check: %s", len(lines), out.String())
+	}
+	if l := lines[0]; l["level"] != "INFO" || l["msg"] != "request" || l["method"] != "GET" || l["path"] != "/things/7" ||
+		l["route"] != "GET /things/{id}" || l["status"] != float64(200) {
+		t.Errorf("first line %v", l)
+	}
+	if _, ok := lines[0]["ms"].(float64); !ok {
+		t.Errorf("no duration in %v", lines[0])
+	}
+	if l := lines[1]; l["level"] != "ERROR" || l["status"] != float64(502) {
+		t.Errorf("a 5xx answer logged as %v, want ERROR", l)
+	}
+	if l := lines[2]; l["route"] != "unmatched" || len(l["path"].(string)) != maxLoggedPath+3 {
+		t.Errorf("long unmatched path logged as %v", l)
 	}
 }

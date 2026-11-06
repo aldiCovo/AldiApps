@@ -31,12 +31,13 @@ var (
 )
 
 // instrument counts every request by its ServeMux pattern, such as "GET /products/{id}",
-// so the labels stay few whatever paths visitors try.
+// so the labels stay few whatever paths visitors try, and logs it.
 func instrument(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(recorder, r)
+		elapsed := time.Since(start)
 		// The mux writes the matched pattern into the request it was given, which is this one.
 		route := r.Pattern
 		if route == "" {
@@ -44,10 +45,38 @@ func instrument(next http.Handler) http.Handler {
 		}
 		// A WebSocket lasts as long as the visitor stays, which would only blur the latency.
 		if !recorder.hijacked {
-			httpDuration.WithLabelValues(route).Observe(time.Since(start).Seconds())
+			httpDuration.WithLabelValues(route).Observe(elapsed.Seconds())
 		}
 		httpRequests.WithLabelValues(route, strconv.Itoa(recorder.status)).Inc()
+		logRequest(r, route, recorder.status, elapsed)
 	})
+}
+
+// maxLoggedPath keeps a scanner's very long paths from filling the logs.
+const maxLoggedPath = 200
+
+// logRequest writes one line per request, at ERROR when the answer is 5xx, so Loki's
+// ErrorLogsSpike alert sees it. The kubelet's health checks come every few seconds and are
+// left out. Only the path is logged, never the query, which can hold a search or a token.
+func logRequest(r *http.Request, route string, status int, elapsed time.Duration) {
+	if route == "GET /healthz" || route == "GET /readyz" {
+		return
+	}
+	level := slog.LevelInfo
+	if status >= http.StatusInternalServerError {
+		level = slog.LevelError
+	}
+	path := r.URL.Path
+	if len(path) > maxLoggedPath {
+		path = path[:maxLoggedPath] + "..."
+	}
+	slog.LogAttrs(context.Background(), level, "request",
+		slog.String("method", r.Method),
+		slog.String("path", path),
+		slog.String("route", route),
+		slog.Int("status", status),
+		slog.Float64("ms", float64(elapsed.Microseconds())/1000),
+	)
 }
 
 type statusRecorder struct {

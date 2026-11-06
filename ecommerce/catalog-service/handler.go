@@ -75,6 +75,31 @@ func (in *productInput) validate() (err error) {
 	return nil
 }
 
+// maxSalePrice matches the admin pages' price limit.
+const maxSalePrice = 1_000_000_000
+
+type saleInput struct {
+	Price    *int64     `json:"price"`
+	StartsAt *time.Time `json:"starts_at"`
+	EndsAt   *time.Time `json:"ends_at"`
+}
+
+func (in *saleInput) validate(now time.Time) error {
+	switch {
+	case in.Price == nil:
+		return errors.New("price is required")
+	case *in.Price <= 0 || *in.Price > maxSalePrice:
+		return fmt.Errorf("price must be between 1 and %d", maxSalePrice)
+	case in.StartsAt == nil || in.EndsAt == nil:
+		return errors.New("starts_at and ends_at are required")
+	case !in.EndsAt.After(*in.StartsAt):
+		return errors.New("ends_at must be after starts_at")
+	case !in.EndsAt.After(now):
+		return errors.New("ends_at must be in the future")
+	}
+	return nil
+}
+
 type variantInput struct {
 	Size  string `json:"size"`
 	Color string `json:"color"`
@@ -287,6 +312,40 @@ func newHandler(store *Store, internalToken string) http.Handler {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
+	mux.HandleFunc("PUT /products/{id}/sale", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		var in saleInput
+		if !readJSON(w, r, &in) {
+			return
+		}
+		if err := in.validate(time.Now()); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		p, err := store.SetSale(r.Context(), id, *in.Price, *in.StartsAt, *in.EndsAt)
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, p)
+	})
+
+	mux.HandleFunc("DELETE /products/{id}/sale", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		p, err := store.ClearSale(r.Context(), id)
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, p)
+	})
+
 	mux.HandleFunc("POST /products/{id}/variants", func(w http.ResponseWriter, r *http.Request) {
 		id, ok := pathID(w, r)
 		if !ok {
@@ -436,7 +495,8 @@ func writeStoreError(w http.ResponseWriter, err error) {
 	case errors.Is(err, errUnknownCategory):
 		writeError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, errStockOutOfRange), errors.Is(err, errCategoryExists),
-		errors.Is(err, errCategoryInUse), errors.Is(err, errVariantExists):
+		errors.Is(err, errCategoryInUse), errors.Is(err, errVariantExists),
+		errors.Is(err, errSaleNotBelow), errors.Is(err, errPriceBelowSale):
 		writeError(w, http.StatusConflict, err.Error())
 	default:
 		slog.Error("database request failed", "error", err)

@@ -11,7 +11,8 @@ import (
 
 var errUnknownVariant = errors.New("a variant in this order doesn't exist")
 
-// Catalog reads prices when an order is made. The stock is checked later, by the saga.
+// Catalog reads prices when an order is made: a product's price is the sale price while a
+// sale runs. The stock is checked later, by the saga.
 type Catalog struct {
 	url    string
 	client *http.Client

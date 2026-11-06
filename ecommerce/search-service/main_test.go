@@ -326,6 +326,33 @@ func TestEventsKeepTheIndexCurrent(t *testing.T) {
 	env.waitFor(t, "q=gaun", 1)
 	env.waitFor(t, "q=lama")
 	env.waitFor(t, "q=duplikat")
+
+	// A sale's struck-through price comes back with the result, and goes when the sale ends.
+	onSale := product(5, nil, "Kemeja Linen", "")
+	onSale.Price, onSale.RegularPrice, onSale.OriginalPrice = 120000, 150000, int64Ptr(150000)
+	env.publish(t, 40, eventProductUpdated, onSale)
+	waitForPrice(t, env, 120000, int64Ptr(150000))
+	onSale.Price, onSale.OriginalPrice = 150000, nil
+	env.publish(t, 41, eventProductUpdated, onSale)
+	waitForPrice(t, env, 150000, nil)
+}
+
+// waitForPrice waits until the shirt from TestEventsKeepTheIndexCurrent has these prices.
+func waitForPrice(t *testing.T, env *testEnv, price int64, original *int64) {
+	t.Helper()
+	var got Product
+	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
+		result := env.find(t, "q=kemeja")
+		if len(result.Products) != 1 {
+			continue
+		}
+		got = result.Products[0]
+		if got.Price == price && got.RegularPrice == 150000 &&
+			(original == nil) == (got.OriginalPrice == nil) && (original == nil || *original == *got.OriginalPrice) {
+			return
+		}
+	}
+	t.Fatalf("want price %d original %v, got %+v", price, original, got)
 }
 
 func TestEventsWaitInTheQueueWhileTheServiceIsDown(t *testing.T) {

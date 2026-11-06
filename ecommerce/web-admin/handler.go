@@ -103,6 +103,8 @@ func newHandler(adminURL string) http.Handler {
 		{http.MethodPost, "/products", true},
 		{http.MethodPut, "/products/{id}", true},
 		{http.MethodDelete, "/products/{id}", false},
+		{http.MethodPut, "/products/{id}/sale", true},
+		{http.MethodDelete, "/products/{id}/sale", false},
 		{http.MethodPost, "/products/{id}/variants", true},
 		{http.MethodPut, "/variants/{id}", true},
 		{http.MethodDelete, "/variants/{id}", false},

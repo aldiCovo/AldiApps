@@ -87,6 +87,16 @@ func run() error {
 		<-consumerDone
 	}()
 
+	salesDone := make(chan struct{})
+	go func() {
+		defer close(salesDone)
+		announceSales(ctx, store)
+	}()
+	defer func() {
+		stop()
+		<-salesDone
+	}()
+
 	server := &http.Server{
 		Addr:              ":" + port,
 		Handler:           newHandler(store, internalToken),

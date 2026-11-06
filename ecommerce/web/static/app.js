@@ -124,6 +124,24 @@ function addStepper(input) {
   stepper.append(step("Kurangi", "−", () => input.stepDown()), input, step("Tambah", "+", () => input.stepUp()));
 }
 
+// priceParts shows what a customer pays for quantity pieces. While a sale runs it comes after
+// the regular price, struck through. Screen readers don't announce the strike, so it's said.
+function priceParts(product, quantity = 1) {
+  const now = rupiah.format(product.price * quantity);
+  if (!product.original_price) return [now];
+  const was = el("s", "price-was");
+  was.append(el("span", "visually-hidden", "Harga normal "), rupiah.format(product.original_price * quantity));
+  const sale = el("span", "price-sale");
+  sale.append(el("span", "visually-hidden", ", harga promo "), now);
+  return [was, " ", sale];
+}
+
+// saleBadge says how much less a product costs during its sale, such as "Hemat 20%".
+function saleBadge(product) {
+  const percent = Math.floor((1 - product.price / product.original_price) * 100);
+  return el("span", "badge sale", percent >= 1 ? `Hemat ${percent}%` : "Promo");
+}
+
 function productCard(product) {
   const card = el("button", "card");
   card.type = "button";
@@ -135,6 +153,7 @@ function productCard(product) {
   const stock = totalStock(product);
   if (stock === 0) art.append(el("span", "badge sold-out", "Stok habis"));
   else if (stock <= 5) art.append(el("span", "badge", `Sisa ${stock}`));
+  if (product.original_price) art.append(saleBadge(product));
   art.append(el("span", "card-view", "Lihat detail"));
   card.append(art);
   const category = state.categories.get(product.category_id);
@@ -142,7 +161,9 @@ function productCard(product) {
   card.append(el("span", "card-name", product.name));
   const sizes = [...new Set((product.variants || []).map((variant) => variant.size))];
   if (sizes.length > 0) card.append(el("span", "card-meta", `Ukuran ${sizes.join(", ")}`));
-  card.append(el("span", "card-price", rupiah.format(product.price)));
+  const price = el("span", "card-price");
+  price.append(...priceParts(product));
+  card.append(price);
   card.addEventListener("click", () => openProduct(product.id));
   return card;
 }
@@ -283,7 +304,10 @@ async function openProduct(id) {
     $("product-category").textContent = category || "";
     $("product-category").hidden = !category;
     $("product-title").textContent = product.name;
-    $("product-price").textContent = rupiah.format(product.price);
+    $("product-price").replaceChildren(...priceParts(product));
+    if (product.original_price && product.sale) {
+      $("product-price").append(el("span", "price-until", `Harga promo sampai ${dateTime.format(new Date(product.sale.ends_at))}`));
+    }
     $("product-description").textContent = product.description;
     $("product-variants").replaceChildren(...(product.variants || []).map(variantChoice));
     $("order-quantity").value = 1;
@@ -1261,8 +1285,12 @@ function cartRow(item) {
   art.setAttribute("aria-hidden", "true");
   fillSwatch(art, product, "art cart-art");
   const about = el("div");
-  about.append(el("div", "cart-name", product.name), el("div", "cart-detail", `${variant.size} · ${variant.color}`), el("div", "cart-detail", rupiah.format(product.price)));
-  const subtotal = el("div", "cart-subtotal", soldOut ? "" : rupiah.format(product.price * item.quantity));
+  about.append(el("div", "cart-name", product.name), el("div", "cart-detail", `${variant.size} · ${variant.color}`));
+  const unitPrice = el("div", "cart-detail");
+  unitPrice.append(...priceParts(product));
+  about.append(unitPrice);
+  const subtotal = el("div", "cart-subtotal");
+  if (!soldOut) subtotal.append(...priceParts(product, item.quantity));
   const actions = el("div", "cart-actions");
   if (soldOut) {
     actions.append(el("span", "sold-out", "Stok habis"));
@@ -1277,7 +1305,7 @@ function cartRow(item) {
       const wanted = Math.trunc(Number(input.value)) || 1;
       item.quantity = Math.min(Math.max(wanted, 1), Number(input.max));
       input.value = item.quantity;
-      subtotal.textContent = rupiah.format(product.price * item.quantity);
+      subtotal.replaceChildren(...priceParts(product, item.quantity));
       showCartCount();
       updateCartTotal();
       if (!loggedIn) {
@@ -1490,14 +1518,18 @@ function renderCheckoutItems(variants) {
     art.setAttribute("aria-hidden", "true");
     fillSwatch(art, product, "art cart-art");
     const about = el("div");
-    about.append(el("div", "cart-name", product.name), el("div", "cart-detail", `${variant.size} · ${variant.color} · ${item.quantity} × ${rupiah.format(product.price)}`));
+    const detail = el("div", "cart-detail", `${variant.size} · ${variant.color} · ${item.quantity} × `);
+    detail.append(...priceParts(product));
+    about.append(el("div", "cart-name", product.name), detail);
     if (variant.stock < item.quantity) {
       problem = "Stok ada yang kurang dari jumlah pesananmu. Ubah jumlahnya di keranjang dulu.";
       about.append(el("p", "error", variant.stock === 0 ? "Stok habis" : `Stok tinggal ${variant.stock}`));
     }
     const lineTotal = product.price * item.quantity;
     subtotal += lineTotal;
-    row.append(art, about, el("div", "cart-subtotal", rupiah.format(lineTotal)));
+    const lineCell = el("div", "cart-subtotal");
+    lineCell.append(...priceParts(product, item.quantity));
+    row.append(art, about, lineCell);
     return row;
   });
   $("checkout-items").replaceChildren(...rows);

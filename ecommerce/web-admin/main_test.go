@@ -182,6 +182,8 @@ func TestCatalogRoutesPass(t *testing.T) {
 		{http.MethodGet, "/admin/api/products?limit=100&offset=0&category_id=2&x=1", "", "GET /products?category_id=2&limit=100&offset=0 Bearer tok-123 "},
 		{http.MethodPost, "/admin/api/products", `{"name":"Rok","price":1}`, `POST /products Bearer tok-123 {"name":"Rok","price":1}`},
 		{http.MethodPut, "/admin/api/products/5", `{"name":"Rok","price":1}`, `PUT /products/5 Bearer tok-123 {"name":"Rok","price":1}`},
+		{http.MethodPut, "/admin/api/products/5/sale", `{"price":1}`, `PUT /products/5/sale Bearer tok-123 {"price":1}`},
+		{http.MethodDelete, "/admin/api/products/5/sale", "", `DELETE /products/5/sale Bearer tok-123 `},
 		{http.MethodDelete, "/admin/api/products/5", "", "DELETE /products/5 Bearer tok-123 "},
 		{http.MethodPost, "/admin/api/products/5/variants", `{"size":"M","color":"Hitam"}`, `POST /products/5/variants Bearer tok-123 {"size":"M","color":"Hitam"}`},
 		{http.MethodPut, "/admin/api/variants/3", `{"size":"L","color":"Hitam"}`, `PUT /variants/3 Bearer tok-123 {"size":"L","color":"Hitam"}`},

@@ -184,10 +184,12 @@ function voucherForm(voucher, onSaved, onCancel) {
   active.type = "checkbox";
   active.checked = voucher ? voucher.active : true;
 
-  const valueField = field("", value);
+  // The label's own text node changes with the kind, so it must exist from the start.
+  const valueField = field("Diskon (%)", value);
+  const valueLabel = valueField.firstChild;
   const mostField = field("Potongan maksimal (Rp, kosongkan jika tanpa batas)", most);
   const relabel = () => {
-    valueField.firstChild.textContent = kind.value === "percent" ? "Diskon (%)" : "Potongan (Rp)";
+    valueLabel.textContent = kind.value === "percent" ? "Diskon (%)" : "Potongan (Rp)";
     valueField.hidden = kind.value === "free_shipping";
     mostField.hidden = kind.value === "amount";
   };

@@ -460,6 +460,7 @@ func TestOrdersUseTheSessionCookie(t *testing.T) {
 	session := &http.Cookie{Name: sessionCookie, Value: testToken}
 	cases := []struct{ method, path, want string }{
 		{"POST", "/api/orders", "order POST /orders"},
+		{"POST", "/api/vouchers/check", "order POST /vouchers/check"},
 		{"GET", "/api/orders?limit=5", "order GET /orders?limit=5"},
 		{"GET", "/api/orders/12", "order GET /orders/12"},
 		{"POST", "/api/orders/12/pay", "order POST /orders/12/pay"},

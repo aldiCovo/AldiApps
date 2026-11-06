@@ -77,6 +77,7 @@ function show(view) {
   $("orders-view").hidden = view !== "orders";
   $("products-view").hidden = view !== "products";
   $("users-view").hidden = view !== "users";
+  $("vouchers-view").hidden = view !== "vouchers";
   $("who").hidden = view === "login";
   $("nav").hidden = view === "login";
   for (const link of document.querySelectorAll(".nav-link")) {
@@ -93,6 +94,9 @@ function openView(view) {
   } else if (view === "users") {
     show("users");
     loadUsers(true);
+  } else if (view === "vouchers") {
+    show("vouchers");
+    loadVouchers();
   } else {
     show("orders");
     loadOrders(true);
@@ -136,7 +140,7 @@ async function start() {
 function loggedIn(me) {
   currentAdmin = me;
   $("who-name").textContent = `${me.name} (${me.email})`;
-  const views = { "#produk": "products", "#pengguna": "users" };
+  const views = { "#produk": "products", "#pengguna": "users", "#voucher": "vouchers" };
   openView(views[location.hash] || "orders");
 }
 
@@ -241,6 +245,11 @@ function orderCard(order) {
   if (order.shipping) {
     const row = el("div", "item muted");
     row.append(el("span", "", `Ongkir ${order.shipping.courier} ${order.shipping.service}`), el("span", "num", rupiah.format(order.shipping.cost)));
+    items.append(row);
+  }
+  if (order.discount > 0) {
+    const row = el("div", "item muted");
+    row.append(el("span", "", `Voucher ${order.voucher_code}`), el("span", "num", `−${rupiah.format(order.discount)}`));
     items.append(row);
   }
   const total = el("div", "item total");

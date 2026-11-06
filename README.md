@@ -162,13 +162,22 @@ Every request needs the `Authorization: Bearer <token>` header from user-service
 
 | Request | Does |
 |---|---|
-| `POST /orders` | Creates an order from `{"items": [{"variant_id", "quantity"}]}`, with 1 to 20 different variants and a quantity of 1 to 20 each. Answers 409 if the user already has 5 open orders, and 503 while catalog-service is down |
+| `POST /orders` | Creates an order from `{"items": [{"variant_id", "quantity"}]}`, with 1 to 20 different variants and a quantity of 1 to 20 each, and an optional `voucher_code`. Answers 409 if the user already has 5 open orders, 422 if the voucher can't be used, and 503 while catalog-service is down |
+| `POST /vouchers/check` | What `{"voucher_code", "items", "shipping_option", "province"}` would take off, with the voucher's terms, without holding it. The courier and province are optional; without them free shipping takes 0 so far |
 | `GET /orders?limit=20&offset=0` | Lists the user's orders, newest first |
 | `GET /orders/{id}` | Returns one |
 | `POST /orders/{id}/pay` | Asks for a simulated payment with `{"simulate": "success"}` or `{"simulate": "failure"}`. Answers 202, or 409 if the order isn't waiting for payment |
 | `POST /orders/{id}/cancel` | Cancels an order that is waiting for payment and returns its stock. Answers 409 in any other status |
 
 Prices and names are copied from catalog-service when the order is created, so later catalog changes don't touch it.
+
+#### Vouchers
+
+A voucher takes a percentage of the items (`percent`, with an optional `max_discount`), an amount off the items (`amount`), or some or all of the shipping (`free_shipping`, with an optional `max_discount`). It never takes more than the items, or the shipping, cost. Each has a minimum subtotal, an optional total quota, a limit per account, a start and an end, and can be turned off.
+
+The order keeps the code and the `discount`, and its `total` is the items plus shipping minus the discount. Creating the order locks the voucher's row, so orders made at the same moment can't pass its quota together. Only orders that still hold the voucher count: one that is rejected or cancelled gives its use back, to the quota and to the account.
+
+A voucher that can't be used answers 422 with a `reason`: `not_found` (also for one that is turned off), `not_started`, `expired`, `used_up`, `already_used` or `min_subtotal`, which also gives `min_subtotal`. The shop words each one.
 
 | Status | Means |
 |---|---|
@@ -190,6 +199,9 @@ These need `Authorization: Bearer <INTERNAL_TOKEN>` instead of a login token, an
 |---|---|
 | `GET /internal/orders?status=paid&limit=20&offset=0` | Lists orders, newest first, optionally with one status |
 | `GET /internal/orders/{id}` | Returns one |
+| `GET /internal/vouchers` | Every voucher, newest first, each with `used`: the orders holding it now |
+| `POST /internal/vouchers`, `PUT /internal/vouchers/{id}` | Makes or changes a voucher from `{"code", "description", "kind", "value", "max_discount", "min_subtotal", "quota", "per_user_limit", "starts_at", "ends_at", "active"}`. A code is 3 to 20 letters or digits, stored in capitals, and answers 409 if another voucher has it. Orders keep the code they were made with |
+| `DELETE /internal/vouchers/{id}` | Deletes a voucher no order has used. One that was used answers 409 and can only be turned off |
 | `POST /internal/orders/{id}/status` | Moves a paid order one step on with `{"status": "packed"}`, `{"status": "shipped", "tracking_number": "JP1234567890"}` or `{"status": "completed"}`. A tracking number is 6 to 40 letters, digits or dashes, and is stored in capitals. Answers 409 if the order isn't in the step before, so a step can't be skipped or done twice |
 
 Shipping and completing send `order.shipped` and `order.completed`, for the customer's email. Every step sends the customer's browser a signal.
@@ -212,7 +224,7 @@ After every status change commits, it publishes `{"order_id", "status"}` to `ord
 | Event | Exchange | `data` |
 |---|---|---|
 | `order.created` | `order.events` | `{"order_id", "items": [{"variant_id", "quantity"}]}` |
-| `order.cancelled` | `order.events` | `{"order_id", "user_id", "reason", "total", "items"}` |
+| `order.cancelled` | `order.events` | `{"order_id", "user_id", "reason", "total", "items"}`, and `discount` and `voucher_code` when a voucher was used |
 | `payment.requested` | `order.events` | `{"order_id", "amount", "outcome"}` |
 | `order.paid`, `order.rejected` | `order.events` | `{"order_id", "user_id", "reason", "total", "items"}`, for its email |
 
@@ -301,6 +313,7 @@ The only way in for the admin pages. It has no database. Every request except `P
 | `PUT`, `DELETE /photos/categories/{id}` | Puts or removes a category's photo |
 | `GET /users?q=&role=&limit=&offset=` | Accounts from user-service, as its `/internal/users` |
 | `PUT /users/{id}/role` | Makes an account an admin or a customer with `{"role"}`. An admin can't change their own role (409), and user-service keeps at least one admin |
+| `GET`, `POST /vouchers`, `PUT`, `DELETE /vouchers/{id}` | order-service's voucher routes |
 
 catalog-service checks the changes itself, and admin-service passes its answers on, except that a refused internal token answers 502, so it can't look like a logged-out admin. Every change is logged with the admin's id.
 
@@ -324,6 +337,7 @@ The admin pages, under `/admin` on the shop's domain, separate from `web`. Its l
 | `POST /admin/api/orders/{id}/status` | admin-service, with the token from the cookie |
 | The category, product, variant and stock routes above, under `/admin/api` | admin-service, with the token from the cookie. Every change, including `DELETE`, must be sent as JSON |
 | `GET /admin/api/users`, `PUT /admin/api/users/{id}/role` | admin-service, with the token from the cookie. A role change must be sent as JSON |
+| `GET`, `POST /admin/api/vouchers`, `PUT`, `DELETE /admin/api/vouchers/{id}` | admin-service, with the token from the cookie. Every change must be sent as JSON |
 | The photo routes above, under `/admin/api` | admin-service, with the token from the cookie. An upload must be sent as `image/jpeg`, `image/png` or `image/webp`, which a form on another site can't send, and other changes as JSON |
 
 The *Produk* page (`/admin/#produk`) manages categories, products with their price, category and description, and each product's variants. Stock changes by an amount added or taken away, not by a new total, so orders placed meanwhile aren't overwritten. Deleting a product or variant asks first, and old orders keep their own copy of names and prices.
@@ -331,6 +345,8 @@ The *Produk* page (`/admin/#produk`) manages categories, products with their pri
 Each product has four photo places; *Jadikan utama* makes a photo the first, the one on the shop's card. *Kelola kategori* gives each category its photo. Before uploading, the browser turns a photo into a JPEG of at most 1600 pixels a side, which keeps uploads small and drops the location a phone camera writes into it.
 
 The *Pengguna* page (`/admin/#pengguna`) lists accounts, newest first, with a search by name or email and tabs for admins and customers. *Jadikan admin* and *Cabut admin* ask first. A demoted admin is out on their next request, and their own account shows no button.
+
+The *Voucher* page (`/admin/#voucher`) makes, changes, turns off and deletes vouchers, and shows how many orders hold each. Only an unused voucher can be deleted, after asking first.
 
 The *Pesanan* page lists orders by step: *Perlu dikemas* (paid), *Dikemas*, *Dikirim*, *Selesai* and *Semua*. Each order offers only its next step, and shipping asks for the tracking number. It needs `ADMIN_URL`.
 
@@ -365,13 +381,14 @@ Serves the pages in `static/`, and passes on only these requests:
 | `POST /api/logout` | Handled here. It only clears the cookie |
 | `GET /api/events` | realtime-service, as a WebSocket with the token from the cookie. Answers 403 if `Origin` isn't this site |
 | `POST /api/orders`, `GET /api/orders`, `GET /api/orders/{id}`, `POST /api/orders/{id}/pay` | order-service, with the token from the cookie |
+| `POST /api/vouchers/check` | order-service, with the token from the cookie |
 | `GET` and `DELETE /api/cart`, `POST /api/cart/merge`, `PUT` and `DELETE /api/cart/items/{id}` | cart-service, with the token from the cookie |
 
 Anything else answers 404, so the other services' write endpoints stay inside the cluster, and a new endpoint stays private until it's added here.
 
 Login keeps the token in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie, so page scripts can't read it. Because of `Secure`, browsers only keep it on HTTPS and `localhost`. `POST` requests must be `application/json`, which a form on another site can't send without asking. A WebSocket handshake carries the cookie without asking, so `/api/events` checks `Origin` instead.
 
-A guest's cart lives in the browser's `localStorage`, so it needs no account. A customer's lives in cart-service, so it follows them to any browser and leaves the browser when they log out. Logging in moves a guest's cart to the account. The browser's copy stays until the account has it. Either way the cart holds only ids and quantities, and reads names, prices and stock again each time it opens. Checkout sends one `POST /api/orders`, which holds at most 20 different variants, up to 20 of each. An order is all or nothing: if one item is short, the whole order is rejected, and the customer can put it back in the cart.
+A guest's cart lives in the browser's `localStorage`, so it needs no account. A customer's lives in cart-service, so it follows them to any browser and leaves the browser when they log out. Logging in moves a guest's cart to the account. The browser's copy stays until the account has it. Either way the cart holds only ids and quantities, and reads names, prices and stock again each time it opens. Checkout sends one `POST /api/orders`, which holds at most 20 different variants, up to 20 of each. An order is all or nothing: if one item is short, the whole order is rejected, and the customer can put it back in the cart. At checkout a voucher code is checked with `/api/vouchers/check`, and the discount follows the chosen courier; order-service checks it again when the order is made, and if it stopped being usable meanwhile, nothing is ordered and the checkout says why.
 
 Photos come from `PHOTOS_DIR`, which the admin pages fill. A product without photos shows its category's photo, and a category without one gets a drawn garment for Dress, Blouse, Rok and Hijab, or the first letter of its name. The heading font is Cormorant Garamond, served from `static/fonts/` under its [license](ecommerce/web/static/fonts/OFL.txt), because the Content-Security-Policy only allows this site's own files.
 

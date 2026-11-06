@@ -101,6 +101,20 @@ func newTestServer(t *testing.T) (*httptest.Server, *fakes) {
 		advance := f.advance
 		f.mu.Unlock()
 		switch {
+		case r.URL.Path == "/internal/vouchers" && r.Method == http.MethodGet:
+			io.WriteString(w, `{"vouchers":[{"id":1,"code":"HEMAT10","used":3}]}`)
+		case r.URL.Path == "/internal/vouchers" && r.Method == http.MethodPost:
+			if strings.Contains(string(body), `"code":"TAKEN"`) {
+				w.WriteHeader(http.StatusConflict)
+				io.WriteString(w, `{"error":"another voucher has this code"}`)
+				return
+			}
+			w.WriteHeader(http.StatusCreated)
+			io.WriteString(w, `{"id":2,"code":"BARU"}`)
+		case r.URL.Path == "/internal/vouchers/1" && r.Method == http.MethodPut:
+			io.WriteString(w, `{"id":1,"code":"HEMAT20"}`)
+		case r.URL.Path == "/internal/vouchers/1" && r.Method == http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
 		case r.URL.Path == "/internal/orders":
 			io.WriteString(w, `{"orders":[{"id":9,"user_id":2,"status":"paid","total":12345678901234567},{"id":8,"user_id":7,"status":"paid","total":1}]}`)
 		case r.URL.Path == "/internal/orders/9/status":
@@ -342,5 +356,39 @@ func TestCatalogChangesNeedAnAdminAndCarryTheInternalToken(t *testing.T) {
 	f.mu.Unlock()
 	if status, _ := do(t, server, http.MethodGet, "/products", "admin-token", ""); status != http.StatusBadGateway {
 		t.Fatalf("wrong internal token: %d", status)
+	}
+}
+
+func TestVoucherRoutesGoToOrderService(t *testing.T) {
+	server, f := newTestServer(t)
+	for _, c := range []struct {
+		method, path, body string
+		status             int
+		answer             string
+	}{
+		{http.MethodGet, "/vouchers", "", http.StatusOK, `"code":"HEMAT10"`},
+		{http.MethodPost, "/vouchers", `{"code":"BARU"}`, http.StatusCreated, `"code":"BARU"`},
+		{http.MethodPost, "/vouchers", `{"code":"TAKEN"}`, http.StatusConflict, "another voucher"},
+		{http.MethodPost, "/vouchers", `not json`, http.StatusBadRequest, "invalid JSON"},
+		{http.MethodPut, "/vouchers/1", `{"code":"HEMAT20"}`, http.StatusOK, `"code":"HEMAT20"`},
+		{http.MethodPut, "/vouchers/abc", `{}`, http.StatusNotFound, "voucher not found"},
+		{http.MethodDelete, "/vouchers/1", "", http.StatusNoContent, ""},
+		{http.MethodDelete, "/vouchers/5", "", http.StatusNotFound, ""},
+	} {
+		status, body := do(t, server, c.method, c.path, "admin-token", c.body)
+		if status != c.status || !strings.Contains(body, c.answer) {
+			t.Errorf("%s %s: %d %s", c.method, c.path, status, body)
+		}
+	}
+	f.mu.Lock()
+	hits := strings.Join(f.orderHits, "\n")
+	f.mu.Unlock()
+	if strings.Contains(hits, "abc") || strings.Contains(hits, "not json") {
+		t.Fatalf("a refused request reached order-service: %s", hits)
+	}
+	for _, token := range []string{"", "customer-token"} {
+		if status, _ := do(t, server, http.MethodPost, "/vouchers", token, `{"code":"X"}`); status != http.StatusUnauthorized && status != http.StatusForbidden {
+			t.Fatalf("%q: %d", token, status)
+		}
 	}
 }

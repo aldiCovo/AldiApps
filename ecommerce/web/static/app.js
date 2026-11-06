@@ -8,15 +8,17 @@ const state = { q: "", categoryId: "", size: "", color: "", inStock: false, offs
 let latestRequest = 0;
 
 class ApiError extends Error {
-  constructor(status) {
+  constructor(status, body = null) {
     super(`request failed with status ${status}`);
     this.status = status;
+    // The service's JSON answer, such as why a voucher was refused.
+    this.body = body;
   }
 }
 
 async function api(path, options = {}) {
   const response = await fetch(`/api${path}`, options);
-  if (!response.ok) throw new ApiError(response.status);
+  if (!response.ok) throw new ApiError(response.status, await response.json().catch(() => null));
   return response.status === 204 ? null : response.json();
 }
 
@@ -933,6 +935,7 @@ function orderDetail(order) {
   sums.append(sumRow("Subtotal", rupiah.format(subtotal)));
   const shipping = order.shipping;
   if (shipping) sums.append(sumRow(`Ongkir ${shipping.courier} ${shipping.service}`, rupiah.format(shipping.cost)));
+  if (order.discount > 0) sums.append(sumRow(`Voucher ${order.voucher_code}`, `−${rupiah.format(order.discount)}`, "sum-row discount-row"));
   sums.append(sumRow("Total", rupiah.format(order.total), "cart-total"));
   box.append(sums);
 
@@ -1057,7 +1060,21 @@ function openOrders() {
   refreshOrders();
 }
 
+// Why order-service refused a voucher, in the shop's words.
+function voucherMessage(body) {
+  const reason = body && body.reason;
+  if (reason === "min_subtotal") return `Voucher ini butuh belanja minimal ${rupiah.format(body.min_subtotal)}.`;
+  return {
+    not_found: "Kode voucher tidak ditemukan.",
+    not_started: "Voucher ini belum bisa dipakai. Promonya belum dimulai.",
+    expired: "Masa berlaku voucher ini sudah habis.",
+    used_up: "Kuota voucher ini sudah habis.",
+    already_used: "Kamu sudah memakai voucher ini sebanyak yang diizinkan.",
+  }[reason] || "Voucher ini tidak bisa dipakai.";
+}
+
 function orderError(error) {
+  if (error.status === 422) return voucherMessage(error.body);
   const messages = {
     400: "Ada barang yang sudah tidak tersedia. Periksa lagi pilihanmu.",
     401: "Silakan masuk lagi.",
@@ -1394,6 +1411,9 @@ let latestCheckout = 0;
 let shippingTable = null;
 let chosenShipping = "";
 let checkoutSubtotal = 0;
+// The voucher the customer applied, with its terms, so the discount follows the courier.
+// order-service checks it again when the order is made.
+let appliedVoucher = null;
 
 async function openCheckout(items, fromCart) {
   if (!loggedIn) {
@@ -1405,6 +1425,8 @@ async function openCheckout(items, fromCart) {
   checkoutFromCart = fromCart;
   checkoutBlocked = true;
   for (const id of ["checkout-error", "checkout-problem", "address-error"]) $(id).hidden = true;
+  $("voucher-code").value = "";
+  showVoucher(null);
   $("checkout-body").hidden = true;
   $("checkout-status").textContent = "Memuat…";
   $("checkout-dialog").showModal();
@@ -1554,11 +1576,84 @@ function renderShipping() {
   updateCheckoutSums();
 }
 
+// The same sum as order-service: a share or an amount of the items, or the shipping, never
+// more than either.
+function voucherDiscount(voucher, subtotal, shippingCost) {
+  let discount = voucher.kind === "percent" ? Math.floor(subtotal * voucher.value / 100)
+    : voucher.kind === "amount" ? voucher.value : shippingCost;
+  if (voucher.max_discount) discount = Math.min(discount, voucher.max_discount);
+  return Math.min(discount, voucher.kind === "free_shipping" ? shippingCost : subtotal);
+}
+
 function updateCheckoutSums() {
   const quote = shippingQuote();
+  const shippingCost = quote ? quote.cost : 0;
+  const discount = appliedVoucher ? voucherDiscount(appliedVoucher, checkoutSubtotal, shippingCost) : 0;
   $("checkout-subtotal").textContent = rupiah.format(checkoutSubtotal);
   $("checkout-shipping").textContent = quote ? rupiah.format(quote.cost) : "—";
-  $("checkout-total").textContent = rupiah.format(checkoutSubtotal + (quote ? quote.cost : 0));
+  $("checkout-discount-row").hidden = !appliedVoucher;
+  if (appliedVoucher) {
+    $("checkout-discount-label").textContent = appliedVoucher.kind === "free_shipping" ? `Gratis ongkir (${appliedVoucher.code})` : `Voucher ${appliedVoucher.code}`;
+    $("checkout-discount").textContent = `−${rupiah.format(discount)}`;
+  }
+  $("checkout-total").textContent = rupiah.format(checkoutSubtotal + shippingCost - discount);
+}
+
+function voucherSummary(voucher) {
+  const most = voucher.max_discount ? `, maksimal ${rupiah.format(voucher.max_discount)}` : "";
+  if (voucher.kind === "percent") return `Diskon ${voucher.value}%${most}`;
+  if (voucher.kind === "amount") return `Potongan ${rupiah.format(voucher.value)}`;
+  return `Gratis ongkir${most}`;
+}
+
+// Shows the applied voucher, or the field to type one.
+function showVoucher(voucher) {
+  appliedVoucher = voucher;
+  $("voucher-form").hidden = Boolean(voucher);
+  $("voucher-applied").hidden = !voucher;
+  $("voucher-error").hidden = true;
+  if (voucher) {
+    $("voucher-applied-code").textContent = voucher.code;
+    $("voucher-applied-text").textContent = `· ${voucher.description || voucherSummary(voucher)}`;
+  }
+  updateCheckoutSums();
+}
+
+function voucherProblem(message) {
+  $("voucher-error").textContent = message;
+  $("voucher-error").hidden = false;
+}
+
+async function submitVoucher(event) {
+  event.preventDefault();
+  const code = $("voucher-code").value.trim();
+  if (!code) {
+    voucherProblem("Masukkan kode voucher dulu.");
+    return;
+  }
+  $("voucher-apply").disabled = true;
+  $("voucher-error").hidden = true;
+  try {
+    const quote = shippingQuote();
+    const voucher = await post("/vouchers/check", {
+      voucher_code: code,
+      items: checkoutItems.map(({ variant_id, quantity }) => ({ variant_id, quantity })),
+      shipping_option: quote ? quote.id : "",
+      province: quote ? checkoutProvince() : "",
+    });
+    showVoucher(voucher);
+  } catch (error) {
+    if (error.status === 401) {
+      renderAccount(null);
+      openAuth();
+      return;
+    }
+    voucherProblem(error.status === 422 ? voucherMessage(error.body)
+      : error.status === 429 ? "Terlalu banyak percobaan. Tunggu sebentar lalu coba lagi."
+      : "Voucher belum bisa dicek. Coba lagi sebentar lagi.");
+  } finally {
+    $("voucher-apply").disabled = false;
+  }
 }
 
 async function saveAddress() {
@@ -1608,11 +1703,19 @@ async function submitCheckout() {
   $("checkout-error").hidden = true;
   try {
     if (editing && !(await trySaveAddress())) return;
-    await post("/orders", { items: checkoutItems.map(({ variant_id, quantity }) => ({ variant_id, quantity })), shipping_address: savedAddress, shipping_option: chosenShipping });
+    const order = { items: checkoutItems.map(({ variant_id, quantity }) => ({ variant_id, quantity })), shipping_address: savedAddress, shipping_option: chosenShipping };
+    if (appliedVoucher) order.voucher_code = appliedVoucher.code;
+    await post("/orders", order);
   } catch (error) {
     const message = orderError(error);
     if (error.status === 401) {
       openAuth();
+      return;
+    }
+    // The voucher stopped being usable since it was applied, such as its quota running out.
+    if (error.status === 422) {
+      showVoucher(null);
+      voucherProblem(`${message} Pesanan belum dibuat. Lanjutkan tanpa voucher atau pakai kode lain.`);
       return;
     }
     $("checkout-error").textContent = message;
@@ -1677,6 +1780,11 @@ $("cart-note-open").addEventListener("click", () => {
 });
 $("cart-checkout").addEventListener("click", checkout);
 $("checkout-submit").addEventListener("click", submitCheckout);
+$("voucher-form").addEventListener("submit", submitVoucher);
+$("voucher-remove").addEventListener("click", () => {
+  showVoucher(null);
+  $("voucher-code").focus();
+});
 $("address-form").addEventListener("submit", submitAddress);
 $("address-edit").addEventListener("click", () => {
   showAddress(true);

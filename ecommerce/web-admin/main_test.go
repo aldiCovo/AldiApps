@@ -240,3 +240,36 @@ func TestUserRoutesPass(t *testing.T) {
 		t.Fatal("admin-service was called")
 	}
 }
+
+func TestVoucherRoutesPass(t *testing.T) {
+	server, s := newTestServer(t)
+	cookie := "admin_session=tok-123"
+	for _, c := range []struct{ method, path, body, want string }{
+		{http.MethodGet, "/admin/api/vouchers?x=1", "", "GET /vouchers Bearer tok-123 "},
+		{http.MethodPost, "/admin/api/vouchers", `{"code":"HEMAT10"}`, `POST /vouchers Bearer tok-123 {"code":"HEMAT10"}`},
+		{http.MethodPut, "/admin/api/vouchers/4", `{"code":"HEMAT20"}`, `PUT /vouchers/4 Bearer tok-123 {"code":"HEMAT20"}`},
+		{http.MethodDelete, "/admin/api/vouchers/4", "", "DELETE /vouchers/4 Bearer tok-123 "},
+	} {
+		if resp := request(t, server, c.method, c.path, c.body, cookie, true); resp.StatusCode != http.StatusOK {
+			t.Fatalf("%s %s: %d", c.method, c.path, resp.StatusCode)
+		}
+		if got := s.requests[len(s.requests)-1]; got != c.want {
+			t.Fatalf("sent %q, want %q", got, c.want)
+		}
+	}
+	before := len(s.requests)
+	for _, c := range []struct{ method, path, body string }{
+		{http.MethodPost, "/admin/api/vouchers", `{"code":"X"}`},
+		{http.MethodDelete, "/admin/api/vouchers/4", ""},
+	} {
+		if resp := request(t, server, c.method, c.path, c.body, cookie, false); resp.StatusCode != http.StatusUnsupportedMediaType {
+			t.Fatalf("%s %s as a form: %d", c.method, c.path, resp.StatusCode)
+		}
+	}
+	if resp := request(t, server, http.MethodPut, "/admin/api/vouchers/abc", `{}`, cookie, true); resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("bad id: %d", resp.StatusCode)
+	}
+	if len(s.requests) != before {
+		t.Fatalf("admin-service was called: %v", s.requests[before:])
+	}
+}

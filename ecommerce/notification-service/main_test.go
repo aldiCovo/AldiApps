@@ -262,3 +262,18 @@ func TestUserClient(t *testing.T) {
 		t.Error("a wrong token must be an error")
 	}
 }
+
+func TestEmailShowsTheVoucherDiscount(t *testing.T) {
+	user := User{Email: "a@example.com", Name: "A"}
+	var order FinishedOrder
+	if err := json.Unmarshal([]byte(`{"order_id":8,"user_id":1,"total":660000,"discount":50000,"voucher_code":"HEMAT10","items":[]}`), &order); err != nil {
+		t.Fatal(err)
+	}
+	if got := compose(eventOrderPaid, order, user).Body; !strings.Contains(got, "Potongan voucher HEMAT10: -Rp 50.000\r\nTotal: Rp 660.000") {
+		t.Fatalf("body %q", got)
+	}
+	order.Discount, order.VoucherCode = 0, ""
+	if got := compose(eventOrderPaid, order, user).Body; strings.Contains(got, "Potongan") {
+		t.Fatalf("an order without a voucher mentions one: %q", got)
+	}
+}

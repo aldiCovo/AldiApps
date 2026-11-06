@@ -107,6 +107,10 @@ func newHandler(adminURL string) http.Handler {
 		{http.MethodPut, "/variants/{id}", true},
 		{http.MethodDelete, "/variants/{id}", false},
 		{http.MethodPatch, "/variants/{id}/stock", true},
+		{http.MethodGet, "/vouchers", false},
+		{http.MethodPost, "/vouchers", true},
+		{http.MethodPut, "/vouchers/{id}", true},
+		{http.MethodDelete, "/vouchers/{id}", false},
 	} {
 		mux.HandleFunc(route.method+" /admin/api"+route.path, func(w http.ResponseWriter, r *http.Request) {
 			path := route.path
@@ -206,7 +210,7 @@ func versionedPage(files fs.FS) ([]byte, map[string]string) {
 		panic(err)
 	}
 	assets := make(map[string]string)
-	for _, name := range []string{"admin.css", "admin.js", "products.js", "photos.js", "users.js"} {
+	for _, name := range []string{"admin.css", "admin.js", "products.js", "photos.js", "users.js", "vouchers.js"} {
 		content, err := fs.ReadFile(files, name)
 		if err != nil {
 			panic(err)

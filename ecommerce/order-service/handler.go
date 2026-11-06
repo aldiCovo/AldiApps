@@ -29,6 +29,8 @@ type orderInput struct {
 	} `json:"items"`
 	ShippingAddress *Address `json:"shipping_address"`
 	ShippingOption  string   `json:"shipping_option"`
+	// Optional.
+	VoucherCode string `json:"voucher_code"`
 }
 
 func (in *orderInput) validate() error {
@@ -38,6 +40,10 @@ func (in *orderInput) validate() error {
 	if err := in.ShippingAddress.validate(); err != nil {
 		return fmt.Errorf("shipping_address: %w", err)
 	}
+	return in.validateItems()
+}
+
+func (in *orderInput) validateItems() error {
 	if len(in.Items) == 0 {
 		return errors.New("items is required")
 	}
@@ -119,25 +125,59 @@ func newHandler(store *Store, verifier *Verifier, catalog *Catalog, internalToke
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		items := make([]OrderItem, len(in.Items))
-		for i, item := range in.Items {
-			var err error
-			if items[i], err = catalog.Item(r.Context(), item.VariantID, item.Quantity); err != nil {
-				if errors.Is(err, errUnknownVariant) {
-					writeError(w, http.StatusBadRequest, err.Error())
-					return
-				}
-				slog.Error("reading the catalog failed", "error", err)
-				writeError(w, http.StatusServiceUnavailable, "the catalog is not available")
-				return
-			}
+		items, ok := readItems(w, r, catalog, &in)
+		if !ok {
+			return
 		}
-		order, err := store.Create(r.Context(), userID, items, *in.ShippingAddress, shipping)
+		order, err := store.Create(r.Context(), userID, items, *in.ShippingAddress, shipping, in.VoucherCode)
 		if err != nil {
 			writeStoreError(w, err)
 			return
 		}
 		writeJSON(w, http.StatusCreated, order)
+	}))
+
+	// What a voucher would take off this checkout. The items are priced from the catalog, as
+	// the order will be, and the province and courier price the shipping.
+	mux.HandleFunc("POST /vouchers/check", authenticated(func(w http.ResponseWriter, r *http.Request, userID int64) {
+		var in struct {
+			orderInput
+			Province string `json:"province"`
+		}
+		if !readJSON(w, r, &in) {
+			return
+		}
+		if strings.TrimSpace(in.VoucherCode) == "" {
+			writeError(w, http.StatusBadRequest, "voucher_code is required")
+			return
+		}
+		if err := in.validateItems(); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		// Without a courier yet, free shipping is worth nothing so far.
+		var shippingCost int64
+		if in.ShippingOption != "" {
+			shipping, err := quote(in.ShippingOption, in.Province)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			shippingCost = shipping.Cost
+		}
+		items, ok := readItems(w, r, catalog, &in.orderInput)
+		if !ok {
+			return
+		}
+		voucher, discount, err := store.CheckVoucher(r.Context(), userID, in.VoucherCode, subtotalOf(items), shippingCost)
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"code": voucher.Code, "description": voucher.Description, "kind": voucher.Kind, "value": voucher.Value,
+			"max_discount": voucher.MaxDiscount, "min_subtotal": voucher.MinSubtotal, "discount": discount,
+		})
 	}))
 
 	mux.HandleFunc("GET /orders", authenticated(func(w http.ResponseWriter, r *http.Request, userID int64) {
@@ -224,6 +264,25 @@ func newHandler(store *Store, verifier *Verifier, catalog *Catalog, internalToke
 	return mux
 }
 
+// readItems prices the order's items from the catalog. It answers the request itself when
+// that fails.
+func readItems(w http.ResponseWriter, r *http.Request, catalog *Catalog, in *orderInput) ([]OrderItem, bool) {
+	items := make([]OrderItem, len(in.Items))
+	for i, item := range in.Items {
+		var err error
+		if items[i], err = catalog.Item(r.Context(), item.VariantID, item.Quantity); err != nil {
+			if errors.Is(err, errUnknownVariant) {
+				writeError(w, http.StatusBadRequest, err.Error())
+				return nil, false
+			}
+			slog.Error("reading the catalog failed", "error", err)
+			writeError(w, http.StatusServiceUnavailable, "the catalog is not available")
+			return nil, false
+		}
+	}
+	return items, true
+}
+
 func readJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodyBytes))
 	decoder.DisallowUnknownFields()
@@ -240,12 +299,16 @@ func readJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 }
 
 func writeStoreError(w http.ResponseWriter, err error) {
+	var refusal *voucherRefusal
 	switch {
-	case errors.Is(err, errNotFound):
+	case errors.As(err, &refusal):
+		writeVoucherRefusal(w, refusal)
+	case errors.Is(err, errNotFound), errors.Is(err, errVoucherNotFound):
 		writeError(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, errBadStep), errors.Is(err, errBadTracking):
 		writeError(w, http.StatusBadRequest, err.Error())
-	case errors.Is(err, errCannotPay), errors.Is(err, errCannotCancel), errors.Is(err, errTooManyOrders), errors.Is(err, errCannotAdvance):
+	case errors.Is(err, errCannotPay), errors.Is(err, errCannotCancel), errors.Is(err, errTooManyOrders), errors.Is(err, errCannotAdvance),
+		errors.Is(err, errVoucherCodeTaken), errors.Is(err, errVoucherInUse):
 		writeError(w, http.StatusConflict, err.Error())
 	default:
 		slog.Error("database request failed", "error", err)

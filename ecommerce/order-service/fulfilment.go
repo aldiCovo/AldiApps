@@ -55,7 +55,7 @@ const adminColumns = "user_id, " + orderColumns
 func scanAdminOrder(row pgx.Row) (AdminOrder, error) {
 	var a AdminOrder
 	o := &a.Order
-	err := row.Scan(&a.UserID, &o.ID, &o.Status, &o.Reason, &o.Total, &o.ExpiresAt, &o.ShippingAddress, &o.Shipping,
+	err := row.Scan(&a.UserID, &o.ID, &o.Status, &o.Reason, &o.Total, &o.Discount, &o.VoucherCode, &o.ExpiresAt, &o.ShippingAddress, &o.Shipping,
 		&o.CreatedAt, &o.UpdatedAt, &o.PaidAt, &o.PackedAt, &o.ShippedAt, &o.CompletedAt, &o.TrackingNumber)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return AdminOrder{}, errNotFound
@@ -146,7 +146,7 @@ func (s *Store) Advance(ctx context.Context, id int64, to, tracking string) (a A
 		}
 		a = list[0]
 		if eventType, found := stepEvents[to]; found {
-			event := orderFinishedEvent{OrderID: a.ID, UserID: a.UserID, Total: a.Total, Items: a.Items}
+			event := orderFinishedEvent{OrderID: a.ID, UserID: a.UserID, Total: a.Total, Items: a.Items, Discount: a.Discount, VoucherCode: a.VoucherCode}
 			if to == statusShipped {
 				event.Shipping, event.TrackingNumber = a.Shipping, a.TrackingNumber
 			}
@@ -178,6 +178,15 @@ func addInternalRoutes(mux *http.ServeMux, store *Store, internalToken string) {
 		id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 		if err != nil || id <= 0 {
 			writeError(w, http.StatusNotFound, errNotFound.Error())
+			return 0, false
+		}
+		return id, true
+	}
+
+	voucherID := func(w http.ResponseWriter, r *http.Request) (int64, bool) {
+		id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+		if err != nil || id <= 0 {
+			writeError(w, http.StatusNotFound, errVoucherNotFound.Error())
 			return 0, false
 		}
 		return id, true
@@ -223,6 +232,65 @@ func addInternalRoutes(mux *http.ServeMux, store *Store, internalToken string) {
 			return
 		}
 		writeJSON(w, http.StatusOK, order)
+	}))
+
+	mux.HandleFunc("GET /internal/vouchers", internal(func(w http.ResponseWriter, r *http.Request) {
+		list, err := store.ListVouchers(r.Context())
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"vouchers": list})
+	}))
+
+	mux.HandleFunc("POST /internal/vouchers", internal(func(w http.ResponseWriter, r *http.Request) {
+		var in voucherInput
+		if !readJSON(w, r, &in) {
+			return
+		}
+		if err := in.validate(); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		voucher, err := store.CreateVoucher(r.Context(), in)
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, voucher)
+	}))
+
+	mux.HandleFunc("PUT /internal/vouchers/{id}", internal(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := voucherID(w, r)
+		if !ok {
+			return
+		}
+		var in voucherInput
+		if !readJSON(w, r, &in) {
+			return
+		}
+		if err := in.validate(); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		voucher, err := store.UpdateVoucher(r.Context(), id, in)
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, voucher)
+	}))
+
+	mux.HandleFunc("DELETE /internal/vouchers/{id}", internal(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := voucherID(w, r)
+		if !ok {
+			return
+		}
+		if err := store.DeleteVoucher(r.Context(), id); err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}))
 
 	mux.HandleFunc("POST /internal/orders/{id}/status", internal(func(w http.ResponseWriter, r *http.Request) {

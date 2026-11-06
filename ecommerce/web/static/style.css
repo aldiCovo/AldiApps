@@ -302,6 +302,16 @@ legend { margin-bottom: 10px; padding: 0; font-size: .92rem; font-weight: 600; }
 .checkout-sums { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
 .sum-row { display: flex; justify-content: space-between; margin: 0 0 6px; color: var(--muted); }
 .checkout-sums .cart-total { margin-top: 10px; }
+.voucher-form { display: flex; gap: 10px; }
+.voucher-form input { flex: 1; min-width: 0; min-height: 46px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; background: #fff; text-transform: uppercase; }
+.voucher-form input::placeholder { text-transform: none; }
+.voucher-form input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px rgb(138 59 50 / .14); }
+.voucher-form .secondary { min-height: 46px; padding: 0 20px; }
+.voucher-applied { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border: 1px dashed var(--accent); border-radius: 8px; }
+.voucher-applied p { margin: 0; }
+.link-button { padding: 4px 0; border: 0; background: none; color: var(--accent); font-weight: 600; text-decoration: underline; cursor: pointer; }
+.voucher-error { margin: 8px 0 0; font-size: .9rem; }
+.discount-row span:last-child { color: var(--accent-dark); }
 .cart-hint { margin: -6px 0 12px; }
 .checkout-submit { width: 100%; margin-top: 14px; }
 .order-address { white-space: pre-line; }

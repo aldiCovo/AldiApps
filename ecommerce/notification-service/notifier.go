@@ -39,7 +39,10 @@ type FinishedOrder struct {
 	UserID  int64  `json:"user_id"`
 	Reason  string `json:"reason"`
 	Total   int64  `json:"total"`
-	Items   []struct {
+	// Already counted in Total.
+	Discount    int64  `json:"discount"`
+	VoucherCode string `json:"voucher_code"`
+	Items       []struct {
 		ProductName string `json:"product_name"`
 		Size        string `json:"size"`
 		Color       string `json:"color"`
@@ -154,6 +157,9 @@ func compose(kind string, order FinishedOrder, user User) Email {
 	fmt.Fprintf(&body, "Halo %s,\r\n\r\n%s\r\n\r\nPesanan #%d\r\n", user.Name, opening, order.OrderID)
 	for _, item := range order.Items {
 		fmt.Fprintf(&body, "- %s, %s, %s x %d\r\n", item.ProductName, item.Size, item.Color, item.Quantity)
+	}
+	if order.Discount > 0 {
+		fmt.Fprintf(&body, "Potongan voucher %s: -%s\r\n", order.VoucherCode, rupiah(order.Discount))
 	}
 	fmt.Fprintf(&body, "Total: %s\r\n\r\n", rupiah(order.Total))
 	body.WriteString("Prastika masih toko latihan. Pembayarannya simulasi, tidak ada uang yang ditarik dan tidak ada barang yang dikirim.\r\n")

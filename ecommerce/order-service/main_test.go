@@ -50,7 +50,7 @@ func newHarness(t *testing.T) *harness {
 	if err := migrate(ctx, pool); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, "TRUNCATE orders, order_items, outbox_events RESTART IDENTITY CASCADE"); err != nil {
+	if _, err := pool.Exec(ctx, "TRUNCATE orders, order_items, outbox_events, vouchers RESTART IDENTITY CASCADE"); err != nil {
 		t.Fatal(err)
 	}
 	public, private, err := ed25519.GenerateKey(rand.Reader)
@@ -541,7 +541,7 @@ func TestStatusChangesSendOneSignalToTheOwner(t *testing.T) {
 	}
 	create := func() int64 {
 		t.Helper()
-		order, err := h.store.Create(ctx, 7, []OrderItem{{VariantID: 1, Price: 100, Quantity: 1}}, testStoredAddress, Shipping{})
+		order, err := h.store.Create(ctx, 7, []OrderItem{{VariantID: 1, Price: 100, Quantity: 1}}, testStoredAddress, Shipping{}, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -615,7 +615,7 @@ func TestFinishedOrdersSendAnEventForTheirEmail(t *testing.T) {
 	}
 	create := func() int64 {
 		t.Helper()
-		order, err := h.store.Create(ctx, 7, []OrderItem{{VariantID: 1, ProductName: "Dress", Size: "M", Color: "Merah", Price: 100, Quantity: 2}}, testStoredAddress, Shipping{})
+		order, err := h.store.Create(ctx, 7, []OrderItem{{VariantID: 1, ProductName: "Dress", Size: "M", Color: "Merah", Price: 100, Quantity: 2}}, testStoredAddress, Shipping{}, "")
 		check(err)
 		return order.ID
 	}

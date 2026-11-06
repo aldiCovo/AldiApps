@@ -124,6 +124,12 @@ func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, 
 			g.withSession(w, r, g.orderURL+"/orders", body)
 		}
 	})
+	// What a voucher code would take off the checkout.
+	mux.HandleFunc("POST /api/vouchers/check", func(w http.ResponseWriter, r *http.Request) {
+		if body, ok := readBody(w, r); ok {
+			g.withSession(w, r, g.orderURL+"/vouchers/check", body)
+		}
+	})
 	mux.HandleFunc("GET /api/orders", func(w http.ResponseWriter, r *http.Request) {
 		g.withSession(w, r, g.orderURL+"/orders?"+r.URL.RawQuery, nil)
 	})

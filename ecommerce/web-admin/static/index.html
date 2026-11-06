@@ -10,6 +10,7 @@
   <script src="/admin/products.js" defer></script>
   <script src="/admin/photos.js" defer></script>
   <script src="/admin/users.js" defer></script>
+  <script src="/admin/vouchers.js" defer></script>
 </head>
 <body>
   <header class="bar">
@@ -17,6 +18,7 @@
     <nav id="nav" class="nav" aria-label="Menu admin" hidden>
       <a class="nav-link" href="#pesanan" data-view="orders">Pesanan</a>
       <a class="nav-link" href="#produk" data-view="products">Produk</a>
+      <a class="nav-link" href="#voucher" data-view="vouchers">Voucher</a>
       <a class="nav-link" href="#pengguna" data-view="users">Pengguna</a>
     </nav>
     <div id="who" class="who" hidden>
@@ -103,6 +105,16 @@
       <p id="users-status" class="status" role="status" aria-live="polite"></p>
       <div id="user-list" class="user-list"></div>
       <button id="more-users" class="secondary more" type="button" hidden>Muat lebih banyak</button>
+    </section>
+
+    <section id="vouchers-view" hidden aria-labelledby="vouchers-title">
+      <div class="view-head">
+        <h1 id="vouchers-title">Voucher</h1>
+        <button id="new-voucher" class="primary" type="button">Buat voucher</button>
+      </div>
+      <p class="muted small intro">Pembeli mengetik kodenya saat checkout. Potongan dihitung dari harga barang, kecuali voucher gratis ongkir yang memotong ongkos kirim. Pesanan yang batal atau gagal mengembalikan kuotanya. Voucher yang sudah dipakai pesanan tidak bisa dihapus, hanya dinonaktifkan.</p>
+      <p id="vouchers-status" class="status" role="status" aria-live="polite"></p>
+      <div id="voucher-list" class="user-list"></div>
     </section>
   </main>
 </body>

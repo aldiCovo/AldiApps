@@ -45,11 +45,14 @@ type OrderItem struct {
 }
 
 type Order struct {
-	ID        int64      `json:"id"`
-	Status    string     `json:"status"`
-	Reason    string     `json:"reason,omitempty"`
-	Total     int64      `json:"total"`
-	ExpiresAt *time.Time `json:"expires_at"`
+	ID     int64  `json:"id"`
+	Status string `json:"status"`
+	Reason string `json:"reason,omitempty"`
+	Total  int64  `json:"total"`
+	// Taken off by the voucher, already counted in Total. Zero without one.
+	Discount    int64      `json:"discount"`
+	VoucherCode string     `json:"voucher_code,omitempty"`
+	ExpiresAt   *time.Time `json:"expires_at"`
 	// Nil only on orders made before addresses existed.
 	ShippingAddress *Address `json:"shipping_address"`
 	// Nil only on orders made before shipping was charged. Total includes its cost.
@@ -84,6 +87,9 @@ type orderFinishedEvent struct {
 	Reason  string      `json:"reason,omitempty"`
 	Total   int64       `json:"total"`
 	Items   []OrderItem `json:"items"`
+	// Counted in Total already.
+	Discount    int64  `json:"discount,omitempty"`
+	VoucherCode string `json:"voucher_code,omitempty"`
 	// Only on order.shipped, for the email.
 	Shipping       *Shipping `json:"shipping,omitempty"`
 	TrackingNumber string    `json:"tracking_number,omitempty"`
@@ -95,11 +101,11 @@ type paymentRequestedEvent struct {
 	Outcome string `json:"outcome"`
 }
 
-const orderColumns = "id, status, reason, total, expires_at, shipping_address, shipping, created_at, updated_at, paid_at, packed_at, shipped_at, completed_at, tracking_number"
+const orderColumns = "id, status, reason, total, discount, voucher_code, expires_at, shipping_address, shipping, created_at, updated_at, paid_at, packed_at, shipped_at, completed_at, tracking_number"
 
 func scanOrder(row pgx.Row) (Order, error) {
 	var o Order
-	err := row.Scan(&o.ID, &o.Status, &o.Reason, &o.Total, &o.ExpiresAt, &o.ShippingAddress, &o.Shipping, &o.CreatedAt, &o.UpdatedAt, &o.PaidAt, &o.PackedAt, &o.ShippedAt, &o.CompletedAt, &o.TrackingNumber)
+	err := row.Scan(&o.ID, &o.Status, &o.Reason, &o.Total, &o.Discount, &o.VoucherCode, &o.ExpiresAt, &o.ShippingAddress, &o.Shipping, &o.CreatedAt, &o.UpdatedAt, &o.PaidAt, &o.PackedAt, &o.ShippedAt, &o.CompletedAt, &o.TrackingNumber)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Order{}, errNotFound
 	}
@@ -164,12 +170,20 @@ func attachItems(ctx context.Context, q querier, orders []Order) error {
 	return err
 }
 
-// Create saves the order and its event together, so the stock request can't get lost.
-func (s *Store) Create(ctx context.Context, userID int64, items []OrderItem, address Address, shipping Shipping) (o Order, err error) {
-	total := shipping.Cost
+func subtotalOf(items []OrderItem) int64 {
+	var subtotal int64
+	for _, item := range items {
+		subtotal += item.Price * int64(item.Quantity)
+	}
+	return subtotal
+}
+
+// Create saves the order and its event together, so the stock request can't get lost. A
+// voucher code, if given, is checked and held in the same transaction.
+func (s *Store) Create(ctx context.Context, userID int64, items []OrderItem, address Address, shipping Shipping, voucherCode string) (o Order, err error) {
+	subtotal := subtotalOf(items)
 	reserve := make([]reservationItem, len(items))
 	for i, item := range items {
-		total += item.Price * int64(item.Quantity)
 		reserve[i] = reservationItem{VariantID: item.VariantID, Quantity: item.Quantity}
 	}
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -186,9 +200,20 @@ func (s *Store) Create(ctx context.Context, userID int64, items []OrderItem, add
 		if open >= maxOpenOrders {
 			return errTooManyOrders
 		}
+		var voucherID *int64
+		var discount int64
+		var code string
+		if voucherCode != "" {
+			voucher, d, err := applyVoucher(ctx, tx, true, userID, voucherCode, subtotal, shipping.Cost)
+			if err != nil {
+				return err
+			}
+			voucherID, discount, code = &voucher.ID, d, voucher.Code
+		}
 		o, err = scanOrder(tx.QueryRow(ctx,
-			`INSERT INTO orders (user_id, status, total, shipping_address, shipping) VALUES ($1, 'pending', $2, $3, $4) RETURNING `+orderColumns,
-			userID, total, address, shipping))
+			`INSERT INTO orders (user_id, status, total, shipping_address, shipping, voucher_id, voucher_code, discount)
+			 VALUES ($1, 'pending', $2, $3, $4, $5, $6, $7) RETURNING `+orderColumns,
+			userID, subtotal+shipping.Cost-discount, address, shipping, voucherID, code, discount))
 		if err != nil {
 			return err
 		}
@@ -291,7 +316,11 @@ func addFinishedEvent(ctx context.Context, tx pgx.Tx, eventType string, id, user
 	if err := attachItems(ctx, tx, orders); err != nil {
 		return err
 	}
-	return addEvent(ctx, tx, eventType, orderFinishedEvent{OrderID: id, UserID: userID, Reason: reason, Total: total, Items: orders[0].Items})
+	event := orderFinishedEvent{OrderID: id, UserID: userID, Reason: reason, Total: total, Items: orders[0].Items}
+	if err := tx.QueryRow(ctx, `SELECT discount, voucher_code FROM orders WHERE id = $1`, id).Scan(&event.Discount, &event.VoucherCode); err != nil {
+		return err
+	}
+	return addEvent(ctx, tx, eventType, event)
 }
 
 // finish applies a final status only from the status before it, so a repeated event changes

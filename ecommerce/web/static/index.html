@@ -204,9 +204,23 @@
         <p id="shipping-note" class="hint shipping-note" hidden></p>
         <div id="shipping-options" class="shipping-options" role="radiogroup" aria-labelledby="shipping-title"></div>
       </section>
+      <section class="checkout-section" aria-labelledby="voucher-title">
+        <h3 id="voucher-title">Voucher</h3>
+        <form id="voucher-form" class="voucher-form">
+          <label class="visually-hidden" for="voucher-code">Kode voucher</label>
+          <input id="voucher-code" name="voucher" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="20" placeholder="Masukkan kode voucher">
+          <button id="voucher-apply" class="secondary" type="submit">Pakai</button>
+        </form>
+        <div id="voucher-applied" class="voucher-applied" hidden>
+          <p><strong id="voucher-applied-code"></strong> <span id="voucher-applied-text"></span></p>
+          <button id="voucher-remove" class="link-button" type="button">Hapus</button>
+        </div>
+        <p id="voucher-error" class="error voucher-error" role="alert" hidden></p>
+      </section>
       <div class="checkout-sums">
         <p class="sum-row"><span>Subtotal</span> <span id="checkout-subtotal"></span></p>
         <p class="sum-row"><span>Ongkir</span> <span id="checkout-shipping"></span></p>
+        <p id="checkout-discount-row" class="sum-row discount-row" hidden><span id="checkout-discount-label">Diskon</span> <span id="checkout-discount"></span></p>
         <p class="cart-total"><span>Total</span> <strong id="checkout-total"></strong></p>
       </div>
       <p class="demo-note">Pembayaran dan ongkir masih simulasi. Tidak ada uang yang ditarik dan tidak ada barang yang dikirim.</p>

@@ -169,6 +169,7 @@ func newHandler(s services) http.Handler {
 	a.addCatalogRoutes(mux)
 	a.addPhotoRoutes(mux)
 	a.addUserRoutes(mux)
+	a.addVoucherRoutes(mux)
 	return mux
 }
 

@@ -18,6 +18,11 @@ const catalogMessages = {
   "this product already has a variant with this size and color": "Produk ini sudah punya varian dengan ukuran dan warna itu.",
   "stock would leave the allowed range": "Stok tidak boleh kurang dari 0.",
   "category_id does not exist": "Kategori itu sudah tidak ada. Muat ulang halaman.",
+  "the sale price must be below the regular price": "Harga coret harus lebih rendah dari harga normal.",
+  "the price must stay above the sale price; change or remove the sale first":
+    "Harga normal harus di atas harga promo. Ubah atau hapus harga coretnya dulu.",
+  "ends_at must be in the future": "Waktu selesai sudah lewat.",
+  "ends_at must be after starts_at": "Waktu selesai harus setelah waktu mulai.",
 };
 
 // Turns a refusal into words for the admin. A refused session goes to the login.
@@ -79,7 +84,9 @@ function productForm(product, onSaved, onCancel) {
   category.append(new Option("Tanpa kategori", ""));
   for (const item of categories) category.append(new Option(item.name, String(item.id)));
   category.value = product && product.category_id ? String(product.category_id) : "";
-  const price = numberInput(product ? product.price : "", 1, maxPrice);
+  // price is what customers pay now, which is the sale price during a sale. The form changes
+  // the regular price.
+  const price = numberInput(product ? product.regular_price ?? product.price : "", 1, maxPrice);
   const description = el("textarea");
   description.rows = 3;
   description.maxLength = 5000;
@@ -295,9 +302,13 @@ function productCard(product, note = "") {
   const title = el("div", "product-title");
   title.append(el("h2", "", product.name), el("span", "muted small", `${categoryName(product.category_id)} · #${product.id}`));
   const actions = el("div", "product-actions");
-  head.append(title, el("strong", "price num", rupiah.format(product.price)), actions);
+  const price = el("strong", "price num");
+  if (product.original_price) price.append(el("s", "muted price-was", rupiah.format(product.original_price)), " ");
+  price.append(rupiah.format(product.price));
+  head.append(title, price, actions);
   card.append(head);
   if (product.description) card.append(el("p", "description muted", product.description));
+  card.append(saleSection(product, card, status));
   card.append(photoSection(product, status));
 
   const editBox = el("div", "edit-box");
@@ -357,6 +368,129 @@ function productCard(product, note = "") {
   for (const variant of product.variants) table.append(variantRow(product, variant, card, status));
   card.append(table, newVariantForm(product, card, status), status);
   return card;
+}
+
+// saleState says where a product's sale is, from the browser's clock.
+function saleState(sale) {
+  const now = Date.now();
+  if (now < Date.parse(sale.starts_at)) return ["Belum mulai", ""];
+  if (now >= Date.parse(sale.ends_at)) return ["Berakhir", "bad"];
+  return ["Berjalan", "good"];
+}
+
+// saleSection shows the product's "harga coret" and lets the admin set, change or remove it.
+// Customers pay the sale price from its start until its end; the regular price is struck through.
+function saleSection(product, card, status) {
+  const box = el("div", "sale-box");
+  const summary = el("div", "sale-summary");
+  const sale = product.sale;
+  if (sale) {
+    const [label, tone] = saleState(sale);
+    const percent = Math.floor((1 - sale.price / product.regular_price) * 100);
+    summary.append(
+      el("span", "", "Harga coret"),
+      el("strong", "num", `${rupiah.format(sale.price)}${percent >= 1 ? ` (hemat ${percent}%)` : ""}`),
+      el("span", "muted small", `${when(sale.starts_at)} – ${when(sale.ends_at)}`),
+      el("span", `state ${tone}`, label),
+    );
+  } else {
+    summary.append(el("span", "muted small", "Tidak ada harga coret."));
+  }
+  const formBox = el("div", "edit-box");
+  formBox.hidden = true;
+  const toggle = button(sale ? "Ubah harga coret" : "Atur harga coret", "link", () => {
+    formBox.hidden = !formBox.hidden;
+    toggle.setAttribute("aria-expanded", String(!formBox.hidden));
+    if (!formBox.hidden) {
+      formBox.replaceChildren(saleForm(product, card, () => {
+        formBox.hidden = true;
+        toggle.setAttribute("aria-expanded", "false");
+        toggle.focus();
+      }));
+      formBox.querySelector("input").focus();
+    }
+  });
+  toggle.setAttribute("aria-expanded", "false");
+  summary.append(toggle);
+  if (sale) {
+    const remove = button("Hapus harga coret", "link danger", async () => {
+      if (remove.dataset.confirm !== "yes") {
+        remove.dataset.confirm = "yes";
+        remove.textContent = "Yakin hapus harga coret?";
+        return;
+      }
+      setBusy(box, true);
+      try {
+        await send("DELETE", `/products/${product.id}/sale`);
+        await refreshProduct(card, product.id, "Harga coret dihapus. Harga kembali normal.");
+      } catch (error) {
+        const message = catalogError(error, "Harga coret belum bisa dihapus. Coba lagi sebentar lagi.");
+        if (message === null) return;
+        status.textContent = message;
+        setBusy(box, false);
+      }
+    });
+    summary.append(remove);
+  }
+  box.append(summary, formBox);
+  return box;
+}
+
+function saleForm(product, card, onCancel) {
+  const form = el("form", "inline-form sale-form");
+  form.noValidate = true;
+  const sale = product.sale;
+  const regular = product.regular_price ?? product.price;
+  const price = numberInput(sale ? sale.price : "", 1, maxPrice);
+  // localInput comes from vouchers.js.
+  const starts = localInput(sale ? sale.starts_at : new Date().toISOString());
+  const ends = localInput(sale ? sale.ends_at : new Date(Date.now() + 7 * 86400000).toISOString());
+  const error = el("p", "error", "");
+  error.setAttribute("role", "alert");
+  error.hidden = true;
+  const save = el("button", "secondary", "Simpan harga coret");
+  save.type = "submit";
+  form.append(
+    field(`Harga promo (Rp), normal ${rupiah.format(regular)}`, price),
+    field("Mulai", starts),
+    field("Selesai", ends),
+    save,
+    button("Batal", "link", onCancel),
+    error,
+  );
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const value = wholeNumber(price, 1, maxPrice);
+    const startsAt = starts.value ? new Date(starts.value) : null;
+    const endsAt = ends.value ? new Date(ends.value) : null;
+    const problem = value === null ? [price, "Harga promo harus angka bulat dari 1."]
+      : value >= regular ? [price, `Harga promo harus lebih rendah dari harga normal ${rupiah.format(regular)}.`]
+      : !startsAt || !endsAt ? [startsAt ? ends : starts, "Isi waktu mulai dan selesai."]
+      : endsAt <= startsAt ? [ends, "Waktu selesai harus setelah waktu mulai."]
+      : endsAt.getTime() <= Date.now() ? [ends, "Waktu selesai sudah lewat."]
+      : null;
+    if (problem) {
+      error.textContent = problem[1];
+      error.hidden = false;
+      problem[0].focus();
+      return;
+    }
+    error.hidden = true;
+    setBusy(form, true);
+    try {
+      await send("PUT", `/products/${product.id}/sale`, {
+        price: value, starts_at: startsAt.toISOString(), ends_at: endsAt.toISOString(),
+      });
+      await refreshProduct(card, product.id, "Harga coret disimpan.");
+    } catch (failure) {
+      const message = catalogError(failure, "Harga coret belum bisa disimpan. Coba lagi sebentar lagi.");
+      if (message === null) return;
+      error.textContent = message;
+      error.hidden = false;
+      setBusy(form, false);
+    }
+  });
+  return form;
 }
 
 function variantRow(product, variant, card, status) {

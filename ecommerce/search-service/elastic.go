@@ -58,14 +58,19 @@ type Variant struct {
 }
 
 type Product struct {
-	ID          int64     `json:"id"`
-	CategoryID  *int64    `json:"category_id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	Price       int64     `json:"price"`
-	Variants    []Variant `json:"variants"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID          int64  `json:"id"`
+	CategoryID  *int64 `json:"category_id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	// Price is what a customer pays now. While a sale runs, OriginalPrice holds the regular
+	// price, which the shop shows struck through. catalog-service sends the product again
+	// when a sale starts or ends.
+	Price         int64     `json:"price"`
+	RegularPrice  int64     `json:"regular_price"`
+	OriginalPrice *int64    `json:"original_price,omitempty"`
+	Variants      []Variant `json:"variants"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 // productDocument adds the text searched by q, so "dress merah" can match across fields.

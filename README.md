@@ -54,15 +54,19 @@ The code is `metrics.go` with `metrics_test.go`, the same in each service. Chang
 | `GET /products?limit=20&offset=0&category_id=1` | Lists products with their variants. `category_id` is optional |
 | `POST /products` | Creates one from `{"category_id", "name", "description", "price"}`. `name` and `price` are required |
 | `GET /products/{id}` | Returns one with its variants |
-| `PUT /products/{id}` | Replaces `category_id`, `name`, `description` and `price`. Leaving out `category_id` clears it |
+| `PUT /products/{id}` | Replaces `category_id`, `name`, `description` and `price`. Leaving out `category_id` clears it. Answers 409 if `price` isn't above a sale that hasn't ended |
 | `DELETE /products/{id}` | Deletes one and its variants |
+| `PUT /products/{id}/sale` | Sells the product for less from `{"price", "starts_at", "ends_at"}`, replacing any sale it had. Times are RFC 3339 and `ends_at` must be in the future. Answers 409 unless `price` is below the regular price |
+| `DELETE /products/{id}/sale` | Removes the sale. Answers the product |
 | `POST /products/{id}/variants` | Creates a variant from `{"size", "color", "stock"}`. `size` and `color` are required. Answers 409 if the product already has that combination, ignoring case |
 | `GET /variants/{id}` | Returns one |
 | `PUT /variants/{id}` | Replaces `size` and `color` |
 | `PATCH /variants/{id}/stock` | Adds `{"delta"}` to the stock. Answers 409 if the stock would go negative |
 | `DELETE /variants/{id}` | Deletes one |
 
-Prices are in whole rupiah and belong to the product. Stock belongs to each variant. A description holds at most 5000 characters. Migrations in `migrations/` run when the service starts.
+Prices are in whole rupiah and belong to the product. Stock belongs to each variant.
+
+A product answers with `price`, what customers pay now, and `regular_price`. While a sale runs, `price` is the sale price and `original_price` is the regular price, which the shop shows struck through ("harga coret"). `sale` holds the sale as set, `{"price", "starts_at", "ends_at"}`, from before it starts until it is removed, even after it ended. The database's clock decides whether a sale runs, so orders, which read `price`, always charge what the product page shows. Every 30 seconds the service sends `product.updated` for each product whose sale started or ended, so search shows the new price within that time. A description holds at most 5000 characters. Migrations in `migrations/` run when the service starts.
 
 Reading is open inside the cluster. Every change needs `Authorization: Bearer <INTERNAL_TOKEN>`, which only admin-service has, and the service won't start without a token of at least 32 characters. Orders change stock through events, not through these routes.
 
@@ -303,7 +307,7 @@ The only way in for the admin pages. It has no database. Every request except `P
 | `GET /orders/{id}` | One order, the same way |
 | `POST /orders/{id}/status` | Moves it a step on, as order-service's internal route does |
 | `GET`, `POST /categories`, `PUT`, `DELETE /categories/{id}` | catalog-service's category routes |
-| `GET`, `POST /products`, `GET`, `PUT`, `DELETE /products/{id}`, `POST /products/{id}/variants` | catalog-service's product routes |
+| `GET`, `POST /products`, `GET`, `PUT`, `DELETE /products/{id}`, `PUT`, `DELETE /products/{id}/sale`, `POST /products/{id}/variants` | catalog-service's product and sale routes |
 | `PUT`, `DELETE /variants/{id}`, `PATCH /variants/{id}/stock` | catalog-service's variant and stock routes |
 | `GET /photos/products` | Every product's four photo places, by product id, `""` where empty |
 | `PUT /photos/products/{id}/{1-4}` | Puts the photo in the body in that place, replacing what was there. Answers the product's four places |
@@ -340,7 +344,7 @@ The admin pages, under `/admin` on the shop's domain, separate from `web`. Its l
 | `GET`, `POST /admin/api/vouchers`, `PUT`, `DELETE /admin/api/vouchers/{id}` | admin-service, with the token from the cookie. Every change must be sent as JSON |
 | The photo routes above, under `/admin/api` | admin-service, with the token from the cookie. An upload must be sent as `image/jpeg`, `image/png` or `image/webp`, which a form on another site can't send, and other changes as JSON |
 
-The *Produk* page (`/admin/#produk`) manages categories, products with their price, category and description, and each product's variants. Stock changes by an amount added or taken away, not by a new total, so orders placed meanwhile aren't overwritten. Deleting a product or variant asks first, and old orders keep their own copy of names and prices.
+The *Produk* page (`/admin/#produk`) manages categories, products with their price, category and description, and each product's variants. Stock changes by an amount added or taken away, not by a new total, so orders placed meanwhile aren't overwritten. Deleting a product or variant asks first, and old orders keep their own copy of names and prices. *Atur harga coret* gives a product a sale price from a start to an end time; the page shows whether it hasn't started, runs or ended, and *Hapus harga coret* removes it. The product form changes the regular price.
 
 Each product has four photo places; *Jadikan utama* makes a photo the first, the one on the shop's card. *Kelola kategori* gives each category its photo. Before uploading, the browser turns a photo into a JPEG of at most 1600 pixels a side, which keeps uploads small and drops the location a phone camera writes into it.
 

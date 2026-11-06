@@ -27,6 +27,8 @@ var (
 	errCategoryInUse    = errors.New("category still has products")
 	errVariantExists    = errors.New("this product already has a variant with this size and color")
 	errStockOutOfRange  = errors.New("stock would leave the allowed range")
+	errSaleNotBelow     = errors.New("the sale price must be below the regular price")
+	errPriceBelowSale   = errors.New("the price must stay above the sale price; change or remove the sale first")
 )
 
 type Category struct {
@@ -46,21 +48,37 @@ type Variant struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// Sale is a lower price over a period. It is kept after it ends, until it is changed or removed.
+type Sale struct {
+	Price    int64     `json:"price"`
+	StartsAt time.Time `json:"starts_at"`
+	EndsAt   time.Time `json:"ends_at"`
+}
+
 type Product struct {
-	ID          int64     `json:"id"`
-	CategoryID  *int64    `json:"category_id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	Price       int64     `json:"price"`
-	Variants    []Variant `json:"variants"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID          int64  `json:"id"`
+	CategoryID  *int64 `json:"category_id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	// Price is what a customer pays now: the sale price while a sale is on.
+	Price        int64 `json:"price"`
+	RegularPrice int64 `json:"regular_price"`
+	// OriginalPrice is the regular price, shown struck through, only while a sale is on.
+	OriginalPrice *int64    `json:"original_price,omitempty"`
+	Sale          *Sale     `json:"sale,omitempty"`
+	Variants      []Variant `json:"variants"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 const (
 	categoryColumns = "id, name, created_at, updated_at"
-	productColumns  = "id, category_id, name, description, price, created_at, updated_at"
-	variantColumns  = "id, product_id, size, color, stock, created_at, updated_at"
+	// saleOn is true while a product's sale runs. The database's clock decides, so reads and
+	// the sale announcer always agree.
+	saleOn         = "(sale_price IS NOT NULL AND sale_starts_at <= now() AND now() < sale_ends_at)"
+	productColumns = "id, category_id, name, description, price, sale_price, sale_starts_at, sale_ends_at, " +
+		saleOn + ", created_at, updated_at"
+	variantColumns = "id, product_id, size, color, stock, created_at, updated_at"
 )
 
 // querier is what both the pool and a transaction can do.
@@ -156,7 +174,19 @@ func (s *Store) DeleteCategory(ctx context.Context, id int64) error {
 
 func scanProduct(row pgx.Row) (Product, error) {
 	p := Product{Variants: []Variant{}}
-	err := row.Scan(&p.ID, &p.CategoryID, &p.Name, &p.Description, &p.Price, &p.CreatedAt, &p.UpdatedAt)
+	var salePrice *int64
+	var saleStarts, saleEnds *time.Time
+	var onSale bool
+	err := row.Scan(&p.ID, &p.CategoryID, &p.Name, &p.Description, &p.RegularPrice,
+		&salePrice, &saleStarts, &saleEnds, &onSale, &p.CreatedAt, &p.UpdatedAt)
+	p.Price = p.RegularPrice
+	if err == nil && salePrice != nil {
+		p.Sale = &Sale{Price: *salePrice, StartsAt: *saleStarts, EndsAt: *saleEnds}
+		if onSale {
+			regular := p.RegularPrice
+			p.Price, p.OriginalPrice = *salePrice, &regular
+		}
+	}
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return Product{}, errNotFound
@@ -296,7 +326,18 @@ func (s *Store) Update(ctx context.Context, id int64, categoryID *int64, name, d
 		if err := lockProduct(ctx, tx, id); err != nil {
 			return err
 		}
-		_, err := scanProduct(tx.QueryRow(ctx,
+		// A sale that hasn't ended must stay below the regular price.
+		var salePrice int64
+		err := tx.QueryRow(ctx,
+			`SELECT sale_price FROM products WHERE id = $1 AND sale_price IS NOT NULL AND sale_ends_at > now()`,
+			id).Scan(&salePrice)
+		switch {
+		case err == nil && price <= salePrice:
+			return errPriceBelowSale
+		case err != nil && !errors.Is(err, pgx.ErrNoRows):
+			return err
+		}
+		_, err = scanProduct(tx.QueryRow(ctx,
 			`UPDATE products SET category_id = $2, name = $3, description = $4, price = $5, updated_at = now()
 			 WHERE id = $1
 			 RETURNING `+productColumns,

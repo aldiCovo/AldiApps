@@ -164,6 +164,8 @@ func newTestServer(t *testing.T) (*httptest.Server, *fakes) {
 			io.WriteString(w, `{"id":6,"name":"Rok","price":150000,"variants":[]}`)
 		case r.Method == http.MethodDelete && r.URL.Path == "/products/5":
 			w.WriteHeader(http.StatusNoContent)
+		case r.Method == http.MethodPut && r.URL.Path == "/products/5/sale":
+			io.WriteString(w, `{"id":5,"name":"Dress","price":300000,"original_price":350000,"variants":[]}`)
 		case r.Method == http.MethodPatch && r.URL.Path == "/variants/3/stock":
 			w.WriteHeader(http.StatusConflict)
 			io.WriteString(w, `{"error":"stock would leave its range"}`)
@@ -307,6 +309,8 @@ func TestCatalogChangesNeedAnAdminAndCarryTheInternalToken(t *testing.T) {
 		{http.MethodPost, "/products", `{"name":"Rok","price":150000}`},
 		{http.MethodPut, "/products/5", `{"name":"Rok","price":150000}`},
 		{http.MethodDelete, "/products/5", ""},
+		{http.MethodPut, "/products/5/sale", `{"price":100000}`},
+		{http.MethodDelete, "/products/5/sale", ""},
 		{http.MethodPost, "/products/5/variants", `{"size":"M","color":"Hitam"}`},
 		{http.MethodPut, "/variants/3", `{"size":"M","color":"Hitam"}`},
 		{http.MethodDelete, "/variants/3", ""},
@@ -336,6 +340,13 @@ func TestCatalogChangesNeedAnAdminAndCarryTheInternalToken(t *testing.T) {
 	}
 	if status, _ := do(t, server, http.MethodDelete, "/products/5", "admin-token", ""); status != http.StatusNoContent {
 		t.Fatalf("delete: %d", status)
+	}
+	sale := `{"price":300000,"starts_at":"2026-11-06T00:00:00Z","ends_at":"2026-11-13T00:00:00Z"}`
+	if status, body := do(t, server, http.MethodPut, "/products/5/sale", "admin-token", sale); status != http.StatusOK || !strings.Contains(body, `"original_price":350000`) {
+		t.Fatalf("sale: %d %s", status, body)
+	}
+	if want := "PUT /products/5/sale Bearer " + catalogToken + " " + sale; f.catalogHits[len(f.catalogHits)-1] != want {
+		t.Fatalf("sent %q", f.catalogHits[len(f.catalogHits)-1])
 	}
 	if status, body := do(t, server, http.MethodPatch, "/variants/3/stock", "admin-token", `{"delta":999}`); status != http.StatusConflict || !strings.Contains(body, "range") {
 		t.Fatalf("stock: %d %s", status, body)

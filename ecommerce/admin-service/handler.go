@@ -412,6 +412,8 @@ func (a *admin) addCatalogRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /products", forward(http.MethodPost, "/products", true))
 	mux.HandleFunc("PUT /products/{id}", forward(http.MethodPut, "/products/{id}", true))
 	mux.HandleFunc("DELETE /products/{id}", forward(http.MethodDelete, "/products/{id}", false, removeProductPhotos))
+	mux.HandleFunc("PUT /products/{id}/sale", forward(http.MethodPut, "/products/{id}/sale", true))
+	mux.HandleFunc("DELETE /products/{id}/sale", forward(http.MethodDelete, "/products/{id}/sale", false))
 	mux.HandleFunc("POST /products/{id}/variants", forward(http.MethodPost, "/products/{id}/variants", true))
 	mux.HandleFunc("PUT /variants/{id}", forward(http.MethodPut, "/variants/{id}", true))
 	mux.HandleFunc("DELETE /variants/{id}", forward(http.MethodDelete, "/variants/{id}", false))

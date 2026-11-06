@@ -139,6 +139,10 @@ main { max-width: 1320px; margin: 0 auto; padding: 0 var(--gutter); }
 .card:hover .art svg { transform: scale(1.04); }
 .badge { position: absolute; top: 12px; left: 12px; padding: 3px 12px; border-radius: 999px; background: var(--card); color: var(--ink); font-size: .78rem; font-weight: 600; }
 .badge.sold-out { background: var(--ink); color: #fff; }
+.badge.sale { left: auto; right: 12px; background: var(--accent); color: #fff; }
+.price-was { color: var(--muted); font-weight: 400; font-size: .88em; }
+.price-sale { color: var(--accent); }
+.price-until { display: block; margin-top: 4px; color: var(--muted); font-size: .8rem; font-weight: 400; }
 .card-view { position: absolute; right: 12px; bottom: 12px; left: 12px; padding: 9px; border-radius: 999px; background: rgb(255 253 250 / .94); color: var(--accent); font-size: .88rem; font-weight: 600; text-align: center; opacity: 0; transform: translateY(6px); transition: opacity .2s, transform .2s; }
 .card:hover .card-view, .card:focus-visible .card-view { opacity: 1; transform: none; }
 .card-art + .card-name { margin-top: 14px; }

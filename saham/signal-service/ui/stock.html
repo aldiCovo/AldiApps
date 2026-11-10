@@ -33,6 +33,13 @@
     <ul class="parts">
     {{range .Parts}}<li><span class="pts {{arah .Points}}">{{poin .Points}}</span> <span class="grp">{{.Group}}</span> {{.Text}}</li>{{end}}
     </ul>
+    {{with .Flow}}
+    <div class="table-wrap"><table>
+      <thead><tr><th>Net asing</th><th class="num">Hari ini</th><th class="num">1 minggu</th><th class="num">1 bulan</th><th class="num">3 bulan</th></tr></thead>
+      <tbody><tr><td>{{.Pasted}} tempelan</td>{{template "flowcells" .}}</tr></tbody>
+    </table></div>
+    {{end}}
+    {{if ge .Technical 2.0}}{{with kurang . $.View.Day}}<p class="note">Data asing kurang: {{join . ", "}}. <a href="/broker">Tempel →</a></p>{{end}}{{end}}
     {{if .HasPlan}}<p class="plan"><b>Rencana:</b> beli maks {{rp .MaxEntry}} · SL {{rp .Stop}} · target {{rp .Target}} · reward/risk {{printf "%.1f" .RewardRisk}} · maks 20 hari{{with .Summary}}{{if .Buy}} · pembeli terbesar {{(index .Buy 0).Broker}} rata-rata {{rp (index .Buy 0).Avg}}{{end}}{{end}}</p>{{end}}
     <p class="note">Skor penilaian, belum terbukti. Kandidat beli dicatat di paper trading (aturan Rekomendasi) untuk diuji ke depan. Bukan saran investasi.</p>
   </div>
@@ -87,3 +94,4 @@
 </section>
 {{end}}
 {{define "scripts"}}<script src="/static/lightweight-charts.js"></script><script src="/static/app.js"></script>{{end}}
+{{define "flowcells"}}{{range $k := list "hari" "minggu" "bulan" "3bulan"}}{{$w := $.Window $k}}<td class="num">{{if $w.OK}}<span class="{{arah $w.Net}}" title="{{$w.Source}}">✓ {{miliar $w.Net}}</span><div class="small muted">{{pct $w.Share}}</div>{{else}}<span class="muted">–</span>{{end}}</td>{{end}}{{end}}

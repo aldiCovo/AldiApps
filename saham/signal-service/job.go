@@ -67,6 +67,7 @@ type dayReport struct {
 	Recommended []recommendation
 	Watching    []recommendation
 	WithBroker  []recommendation
+	ToPaste     []recommendation // the stocks whose foreign flow to paste after the close
 }
 
 type marketState struct {
@@ -300,28 +301,48 @@ func (j *job) addSignals(ctx context.Context, all map[string]*series, day time.T
 	return nil
 }
 
-// addRecommendations scores every stock with its latest broker summary and records each buy
-// candidate as a paper trade, to see whether the score beats random entries.
+// addRecommendations scores every stock with its broker data and records each buy candidate as
+// a paper trade, to see whether the score beats random entries.
 func (j *job) addRecommendations(ctx context.Context, v *marketView, day time.Time, healthy map[string]bool, r *dayReport) error {
-	summaries, err := j.store.BrokerSummariesSince(ctx, day.Add(-brokerMaxAge))
+	recs, err := j.recommendations(ctx, v)
 	if err != nil {
 		return err
+	}
+	r.Recommended, r.Watching, r.WithBroker = nil, nil, nil
+	for _, rec := range recs {
+		switch {
+		case rec.Label == recBuy:
+			r.Recommended = append(r.Recommended, rec)
+		case rec.Label == recWatch:
+			r.Watching = append(r.Watching, rec)
+		case rec.Summary != nil:
+			r.WithBroker = append(r.WithBroker, rec)
+		}
+	}
+	r.ToPaste = pasteTargets(recs)
+	_, err = j.recordRecommended(ctx, v, recs, day, healthy[day.Format(time.DateOnly)])
+	return err
+}
+
+// recommendations scores every stock in the view with the broker data kept.
+func (j *job) recommendations(ctx context.Context, v *marketView) ([]recommendation, error) {
+	summaries, err := j.store.BrokerSummariesSince(ctx, v.Day.Add(-flowHistory))
+	if err != nil {
+		return nil, err
 	}
 	foreign, err := j.store.ForeignBrokers(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	marketOK := healthy[day.Format(time.DateOnly)]
-	for _, rec := range recommendAll(v, summaries, foreign) {
-		switch {
-		case rec.Label == recWatch:
-			r.Watching = append(r.Watching, rec)
-			continue
-		case rec.Label == recBuy:
-		case rec.Summary != nil:
-			r.WithBroker = append(r.WithBroker, rec)
-			continue
-		default:
+	return recommendAll(v, summaries, foreign), nil
+}
+
+// recordRecommended adds a paper trade for each buy candidate with a close on the day and no
+// trade of the rule still open, and returns the ones added.
+func (j *job) recordRecommended(ctx context.Context, v *marketView, recs []recommendation, day time.Time, marketOK bool) ([]recommendation, error) {
+	var added []recommendation
+	for _, rec := range recs {
+		if rec.Label != recBuy {
 			continue
 		}
 		s := v.Stocks[rec.Ticker]
@@ -329,22 +350,23 @@ func (j *job) addRecommendations(ctx context.Context, v *marketView, day time.Ti
 		if !s.bars[last].Date.Equal(day) || last < warmupBars || math.IsNaN(s.atr14[last]) {
 			continue
 		}
-		r.Recommended = append(r.Recommended, rec)
+		busy, err := j.store.HasUnfinished(ctx, strategyRec, rec.Ticker)
+		if err != nil {
+			return nil, err
+		}
+		if busy {
+			continue
+		}
 		var reasons []string
 		for _, p := range rec.Reasons(4) {
 			reasons = append(reasons, p.Text)
 		}
-		busy, err := j.store.HasUnfinished(ctx, strategyRec, rec.Ticker)
-		if err != nil {
-			return err
+		if err := j.store.AddSignal(ctx, s.signal(last, strategyRec, reasons...), marketOK); err != nil {
+			return nil, err
 		}
-		if !busy {
-			if err := j.store.AddSignal(ctx, s.signal(last, strategyRec, reasons...), marketOK); err != nil {
-				return err
-			}
-		}
+		added = append(added, rec)
 	}
-	return nil
+	return added, nil
 }
 
 // randomDay picks about one day in ten for each stock, spread so that not every stock enters

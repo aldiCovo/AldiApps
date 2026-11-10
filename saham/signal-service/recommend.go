@@ -40,6 +40,7 @@ type recommendation struct {
 	Class     string // good, info, warn or bad
 	Parts     []recPart
 	Summary   *brokerSummary // the summary used, nil when none is recent
+	Flow      *foreignFlow   // the foreign flow windows, nil without foreign summaries
 	// The trade plan, the same exits as the breakout rule, so its paper trades compare
 	// with acak/breakout.
 	HasPlan  bool
@@ -95,8 +96,13 @@ func pickBroker(list []brokerSummary, ticker string, day time.Time) *brokerSumma
 	return best
 }
 
-// recommend scores one stock from the view and, when given, a broker summary.
-func recommend(v *marketView, ticker string, b *brokerSummary, foreign map[string]bool) (recommendation, bool) {
+// minTechnicalForBuy keeps strong broker data alone from making a buy candidate of a stock whose
+// chart says otherwise: the technical and market points must be at least this.
+const minTechnicalForBuy = 2
+
+// recommend scores one stock from the view and, when given, its foreign flow windows or else a
+// recent broker summary.
+func recommend(v *marketView, ticker string, b *brokerSummary, flow *foreignFlow, foreign map[string]bool) (recommendation, bool) {
 	s := v.Stocks[ticker]
 	if s == nil {
 		return recommendation{}, false
@@ -172,16 +178,23 @@ func recommend(v *marketView, ticker string, b *brokerSummary, foreign map[strin
 	}
 
 	// The brokers.
-	if b == nil {
-		add("Broker", 0, "Belum ada broker summary 14 hari terakhir: tempel dari Stockbit di halaman Broker")
-	} else {
+	switch {
+	case flow != nil && flow.HasAny():
+		r.Flow, r.Summary = flow, flow.Latest
+		r.Broker = flowPoints(&r, *flow) + summaryPoints(&r, flow.Latest, close)
+	case b != nil:
 		r.Summary = b
 		r.Broker = brokerPoints(&r, s, b, foreign, close)
+	default:
+		add("Broker", 0, "Belum ada data broker asing: tempel broker summary filter Asing dari Stockbit")
+	}
+	if flow != nil {
+		r.Flow = flow
 	}
 
 	r.Score = r.Technical + r.Broker
 	switch {
-	case r.Score >= 4:
+	case r.Score >= 4 && r.Technical >= minTechnicalForBuy:
 		r.Label, r.Class = recBuy, "good"
 	case r.Score >= 2:
 		r.Label, r.Class = recWatch, "info"
@@ -201,9 +214,10 @@ func recommend(v *marketView, ticker string, b *brokerSummary, foreign map[strin
 
 // brokerPoints adds the broker parts and returns their points.
 func brokerPoints(r *recommendation, s *series, b *brokerSummary, foreign map[string]bool, close float64) float64 {
-	before := len(r.Parts)
-	add := func(points float64, format string, args ...any) {
-		r.Parts = append(r.Parts, recPart{Group: "Broker", Text: fmt.Sprintf(format, args...), Points: points})
+	points := 0.0
+	add := func(p float64, format string, args ...any) {
+		r.Parts = append(r.Parts, recPart{Group: "Broker", Text: fmt.Sprintf(format, args...), Points: p})
+		points += p
 	}
 	a := analyzeBrokers(*b, foreign)
 	period := tanggal(b.Start) + " – " + tanggal(b.End)
@@ -223,24 +237,35 @@ func brokerPoints(r *recommendation, s *series, b *brokerSummary, foreign map[st
 	}
 	if turnover > 0 {
 		share := net / turnover
-		points := 0.0
+		p := 0.0
 		switch {
 		case share >= 0.05:
-			points = 2
+			p = 2
 		case share >= 0.01:
-			points = 1
+			p = 1
 		case share <= -0.05:
-			points = -2
+			p = -2
 		case share <= -0.01:
-			points = -1
+			p = -1
 		}
-		points = math.Max(-limit, math.Min(limit, points))
-		add(points, "%s %s, %s dari nilai transaksi %s", what, miliar(net), pct(share), period)
+		add(math.Max(-limit, math.Min(limit, p)), "%s %s, %s dari nilai transaksi %s", what, miliar(net), pct(share), period)
 	} else {
-		points := math.Max(-limit, math.Min(limit, math.Copysign(1, net)))
-		add(points, "%s %s (%s)", what, miliar(net), period)
+		add(math.Max(-limit, math.Min(limit, math.Copysign(1, net))), "%s %s (%s)", what, miliar(net), period)
 	}
 
+	return points + summaryPoints(r, b, close)
+}
+
+// summaryPoints scores Stockbit's own reading of a summary and where the price sits against its
+// biggest buyer.
+func summaryPoints(r *recommendation, b *brokerSummary, close float64) float64 {
+	if b == nil {
+		return 0
+	}
+	before := len(r.Parts)
+	add := func(points float64, format string, args ...any) {
+		r.Parts = append(r.Parts, recPart{Group: "Broker", Text: fmt.Sprintf(format, args...), Points: points})
+	}
 	// Stockbit's own reading of the top brokers.
 	label := b.AccDist
 	if len(b.Top) > 0 && strings.Contains(b.Top[0].Label, "Big") {
@@ -276,11 +301,43 @@ func brokerPoints(r *recommendation, s *series, b *brokerSummary, foreign map[st
 	return points
 }
 
+// pasteTargets are the stocks whose foreign flow is worth pasting: those the chart alone puts at
+// Pantau or better, the strongest first, at most maxPasteTargets.
+func pasteTargets(recs []recommendation) []recommendation {
+	var out []recommendation
+	for _, r := range recs {
+		if r.Technical >= minTechnicalForBuy {
+			out = append(out, r)
+		}
+	}
+	sort.SliceStable(out, func(a, b int) bool { return out[a].Technical > out[b].Technical })
+	return out[:min(len(out), maxPasteTargets)]
+}
+
+const maxPasteTargets = 5
+
+// flowHistory is how far back to read summaries for the windows: three months at the longest
+// stretch, 90 trading days, with room.
+const flowHistory = 150 * 24 * time.Hour
+
+// recommendFor scores one stock with the summaries given, read from flowHistory back.
+func recommendFor(v *marketView, ticker string, summaries []brokerSummary, foreign map[string]bool) (recommendation, bool) {
+	s := v.Stocks[ticker]
+	if s == nil {
+		return recommendation{}, false
+	}
+	var flow *foreignFlow
+	if f := buildFlow(s, summaries); f.Pasted > 0 {
+		flow = &f
+	}
+	return recommend(v, ticker, pickBroker(summaries, ticker, v.Day), flow, foreign)
+}
+
 // recommendAll scores every stock in the view, best first.
 func recommendAll(v *marketView, summaries []brokerSummary, foreign map[string]bool) []recommendation {
 	var out []recommendation
 	for _, t := range v.Tickers {
-		if r, ok := recommend(v, t, pickBroker(summaries, t, v.Day), foreign); ok {
+		if r, ok := recommendFor(v, t, summaries, foreign); ok {
 			out = append(out, r)
 		}
 	}

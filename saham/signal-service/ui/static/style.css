@@ -158,8 +158,8 @@ form.paste textarea:focus, form.paste select:focus { outline: 2px solid var(--ac
 .filters { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: .75rem; }
 .filters label { margin: 0; }
 .filters select { display: block; margin-top: .25rem; font: inherit; padding: .45rem .6rem; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); }
-form.paste button { margin-top: .5rem; font: inherit; font-weight: 600; padding: .6rem 1.1rem; border: 0; border-radius: 8px; background: var(--accent); color: #fff; cursor: pointer; }
-@media (prefers-color-scheme: dark) { form.paste button { color: #04201d; } }
+form.paste button, form.inline button { margin-top: .5rem; font: inherit; font-weight: 600; padding: .6rem 1.1rem; border: 0; border-radius: 8px; background: var(--accent); color: #fff; cursor: pointer; }
+@media (prefers-color-scheme: dark) { form.paste button, form.inline button { color: #04201d; } }
 section.two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 section.two h2 { margin-top: 0; }
 @media (max-width: 800px) { section.two { grid-template-columns: 1fr; } }
@@ -179,3 +179,5 @@ ul.parts li:last-child { border-bottom: 0; }
 ul.parts .pts { min-width: 2.2rem; text-align: right; font-weight: 700; }
 ul.parts .grp { color: var(--muted); font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; min-width: 5.5rem; }
 p.plan { background: var(--info-bg); border-radius: 8px; padding: .6rem .8rem; margin: .5rem 0; }
+.flash { background: var(--info-bg); border-radius: 8px; padding: .6rem .8rem; }
+form.inline { margin: .75rem 0 .25rem; }

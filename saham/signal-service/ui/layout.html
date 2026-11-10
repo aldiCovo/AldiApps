@@ -20,6 +20,7 @@
       <a href="/saham" {{if eq .Active "stocks"}}aria-current="page"{{end}}>LQ45</a>
       <a href="/paper" {{if eq .Active "paper"}}aria-current="page"{{end}}>Paper trading</a>
       <a href="/momentum" {{if eq .Active "momentum"}}aria-current="page"{{end}}>Momentum</a>
+      <a href="/broker" {{if eq .Active "broker"}}aria-current="page"{{end}}>Broker</a>
     </nav>
     <form method="post" action="/logout"><button class="link" type="submit">Keluar</button></form>
   </div>

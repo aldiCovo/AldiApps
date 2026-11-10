@@ -43,6 +43,19 @@
 </section>
 
 <section>
+  <div class="section-head"><h2>Broker summary {{$r.Ticker}}</h2><a href="/broker">Tempel baru →</a></div>
+  {{if $d.Brokers}}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Periode</th><th>Filter</th><th>Stockbit</th><th class="num">Net broker asing</th><th class="num">Net broker lokal</th></tr></thead>
+    <tbody>{{range $d.Brokers}}
+      <tr><td><a href="/broker/{{.ID}}">{{tanggal .Start}} – {{tanggal .End}}</a></td><td>{{investorName .Investor}} · {{modeName .Mode}}</td>
+      <td>{{if .AccDist}}<span class="badge {{if isDist .AccDist}}bad{{else if isAcc .AccDist}}good{{else}}info{{end}}">{{.AccDist}}</span>{{else}}-{{end}}</td>
+      <td class="num {{arah .Analysis.ForeignNet}}">{{miliar .Analysis.ForeignNet}}</td><td class="num {{arah .Analysis.LocalNet}}">{{miliar .Analysis.LocalNet}}</td></tr>{{end}}</tbody>
+  </table></div>
+  {{else}}<p class="empty-line">Belum ada. Tempel broker summary {{$r.Ticker}} dari Stockbit di halaman <a href="/broker">Broker</a>.</p>{{end}}
+</section>
+
+<section>
   <h2>Paper trading {{$r.Ticker}}</h2>
   {{if $d.Trades}}
   <div class="table-wrap"><table>

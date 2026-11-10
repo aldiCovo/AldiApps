@@ -1,0 +1,86 @@
+{{define "content"}}
+{{$d := .Data}}{{$s := $d.Item}}{{$a := $s.Analysis}}{{$price := $d.Price}}
+<div class="section-head">
+  <h1>{{$s.Ticker}} · broker {{tanggal $s.Start}} – {{tanggal $s.End}}</h1>
+  <a href="/broker">← Broker</a>
+</div>
+<p class="muted">{{investorName $s.Investor}} · {{marketName $s.Market}} · {{modeName $s.Mode}}{{if $d.HasView}} · <a href="/saham/{{$s.Ticker}}">grafik {{$s.Ticker}}</a>{{end}}</p>
+
+<section class="cards">
+  <div class="card">
+    <div class="label">{{if eq $s.Investor "foreign"}}Net investor asing (semua broker){{else}}Net broker asing{{end}}</div>
+    {{if eq $s.Investor "foreign"}}
+      {{$net := sub $a.TotalBuy $a.TotalSell}}
+      <div class="big {{arah $net}}">{{miliar $net}}</div>
+      <div class="muted">Filter Asing: semua baris adalah transaksi investor asing, lewat broker mana pun.</div>
+    {{else}}
+      <div class="big {{arah $a.ForeignNet}}">{{miliar $a.ForeignNet}}</div>
+      <div>Beli <span class="up">{{miliar $a.ForeignBuy}}</span> · jual <span class="down">{{miliar (neg $a.ForeignSell)}}</span></div>
+      <div class="small">Broker asing juga melayani nasabah lokal, jadi ini perkiraan arus asing.</div>
+    {{end}}
+  </div>
+  <div class="card">
+    <div class="label">Net broker lokal</div>
+    <div class="big {{arah $a.LocalNet}}">{{miliar $a.LocalNet}}</div>
+    <div>Beli <span class="up">{{miliar $a.LocalBuy}}</span> · jual <span class="down">{{miliar (neg $a.LocalSell)}}</span></div>
+  </div>
+  <div class="card">
+    <div class="label">Menurut Stockbit</div>
+    <div class="big">{{if $s.AccDist}}<span class="badge {{if isDist $s.AccDist}}bad{{else if isAcc $s.AccDist}}good{{else}}info{{end}}">{{$s.AccDist}}</span>{{else}}-{{end}}</div>
+    <div>{{with $s.Buyers}}{{.}} pembeli{{end}}{{with $s.Sellers}} · {{.}} penjual{{end}}</div>
+    <div class="small">Net value {{nilaiPtr $s.NetValue}}{{with $s.AvgPrice}} · rata-rata {{rp .}}{{end}}</div>
+  </div>
+  <div class="card">
+    <div class="label">Pemusatan</div>
+    <div>3 pembeli teratas: <b>{{persen $a.Top3BuyShare}}</b> dari beli</div>
+    <div>3 penjual teratas: <b>{{persen $a.Top3SellShare}}</b> dari jual</div>
+    <div class="small">{{if $d.HasView}}Harga terakhir {{rp $price}} ({{tanggal .View.Day}}){{else if .View}}Harga tidak tersedia (di luar LQ45){{else}}Harga sedang dimuat{{end}}</div>
+  </div>
+</section>
+
+{{if $s.Top}}
+<section>
+  <h2>Top broker (Stockbit)</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th></th><th class="num">Volume (lot)</th><th class="num">%</th><th class="num">Rp miliar</th><th>Acc/Dist</th></tr></thead>
+    <tbody>{{range $s.Top}}<tr><td>{{.Name}}</td><td class="num {{arah .Lots}}">{{lotSigned .Lots}}</td><td class="num {{arah .Percent}}">{{printf "%.1f" .Percent}}</td><td class="num {{arah .ValueB}}">{{printf "%.1f" .ValueB}}</td><td><span class="badge {{if isDist .Label}}bad{{else if isAcc .Label}}good{{else}}info{{end}}">{{.Label}}</span></td></tr>{{end}}</tbody>
+  </table></div>
+</section>
+{{end}}
+
+<section class="two">
+  <div>
+    <h2>Pembeli</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Broker</th><th class="num">Value</th><th class="num">Lot</th><th class="num">Rata2</th>{{if $d.HasView}}<th class="num">Harga vs rata2</th>{{end}}</tr></thead>
+      <tbody>{{range $s.Buy}}{{$v := vsAvg $price .Avg}}
+        <tr {{if index $d.Foreign .Broker}}class="foreign"{{end}}><td><b>{{.Broker}}</b>{{if index $d.Foreign .Broker}} <span class="badge info">asing</span>{{end}}</td>
+        <td class="num">{{nilai .Value}}</td><td class="num">{{lot .Lots}}</td><td class="num">{{rp .Avg}}</td>{{if $d.HasView}}<td class="num {{arah $v}}">{{pct $v}}</td>{{end}}</tr>{{end}}</tbody>
+    </table></div>
+  </div>
+  <div>
+    <h2>Penjual</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Broker</th><th class="num">Value</th><th class="num">Lot</th><th class="num">Rata2</th></tr></thead>
+      <tbody>{{range $s.Sell}}
+        <tr {{if index $d.Foreign .Broker}}class="foreign"{{end}}><td><b>{{.Broker}}</b>{{if index $d.Foreign .Broker}} <span class="badge info">asing</span>{{end}}</td>
+        <td class="num">{{nilai .Value}}</td><td class="num">{{lot .Lots}}</td><td class="num">{{rp .Avg}}</td></tr>{{end}}</tbody>
+    </table></div>
+  </div>
+</section>
+<p class="note">Harga vs rata2: positif berarti harga sekarang di atas harga rata-rata beli broker itu (untung di atas kertas). Value dalam miliar rupiah (M).</p>
+
+{{if gt (len $d.History) 1}}
+<section>
+  <h2>Riwayat {{$s.Ticker}}</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Periode</th><th>Filter</th><th>Stockbit</th><th class="num">Net broker asing</th><th class="num">Net broker lokal</th></tr></thead>
+    <tbody>{{range $d.History}}
+      <tr {{if eq .ID $s.ID}}class="pick"{{end}}><td><a href="/broker/{{.ID}}">{{tanggal .Start}} – {{tanggal .End}}</a></td><td>{{investorName .Investor}} · {{modeName .Mode}}</td>
+      <td>{{.AccDist}}</td><td class="num {{arah .Analysis.ForeignNet}}">{{miliar .Analysis.ForeignNet}}</td><td class="num {{arah .Analysis.LocalNet}}">{{miliar .Analysis.LocalNet}}</td></tr>{{end}}</tbody>
+  </table></div>
+</section>
+{{end}}
+
+<form class="danger" method="post" action="/broker/{{$s.ID}}/hapus"><button class="link" type="submit">Hapus tempelan ini</button></form>
+{{end}}

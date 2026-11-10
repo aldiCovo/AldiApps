@@ -54,7 +54,7 @@ func TestPages(t *testing.T) {
 	if err := migrate(ctx, pool); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, "TRUNCATE paper_trades, momentum_months, runs"); err != nil {
+	if _, err := pool.Exec(ctx, "TRUNCATE paper_trades, momentum_months, runs, broker_summaries CASCADE"); err != nil {
 		t.Fatal(err)
 	}
 	last := time.Date(2026, 11, 23, 0, 0, 0, 0, wib)
@@ -142,6 +142,60 @@ func TestPages(t *testing.T) {
 			t.Errorf("%s: %d %.300s", path, w.Code, w.Body.String())
 		}
 	}
+	// Paste a broker summary, see it, find it on the stock's page, and delete it.
+	fixture, err := os.ReadFile("testdata/broker_summary.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pasted := strings.Replace(string(fixture), "TEST", "BBCA", 1)
+	if w := do("POST", "/broker", session, url.Values{"text": {"tidak ada apa-apa"}}); w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), "Teks tidak terbaca") {
+		t.Errorf("a bad paste gave %d", w.Code)
+	}
+	w = do("POST", "/broker", session, url.Values{"text": {pasted}, "investor": {"all"}, "market": {"regular"}, "mode": {"net"}})
+	detail := w.Header().Get("Location")
+	if w.Code != http.StatusSeeOther || !strings.HasPrefix(detail, "/broker/") {
+		t.Fatalf("paste gave %d to %q: %.500s", w.Code, detail, w.Body.String())
+	}
+	// The same stock, period and filter again replaces it rather than adding a second.
+	if w := do("POST", "/broker", session, url.Values{"text": {pasted}}); w.Header().Get("Location") != detail {
+		t.Errorf("a repeated paste went to %q, want %q", w.Header().Get("Location"), detail)
+	}
+	for path, want := range map[string]string{
+		detail:          "Net broker asing",
+		"/broker":       "BBCA",
+		"/saham/BBCA":   "Broker summary BBCA",
+		"/broker/asing": "ZP",
+	} {
+		w := do("GET", path, session, nil)
+		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), want) {
+			t.Errorf("%s: %d, want %q in:\n%.1500s", path, w.Code, want, w.Body.String())
+		}
+	}
+	if w := do("GET", detail, session, nil); !strings.Contains(w.Body.String(), "−") {
+		t.Errorf("detail lacks a negative foreign net")
+	}
+	r := httptest.NewRequest("POST", "/broker/asing", strings.NewReader("codes=zp+KZ"))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.Header.Set("Origin", "https://evil.example")
+	r.AddCookie(&http.Cookie{Name: sessionCookie, Value: session})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, r)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("a post from another site gave %d", rec.Code)
+	}
+	if w := do("POST", "/broker/asing", session, url.Values{"codes": {"zp, kz YU"}}); w.Code != http.StatusSeeOther {
+		t.Errorf("saving foreign brokers gave %d", w.Code)
+	}
+	if w := do("GET", "/broker/asing", session, nil); !strings.Contains(w.Body.String(), "KZ YU ZP") {
+		t.Errorf("foreign brokers not saved: %.800s", w.Body.String())
+	}
+	if w := do("POST", detail+"/hapus", session, url.Values{}); w.Code != http.StatusSeeOther {
+		t.Errorf("delete gave %d", w.Code)
+	}
+	if w := do("GET", detail, session, nil); w.Code != http.StatusNotFound {
+		t.Errorf("after delete the detail gave %d", w.Code)
+	}
+
 	if csp := do("GET", "/", session, nil).Header().Get("Content-Security-Policy"); !strings.Contains(csp, "script-src 'self'") {
 		t.Errorf("CSP %q", csp)
 	}

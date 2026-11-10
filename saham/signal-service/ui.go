@@ -48,7 +48,7 @@ func newWebUI(j *job, st *store, password string, runAt time.Duration) (*webUI, 
 	key := sha256.Sum256([]byte("saham-ui-session\x00" + password))
 	u := &webUI{job: j, store: st, password: []byte(password), key: key[:], runAt: runAt,
 		pages: map[string]*template.Template{}, now: time.Now}
-	for _, name := range []string{"login", "loading", "home", "stocks", "stock", "paper", "momentum"} {
+	for _, name := range []string{"login", "loading", "home", "stocks", "stock", "paper", "momentum", "broker", "broker_detail", "broker_foreign"} {
 		t, err := template.New("layout.html").Funcs(templateFuncs).ParseFS(uiFiles, "ui/layout.html", "ui/"+name+".html")
 		if err != nil {
 			return nil, fmt.Errorf("page %s: %w", name, err)
@@ -75,7 +75,13 @@ func (u *webUI) handler() http.Handler {
 	mux.Handle("GET /paper", u.private(u.paper))
 	mux.Handle("GET /momentum", u.private(u.momentum))
 	mux.Handle("GET /data/{ticker}", u.private(u.chartData))
-	return securityHeaders(mux)
+	mux.Handle("GET /broker", u.private(u.brokerForm))
+	mux.Handle("POST /broker", u.private(u.brokerPaste))
+	mux.Handle("GET /broker/asing", u.private(u.foreignForm))
+	mux.Handle("POST /broker/asing", u.private(u.foreignSave))
+	mux.Handle("GET /broker/{id}", u.private(u.brokerDetail))
+	mux.Handle("POST /broker/{id}/hapus", u.private(u.brokerDelete))
+	return securityHeaders(sameOrigin(mux))
 }
 
 func securityHeaders(next http.Handler) http.Handler {
@@ -266,6 +272,7 @@ type stockData struct {
 	Low52    float64
 	Signals  []Signal
 	Trades   []tradeRow
+	Brokers  []brokerItem
 	LastDate time.Time
 }
 
@@ -299,6 +306,10 @@ func (u *webUI) stock(w http.ResponseWriter, r *http.Request) {
 	}
 	var err error
 	if d.Trades, err = u.store.Trades(r.Context(), "", ticker, true, 200); err != nil {
+		u.fail(w, err)
+		return
+	}
+	if d.Brokers, _, err = u.brokerItems(r, ticker, 20); err != nil {
 		u.fail(w, err)
 		return
 	}
@@ -615,8 +626,42 @@ var templateFuncs = template.FuncMap{
 		}
 		return strings.Replace(fmt.Sprintf("%.1f jt", f/1e6), ".", ",", 1)
 	},
-	"persen":     func(f float64) string { return fmt.Sprintf("%.0f%%", f*100) },
-	"inc":        func(i int) int { return i + 1 },
+	"persen": func(f float64) string { return fmt.Sprintf("%.0f%%", f*100) },
+	"inc":    func(i int) int { return i + 1 },
+	// miliar writes rupiah in billions the Indonesian way, signed: "+262,3 M", "−287,2 M".
+	"miliar": miliar,
+	// nilai is an amount in billions without a sign, for columns that are all buying or selling.
+	"nilai": func(f float64) string {
+		return strings.Replace(strings.TrimPrefix(miliar(math.Abs(f)), "+"), "−", "", 1)
+	},
+	"nilaiPtr": func(f *float64) string {
+		if f == nil {
+			return "-"
+		}
+		return strings.TrimPrefix(miliar(math.Abs(*f)), "+")
+	},
+	"lotSigned": func(f float64) string { return strings.Replace(rp(f), "-", "−", 1) },
+	"sub":       func(a, b float64) float64 { return a - b },
+	"neg":       func(a float64) float64 { return -a },
+	"miliarPtr": func(f *float64) string {
+		if f == nil {
+			return "-"
+		}
+		return miliar(*f)
+	},
+	"lot":          func(f float64) string { return rp(f) },
+	"investorName": func(v string) string { return investorNames[v] },
+	"marketName":   func(v string) string { return marketNames[v] },
+	"modeName":     func(v string) string { return modeNames[v] },
+	"isDist":       func(label string) bool { return strings.Contains(strings.ToLower(label), "dist") },
+	"isAcc":        func(label string) bool { return strings.Contains(strings.ToLower(label), "acc") },
+	// vsAvg is how far the price is above a broker's average, NaN when either is unknown.
+	"vsAvg": func(price, avg float64) float64 {
+		if math.IsNaN(price) || avg <= 0 {
+			return math.NaN()
+		}
+		return price/avg - 1
+	},
 	"winRate":    winRate,
 	"meanPct":    meanPct,
 	"aturan":     ruleLabel,
@@ -713,4 +758,15 @@ func exitLabel(sig Signal) string {
 		return "Trailing stop"
 	}
 	return ""
+}
+
+func miliar(f float64) string {
+	if math.IsNaN(f) {
+		return "-"
+	}
+	v := strings.Replace(fmt.Sprintf("%+.1f M", f/1e9), ".", ",", 1)
+	if v == "-0,0 M" {
+		v = "+0,0 M"
+	}
+	return strings.Replace(v, "-", "−", 1)
 }

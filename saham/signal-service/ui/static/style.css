@@ -150,3 +150,19 @@ footer { max-width: 1100px; margin: 0 auto; padding: 1rem 16px 2rem; color: var(
 @media (prefers-color-scheme: dark) { .login button { color: #04201d; } }
 .error { color: var(--down); font-size: .875rem; margin: .5rem 0 0; }
 .empty { text-align: center; margin-top: 15vh; }
+
+form.paste { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+form.paste label { display: block; font-size: .85rem; color: var(--muted); margin-bottom: .3rem; }
+form.paste textarea { width: 100%; font: .85rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; padding: .6rem .7rem; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); resize: vertical; }
+form.paste textarea:focus, form.paste select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.filters { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: .75rem; }
+.filters label { margin: 0; }
+.filters select { display: block; margin-top: .25rem; font: inherit; padding: .45rem .6rem; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); }
+form.paste button { margin-top: .5rem; font: inherit; font-weight: 600; padding: .6rem 1.1rem; border: 0; border-radius: 8px; background: var(--accent); color: #fff; cursor: pointer; }
+@media (prefers-color-scheme: dark) { form.paste button { color: #04201d; } }
+section.two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+section.two h2 { margin-top: 0; }
+@media (max-width: 800px) { section.two { grid-template-columns: 1fr; } }
+tr.foreign td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+form.danger { margin-top: 2rem; }
+form.danger button { color: var(--down); }

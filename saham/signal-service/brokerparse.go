@@ -306,3 +306,9 @@ func topShare(lines []brokerLine, total float64) float64 {
 	}
 	return sum / total
 }
+
+// samePaste reports whether two pasted texts hold the same cells, whatever the blank lines and
+// spaces around them.
+func samePaste(a, b string) bool {
+	return strings.Join(strings.Fields(a), " ") == strings.Join(strings.Fields(b), " ")
+}

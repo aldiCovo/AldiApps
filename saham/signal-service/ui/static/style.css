@@ -166,3 +166,8 @@ section.two h2 { margin-top: 0; }
 tr.foreign td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 form.danger { margin-top: 2rem; }
 form.danger button { color: var(--down); }
+.warning { background: var(--warn-bg); border: 1px solid var(--warn); border-radius: 8px; padding: .75rem 1rem; margin-bottom: 1rem; }
+.warning p { margin: .4rem 0; }
+table.compare { width: auto; margin: .5rem 0; background: var(--surface); border-radius: 6px; }
+table.compare th, table.compare td { padding: .35rem .75rem; }
+label.check { display: flex; gap: .5rem; align-items: center; font-weight: 600; margin: .5rem 0; color: var(--text); }

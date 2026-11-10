@@ -76,6 +76,7 @@ func (u *webUI) handler() http.Handler {
 	mux.Handle("GET /momentum", u.private(u.momentum))
 	mux.Handle("GET /data/{ticker}", u.private(u.chartData))
 	mux.Handle("GET /rekomendasi", u.private(u.recommendations))
+	mux.Handle("POST /rekomendasi/kirim", u.private(u.resend))
 	mux.Handle("GET /broker", u.private(u.brokerForm))
 	mux.Handle("POST /broker", u.private(u.brokerPaste))
 	mux.Handle("GET /broker/asing", u.private(u.foreignForm))
@@ -316,11 +317,12 @@ func (u *webUI) stock(w http.ResponseWriter, r *http.Request) {
 		u.fail(w, err)
 		return
 	}
-	summaries := make([]brokerSummary, len(d.Brokers))
-	for k, b := range d.Brokers {
-		summaries[k] = b.brokerSummary
+	summaries, err := u.store.BrokerSummariesSince(r.Context(), v.Day.Add(-flowHistory))
+	if err != nil {
+		u.fail(w, err)
+		return
 	}
-	d.Rec, _ = recommend(v, ticker, pickBroker(summaries, ticker, v.Day), foreign)
+	d.Rec, _ = recommendFor(v, ticker, summaries, foreign)
 	u.render(w, r, http.StatusOK, "stock", page{Title: ticker, Active: "stocks", View: v, Data: d})
 }
 
@@ -638,6 +640,8 @@ var templateFuncs = template.FuncMap{
 	"persen": func(f float64) string { return fmt.Sprintf("%.0f%%", f*100) },
 	"inc":    func(i int) int { return i + 1 },
 	"poin":   poin,
+	"kurang": pasteNeeds,
+	"list":   func(s ...string) []string { return s },
 	// miliar writes rupiah in billions the Indonesian way, signed: "+262,3 M", "−287,2 M".
 	"miliar": miliar,
 	// nilai is an amount in billions without a sign, for columns that are all buying or selling.
@@ -789,24 +793,29 @@ type recData struct {
 	Recs                  []recommendation
 	Buy, Watch, Wait, Avd int
 	WithBroker            int
+	ToPaste               []recommendation
+	// Flows are every stock with foreign summaries kept, the paste targets first.
+	Flows []recommendation
+	Sent  string // the outcome of sending the summary again
+	Saved string // after several summaries pasted at once
 }
 
-func (u *webUI) recommendations(w http.ResponseWriter, r *http.Request) {
+func (u *webUI) recData(w http.ResponseWriter, r *http.Request) (*marketView, recData, bool) {
 	v, ok := u.withView(w, r, "Rekomendasi", "rekomendasi")
 	if !ok {
-		return
+		return nil, recData{}, false
 	}
-	summaries, err := u.store.BrokerSummariesSince(r.Context(), v.Day.Add(-brokerMaxAge))
+	recs, err := u.job.recommendations(r.Context(), v)
 	if err != nil {
 		u.fail(w, err)
-		return
+		return nil, recData{}, false
 	}
-	foreign, err := u.store.ForeignBrokers(r.Context())
-	if err != nil {
-		u.fail(w, err)
-		return
+	d := recData{Recs: recs, ToPaste: pasteTargets(recs)}
+	target := map[string]bool{}
+	for _, t := range d.ToPaste {
+		target[t.Ticker] = true
+		d.Flows = append(d.Flows, t)
 	}
-	d := recData{Recs: recommendAll(v, summaries, foreign)}
 	for _, rec := range d.Recs {
 		switch rec.Label {
 		case recBuy:
@@ -818,9 +827,49 @@ func (u *webUI) recommendations(w http.ResponseWriter, r *http.Request) {
 		default:
 			d.Avd++
 		}
-		if rec.Summary != nil {
+		if rec.Summary != nil || rec.Flow != nil {
 			d.WithBroker++
 		}
+		if rec.Flow != nil && !target[rec.Ticker] {
+			d.Flows = append(d.Flows, rec)
+		}
+	}
+	return v, d, true
+}
+
+func (u *webUI) recommendations(w http.ResponseWriter, r *http.Request) {
+	v, d, ok := u.recData(w, r)
+	if !ok {
+		return
+	}
+	switch r.URL.Query().Get("kirim") {
+	case "ok":
+		d.Sent = "Ringkasan terbaru sudah dikirim ke Telegram."
+	case "gagal":
+		d.Sent = "Gagal mengirim ke Telegram. Coba lagi sebentar lagi."
+	}
+	if n, err := strconv.Atoi(r.URL.Query().Get("tersimpan")); err == nil && n > 0 {
+		d.Saved = fmt.Sprintf("%d broker summary tersimpan.", n)
 	}
 	u.render(w, r, http.StatusOK, "rekomendasi", page{Title: "Rekomendasi", Active: "rekomendasi", View: v, Data: d})
+}
+
+// resend sends the recommendation again after foreign flow was pasted, and records any new buy
+// candidate as a paper trade, as the daily run does.
+func (u *webUI) resend(w http.ResponseWriter, r *http.Request) {
+	v, d, ok := u.recData(w, r)
+	if !ok {
+		return
+	}
+	added, err := u.job.recordRecommended(r.Context(), v, d.Recs, v.Day, v.Market.Healthy)
+	if err != nil {
+		u.fail(w, err)
+		return
+	}
+	if err := u.job.telegram.Send(r.Context(), composeUpdate(v, d, added)); err != nil {
+		slog.Warn("sending the updated recommendation", "error", err)
+		http.Redirect(w, r, "/rekomendasi?kirim=gagal", http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/rekomendasi?kirim=ok", http.StatusSeeOther)
 }

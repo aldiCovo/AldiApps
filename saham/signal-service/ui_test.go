@@ -217,6 +217,35 @@ func TestPages(t *testing.T) {
 		t.Errorf("after delete the detail gave %d", w.Code)
 	}
 
+	// Several foreign summaries pasted at once, then the recommendation sent again.
+	before := strings.NewReplacer("01 Nov 26", "13 Nov 26", "09 Nov 26", "26 Nov 26").Replace(pasted)
+	week := strings.NewReplacer("01 Nov 26", "27 Nov 26", "09 Nov 26", "04 Dec 26").Replace(pasted)
+	if w := do("POST", "/broker", session, url.Values{"text": {before + "\n" + week}, "investor": {"foreign"}, "market": {"regular"}, "mode": {"net"}}); w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/rekomendasi?tersimpan=2#asing" {
+		t.Errorf("two pastes gave %d to %q: %.1500s", w.Code, w.Header().Get("Location"), w.Body.String())
+	}
+	if w := do("POST", "/broker", session, url.Values{"text": {pasted + "\nBroker Summary\nrusak"}, "investor": {"foreign"}}); w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), "Tempelan ke-2 dari 2") {
+		t.Errorf("a bad second paste gave %d", w.Code)
+	}
+	w = do("GET", "/rekomendasi?tersimpan=2", session, nil)
+	for _, want := range []string{"2 broker summary tersimpan", "Data broker asing", "tempelan 27 Nov 2026 – 4 Des 2026", "Kirim ringkasan ulang"} {
+		if !strings.Contains(w.Body.String(), want) {
+			t.Errorf("/rekomendasi lacks %q", want)
+		}
+	}
+	if w := do("GET", "/saham/BBCA", session, nil); !strings.Contains(w.Body.String(), "Net asing") {
+		t.Errorf("the stock page lacks the flow table")
+	}
+	tg := j.telegram.(*fakeTelegram)
+	sent := len(tg.sent)
+	if w := do("POST", "/rekomendasi/kirim", session, url.Values{}); w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/rekomendasi?kirim=ok" {
+		t.Errorf("resend gave %d to %q", w.Code, w.Header().Get("Location"))
+	}
+	if len(tg.sent) != sent+1 || !strings.Contains(tg.sent[sent], "Rekomendasi diperbarui 4 Des 2026") {
+		t.Errorf("resend sent %d messages", len(tg.sent)-sent)
+	} else {
+		t.Logf("update:\n%s", tg.sent[sent])
+	}
+
 	if csp := do("GET", "/", session, nil).Header().Get("Content-Security-Policy"); !strings.Contains(csp, "script-src 'self'") {
 		t.Errorf("CSP %q", csp)
 	}

@@ -26,7 +26,7 @@ func TestRecommend(t *testing.T) {
 	close := s.closes[len(s.closes)-1]
 
 	// Technical only: uptrend +2, momentum +1, IHSG +1.
-	r, ok := recommend(v, "BBRI", nil, nil)
+	r, ok := recommend(v, "BBRI", nil, nil, nil)
 	if !ok || r.Technical != 4 || r.Broker != 0 || r.Label != recBuy || !r.HasPlan {
 		t.Fatalf("technical only: %+v", r)
 	}
@@ -42,7 +42,7 @@ func TestRecommend(t *testing.T) {
 	sell := period(brokerSummary{Investor: "foreign", AccDist: "Dist",
 		Buy:  []brokerLine{{Broker: "YP", Value: 1e9, Avg: close * 1.2}},
 		Sell: []brokerLine{{Broker: "ZP", Value: 1e9 + 0.1*close*1e6*7}}})
-	r, _ = recommend(v, "BBRI", &sell, nil)
+	r, _ = recommend(v, "BBRI", &sell, nil, nil)
 	if r.Broker != -3 || r.Label != recPantauOr(r.Score) {
 		t.Errorf("selling: broker %v score %v label %s", r.Broker, r.Score, r.Label)
 	}
@@ -53,7 +53,7 @@ func TestRecommend(t *testing.T) {
 	// Estimated from broker codes it counts at most one point.
 	est := sell
 	est.Investor = "all"
-	r, _ = recommend(v, "BBRI", &est, map[string]bool{"ZP": true})
+	r, _ = recommend(v, "BBRI", &est, nil, map[string]bool{"ZP": true})
 	if r.Broker != -2 {
 		t.Errorf("estimated selling: broker %v, parts %+v", r.Broker, r.Parts)
 	}
@@ -62,7 +62,7 @@ func TestRecommend(t *testing.T) {
 	buy := period(brokerSummary{Investor: "foreign", AccDist: "Big Acc",
 		Buy:  []brokerLine{{Broker: "BK", Value: 1e9 + 0.1*close*1e6*7, Avg: close}},
 		Sell: []brokerLine{{Broker: "CC", Value: 1e9}}})
-	r, _ = recommend(v, "BBRI", &buy, nil)
+	r, _ = recommend(v, "BBRI", &buy, nil, nil)
 	if r.Broker != 4 || r.Score != 8 || r.Label != recBuy {
 		t.Errorf("buying: broker %v score %v", r.Broker, r.Score)
 	}
@@ -76,7 +76,7 @@ func TestRecommend(t *testing.T) {
 	falling = analyze("TLKM", falling.bars)
 	down.Stocks["TLKM"] = falling
 	down.Tickers = append(down.Tickers, "TLKM")
-	r, _ = recommend(down, "TLKM", nil, nil)
+	r, _ = recommend(down, "TLKM", nil, nil, nil)
 	if r.Label != recAvoid || r.HasPlan {
 		t.Errorf("downtrend: %+v", r)
 	}

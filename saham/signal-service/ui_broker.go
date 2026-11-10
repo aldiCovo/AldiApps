@@ -2,10 +2,12 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -43,17 +45,21 @@ type brokerItem struct {
 	Analysis brokerAnalysis
 }
 
+// brokerConflict is a kept summary a paste would replace, with the paste, shown for a yes or no.
+type brokerConflict struct {
+	Existing brokerSummary
+	New      brokerSummary
+}
+
 type brokerFormData struct {
-	Error string
-	// Existing is the summary a paste would replace, with New the paste, shown for a yes or no.
-	Existing *brokerSummary
-	New      *brokerSummary
-	Text     string
-	Investor string
-	Market   string
-	Mode     string
-	Recent   []brokerItem
-	Foreign  []string
+	Error     string
+	Conflicts []brokerConflict
+	Text      string
+	Investor  string
+	Market    string
+	Mode      string
+	Recent    []brokerItem
+	Foreign   []string
 }
 
 func (u *webUI) brokerItems(r *http.Request, ticker string, limit int) ([]brokerItem, map[string]bool, error) {
@@ -73,7 +79,7 @@ func (u *webUI) brokerItems(r *http.Request, ticker string, limit int) ([]broker
 }
 
 func (u *webUI) brokerForm(w http.ResponseWriter, r *http.Request) {
-	u.renderBrokerForm(w, r, http.StatusOK, brokerFormData{Investor: "all", Market: "regular", Mode: "net"})
+	u.renderBrokerForm(w, r, http.StatusOK, brokerFormData{Investor: "foreign", Market: "regular", Mode: "net"})
 }
 
 func (u *webUI) renderBrokerForm(w http.ResponseWriter, r *http.Request, status int, d brokerFormData) {
@@ -94,32 +100,67 @@ func (u *webUI) brokerPaste(w http.ResponseWriter, r *http.Request) {
 		Market:   pick(r.PostFormValue("market"), marketNames, "regular"),
 		Mode:     pick(r.PostFormValue("mode"), modeNames, "net"),
 	}
-	s, err := parseBrokerSummary(d.Text)
-	if err != nil {
-		d.Error = "Teks tidak terbaca: " + err.Error() + "."
-		u.renderBrokerForm(w, r, http.StatusUnprocessableEntity, d)
-		return
+	chunks := splitPastes(d.Text)
+	var list []brokerSummary
+	for k, chunk := range chunks {
+		s, err := parseBrokerSummary(chunk)
+		if err != nil {
+			d.Error = "Teks tidak terbaca: " + err.Error() + "."
+			if len(chunks) > 1 {
+				d.Error = fmt.Sprintf("Tempelan ke-%d dari %d tidak terbaca: %s. Tidak ada yang disimpan.", k+1, len(chunks), err)
+			}
+			u.renderBrokerForm(w, r, http.StatusUnprocessableEntity, d)
+			return
+		}
+		s.Investor, s.Market, s.Mode = d.Investor, d.Market, d.Mode
+		list = append(list, s)
 	}
-	s.Investor, s.Market, s.Mode = d.Investor, d.Market, d.Mode
 	// A different paste for the same stock, period and filter replaces the kept one only once
 	// confirmed, and the confirmation names which one, so a changed filter is checked again.
-	existing, err := u.store.FindBrokerSummary(r.Context(), s)
-	switch {
-	case errors.Is(err, errNotFound):
-	case err != nil:
-		u.fail(w, err)
-		return
-	case !samePaste(existing.Pasted, s.Pasted) && r.PostFormValue("replace") != strconv.FormatInt(existing.ID, 10):
-		d.Existing, d.New = &existing, &s
+	replace := r.PostForm["replace"]
+	for _, s := range list {
+		existing, err := u.store.FindBrokerSummary(r.Context(), s)
+		switch {
+		case errors.Is(err, errNotFound):
+		case err != nil:
+			u.fail(w, err)
+			return
+		case !samePaste(existing.Pasted, s.Pasted) && !slices.Contains(replace, strconv.FormatInt(existing.ID, 10)):
+			d.Conflicts = append(d.Conflicts, brokerConflict{existing, s})
+		}
+	}
+	if len(d.Conflicts) > 0 {
 		u.renderBrokerForm(w, r, http.StatusConflict, d)
 		return
 	}
-	id, err := u.store.SaveBrokerSummary(r.Context(), s)
-	if err != nil {
-		u.fail(w, err)
+	var id int64
+	for _, s := range list {
+		var err error
+		if id, err = u.store.SaveBrokerSummary(r.Context(), s); err != nil {
+			u.fail(w, err)
+			return
+		}
+	}
+	if len(list) > 1 {
+		http.Redirect(w, r, fmt.Sprintf("/rekomendasi?tersimpan=%d#asing", len(list)), http.StatusSeeOther)
 		return
 	}
 	http.Redirect(w, r, "/broker/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
+}
+
+// splitPastes cuts a text holding several broker summaries copied one after another at each
+// "Broker Summary" title, the first line Stockbit's page gives.
+func splitPastes(text string) []string {
+	lines := strings.Split(strings.ReplaceAll(text, "\r", ""), "\n")
+	var chunks []string
+	start := 0
+	for i, l := range lines {
+		if strings.TrimSpace(l) == "Broker Summary" && i > start && strings.TrimSpace(strings.Join(lines[start:i], "")) != "" {
+			chunks = append(chunks, strings.Join(lines[start:i], "\n"))
+			start = i
+		}
+	}
+	return append(chunks, strings.Join(lines[start:], "\n"))
 }
 
 func pick(v string, allowed map[string]string, fallback string) string {

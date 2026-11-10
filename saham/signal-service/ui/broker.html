@@ -2,10 +2,11 @@
 {{$d := .Data}}
 <h1>Broker summary</h1>
 <p class="note">Di stockbit.com (browser laptop), buka Broker Summary satu saham, blok semua teksnya dari judul sampai baris broker terakhir, salin, lalu tempel di sini. Scroll tabel Stockbit sampai bawah dulu kalau ingin semua broker ikut. Tempelan dengan saham, periode dan filter yang sama menggantikan yang lama.</p>
+<p class="note">Untuk arus asing: pilih <b>Investor: Foreign</b> dan <b>Net</b> di Stockbit. Beberapa periode atau saham boleh ditempel sekaligus, satu setelah yang lain, dalam kotak ini. Lihat yang masih kurang di <a href="/rekomendasi#asing">Rekomendasi → Data broker asing</a>.</p>
 
 <form class="paste" method="post" action="/broker">
   {{with $d.Error}}<p class="error" role="alert">{{.}}</p>{{end}}
-  {{with $d.Existing}}{{$new := $d.New}}
+  {{range $d.Conflicts}}{{$new := .New}}{{with .Existing}}
   <div class="warning" role="alert">
     <p><b>Sudah ada broker summary {{.Ticker}} {{tanggal .Start}} – {{tanggal .End}} dengan filter {{investorName .Investor}} · {{marketName .Market}} · {{modeName .Mode}}</b>, ditempel {{jam .CreatedAt}}, dan isinya berbeda.</p>
     <table class="compare">
@@ -16,11 +17,11 @@
         <tr><td>Net value</td><td>{{nilaiPtr .NetValue}}</td><td>{{nilaiPtr $new.NetValue}}</td></tr>
       </tbody>
     </table>
-    <p>Kalau ini data dengan filter lain di Stockbit (misalnya Foreign), ganti pilihan <b>Investor</b> di bawah lalu simpan lagi. Kalau memang ingin mengganti yang lama, centang di bawah.</p>
-    <label class="check"><input type="checkbox" name="replace" value="{{.ID}}"> Ya, timpa tempelan lama ({{tanggal .Start}} – {{tanggal .End}}, {{investorName .Investor}})</label>
+    <p>Kalau ini data dengan filter lain di Stockbit, ganti pilihan <b>Investor</b> di bawah lalu simpan lagi. Kalau memang ingin mengganti yang lama, centang di bawah.</p>
+    <label class="check"><input type="checkbox" name="replace" value="{{.ID}}"> Ya, timpa tempelan lama ({{.Ticker}} {{tanggal .Start}} – {{tanggal .End}}, {{investorName .Investor}})</label>
     <p><a href="/broker/{{.ID}}">Lihat yang lama</a></p>
   </div>
-  {{end}}
+  {{end}}{{end}}
   <label for="text">Teks dari Stockbit</label>
   <textarea id="text" name="text" rows="10" required placeholder="Broker Summary&#10;BBRI&#10;01 Nov 26&#10;–&#10;09 Nov 26&#10;…">{{$d.Text}}</textarea>
   <div class="filters">

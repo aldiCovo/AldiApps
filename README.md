@@ -16,6 +16,7 @@ Application source code, one folder per application. Each folder has its own `Do
 | [`ecommerce/web/`](ecommerce/web/) | The shop's pages for customers, at **https://prastika.aldiab.ai.id** |
 | [`ecommerce/admin-service/`](ecommerce/admin-service/) | Go API for the admin pages. It lets in admins only and calls the other services' internal routes. Only reachable through `web-admin` |
 | [`ecommerce/web-admin/`](ecommerce/web-admin/) | The admin pages, with their own login, at **https://prastika.aldiab.ai.id/admin** |
+| [`saham/signal-service/`](saham/signal-service/) | Go service that sends a daily LQ45 market brief to Telegram after the close, with a screener and forward paper trading of its rules, using its own PostgreSQL. `signal-service backtest` replays the rules on past prices. Not investment advice |
 
 ## Deploy
 

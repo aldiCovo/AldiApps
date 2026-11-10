@@ -51,15 +51,35 @@ func TestParseBrokerSummary(t *testing.T) {
 	}
 }
 
+// With Stockbit's "-" cells the pairs are exact, even where value order alone would misplace a
+// line: BK's 25B is bigger than CC's 20B before it, so value order would put BK with the sellers.
+func TestParseBrokerSummaryDashes(t *testing.T) {
+	text, err := os.ReadFile("testdata/broker_summary_dashes.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := parseBrokerSummary(string(text))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := codes(s.Buy), []string{"ZP", "OD", "CC", "BK", "XL"}; !equal(got, want) {
+		t.Errorf("buyers %v, want %v", got, want)
+	}
+	if got, want := codes(s.Sell), []string{"KZ", "YU"}; !equal(got, want) {
+		t.Errorf("sellers %v, want %v", got, want)
+	}
+}
+
 func TestParseBrokerSummaryErrors(t *testing.T) {
 	for name, text := range map[string]string{
-		"empty":     "",
-		"no stock":  "01 Nov 26\nBY\nSL\nZP\n1B\n1K\n100\n",
-		"no period": "BBRI\nBY\nSL\nZP\n1B\n1K\n100\n",
-		"no table":  "BBRI\n01 Nov 26\n",
-		"bad line":  "BBRI\n01 Nov 26\nSL\nZP\n1B\nxx\n100\n",
-		"cut short": "BBRI\n01 Nov 26\nSL\nZP\n1B\n",
-		"bad month": "BBRI\n01 Abc 26\nSL\nZP\n1B\n1K\n100\n",
+		"empty":      "",
+		"no stock":   "01 Nov 26\nBY\nSL\nZP\n1B\n1K\n100\n",
+		"no period":  "BBRI\nBY\nSL\nZP\n1B\n1K\n100\n",
+		"no table":   "BBRI\n01 Nov 26\n",
+		"bad line":   "BBRI\n01 Nov 26\nSL\nZP\n1B\nxx\n100\n",
+		"cut short":  "BBRI\n01 Nov 26\nSL\nZP\n1B\n",
+		"two dashes": "BBRI\n01 Nov 26\nSL\nZP\n1B\n1K\n100\n-\n-\n",
+		"bad month":  "BBRI\n01 Abc 26\nSL\nZP\n1B\n1K\n100\n",
 	} {
 		if _, err := parseBrokerSummary(text); err == nil {
 			t.Errorf("%s: read without an error", name)

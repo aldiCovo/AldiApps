@@ -1,0 +1,32 @@
+{{define "content"}}
+{{$sort := .Data.Sort}}
+<h1>Saham LQ45</h1>
+<p class="note">Daftar LQ45 yang berlaku sekarang. Klik judul kolom untuk mengurutkan, terbesar dulu. Momentum = kenaikan 6 bulan tanpa bulan terakhir, angka yang dipakai aturan momentum.</p>
+<div class="table-wrap"><table class="stocks">
+  <thead><tr>
+    <th><a href="/saham" {{if eq $sort ""}}aria-current="true"{{end}}>Saham</a></th>
+    <th class="num">Close</th>
+    <th class="num"><a href="/saham?urut=hari" {{if eq $sort "hari"}}aria-current="true"{{end}}>1 hari</a></th>
+    <th class="num"><a href="/saham?urut=20hari" {{if eq $sort "20hari"}}aria-current="true"{{end}}>20 hari</a></th>
+    <th class="num"><a href="/saham?urut=ma200" {{if eq $sort "ma200"}}aria-current="true"{{end}}>vs MA200</a></th>
+    <th class="num"><a href="/saham?urut=rsi" {{if eq $sort "rsi"}}aria-current="true"{{end}}>RSI(14)</a></th>
+    <th class="num"><a href="/saham?urut=momentum" {{if eq $sort "momentum"}}aria-current="true"{{end}}>Momentum</a></th>
+    <th>Sinyal</th>
+  </tr></thead>
+  <tbody>
+  {{range .Data.Rows}}
+    <tr>
+      <td><a class="ticker" href="/saham/{{.Ticker}}">{{.Ticker}}</a></td>
+      <td class="num">{{rp .Close}}</td>
+      <td class="num {{arah .Change1d}}">{{pct .Change1d}}</td>
+      <td class="num {{arah .Change20d}}">{{pct .Change20d}}</td>
+      <td class="num {{arah .VsMA200}}">{{pct .VsMA200}}</td>
+      <td class="num">{{angka .RSI14}}</td>
+      <td class="num {{arah .Momentum}}">{{pct .Momentum}}</td>
+      <td>{{range .Signals}}<span class="badge info">{{aturan .}}</span> {{end}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table></div>
+{{with .View.Missing}}<p class="note">Tanpa data dari Yahoo: {{join . ", "}}.</p>{{end}}
+{{end}}

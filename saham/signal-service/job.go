@@ -9,6 +9,7 @@ import (
 	"math"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -39,6 +40,8 @@ type job struct {
 	tickers  []string
 	now      func() time.Time
 	mu       sync.Mutex
+	// view is the latest prices for the web pages, nil until first read.
+	view atomic.Pointer[marketView]
 }
 
 // event is a paper trade that was bought or sold today, for the brief.
@@ -112,6 +115,7 @@ func (j *job) Run(ctx context.Context, force bool) (string, error) {
 	if len(missing) > len(j.tickers)/5 {
 		return "", fmt.Errorf("no prices for %d of %d stocks: %s", len(missing), len(j.tickers), strings.Join(missing, ", "))
 	}
+	j.view.Store(buildView(j.tickers, index, all, missing, time.Now()))
 	healthy := marketFilter(index, marketMA200)
 	r := dayReport{Day: day, Missing: missing, Market: readMarket(index, all)}
 

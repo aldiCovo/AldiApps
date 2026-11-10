@@ -1,0 +1,13 @@
+{{define "content"}}
+<div class="login">
+  <img src="/static/icon.svg" alt="" width="48" height="48">
+  <h1>Saham</h1>
+  <p class="muted">Ringkasan pasar LQ45 dan paper trading.</p>
+  <form method="post" action="/login">
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required autofocus>
+    {{with .Data}}<p class="error" role="alert">{{.}}</p>{{end}}
+    <button type="submit">Masuk</button>
+  </form>
+</div>
+{{end}}

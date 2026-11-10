@@ -6,6 +6,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY *.go ./
 COPY migrations ./migrations
+COPY ui ./ui
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -trimpath -ldflags='-s -w' -o /signal-service .
 
 FROM gcr.io/distroless/static-debian13:nonroot

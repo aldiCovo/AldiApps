@@ -1,0 +1,30 @@
+{{define "content"}}
+{{$d := .Data}}
+<h1>Rekomendasi {{tanggal .View.Day}}</h1>
+<p class="note">Skor gabungan analisa teknikal dan broker summary yang kamu tempel (maksimal 14 hari terakhir). Tiap bagian memberi poin dengan alasan tertulis; totalnya menentukan label. Poinnya penilaian, bukan hasil backtest: setiap <b>Kandidat beli</b> otomatis masuk paper trading sebagai aturan Rekomendasi, dibanding entry acak, supaya kelihatan apakah skor ini benar-benar membantu. Bukan saran investasi.</p>
+
+<section class="cards">
+  <div class="card"><div class="label">Kandidat beli</div><div class="big up">{{$d.Buy}}</div><div class="muted">Skor 4 ke atas</div></div>
+  <div class="card"><div class="label">Pantau</div><div class="big">{{$d.Watch}}</div><div class="muted">Skor 2 sampai 3</div></div>
+  <div class="card"><div class="label">Tunggu / Hindari</div><div class="big">{{$d.Wait}} / <span class="down">{{$d.Avd}}</span></div><div class="muted">Skor 0–1 / di bawah 0</div></div>
+  <div class="card"><div class="label">Dengan data broker</div><div class="big">{{$d.WithBroker}} <span class="muted">dari {{len $d.Recs}}</span></div><div class="muted"><a href="/broker">Tempel broker summary</a> untuk menambah</div></div>
+</section>
+
+<section>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Saham</th><th>Label</th><th class="num">Skor</th><th class="num">Teknikal</th><th class="num">Broker</th><th>Alasan utama</th><th>Rencana</th></tr></thead>
+    <tbody>
+    {{range $d.Recs}}
+      <tr><td><a class="ticker" href="/saham/{{.Ticker}}">{{.Ticker}}</a></td>
+      <td><span class="badge {{.Class}}">{{.Label}}</span></td>
+      <td class="num {{arah .Score}}"><b>{{poin .Score}}</b></td>
+      <td class="num {{arah .Technical}}">{{poin .Technical}}</td>
+      <td class="num {{arah .Broker}}">{{if .Summary}}{{poin .Broker}}{{else}}<span class="muted">-</span>{{end}}</td>
+      <td class="reasons">{{range $i, $p := .Reasons 2}}{{if $i}}; {{end}}{{$p.Text}}{{end}}</td>
+      <td>{{if .HasPlan}}Beli ≤ {{rp .MaxEntry}} · SL {{rp .Stop}} · TP {{rp .Target}}{{else}}-{{end}}</td></tr>
+    {{end}}
+    </tbody>
+  </table></div>
+  <p class="note">Teknikal: tren MA50/MA200 (±2), momentum 6 bulan (±1), RSI jenuh beli (−1), sinyal screener (+1), IHSG (±1). Broker: arus asing dibanding nilai transaksi periode itu (±2 dengan filter Asing, ±1 kalau diperkirakan dari broker asing), label Acc/Dist Stockbit (±1), harga dekat rata-rata pembeli terbesar (+1). Rencana: beli maks 2% di atas close, SL 2 ATR, target 3 ATR, maks 20 hari.</p>
+</section>
+{{end}}

@@ -8,8 +8,11 @@ import (
 	"time"
 )
 
-// maxScreener keeps the brief within Telegram's 4096 characters on a busy day.
-const maxScreener = 12
+// maxScreener and maxRecommended keep the brief within Telegram's 4096 characters on a busy day.
+const (
+	maxScreener    = 12
+	maxRecommended = 5
+)
 
 var bulan = []string{"", "Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"}
 
@@ -52,6 +55,26 @@ func composeBrief(r dayReport) string {
 			b.WriteString(" · trailing stop")
 		}
 		b.WriteString("\n")
+	}
+
+	b.WriteString("\n⭐ <b>Rekomendasi</b> <i>(skor teknikal + broker, belum terbukti)</i>\n")
+	if len(r.Recommended) == 0 {
+		fmt.Fprintf(&b, "Tidak ada kandidat beli hari ini. %d saham berlabel Pantau.\n", r.Watching)
+	}
+	for i, rec := range r.Recommended {
+		if i == maxRecommended {
+			fmt.Fprintf(&b, "…dan %d lainnya\n", len(r.Recommended)-maxRecommended)
+			break
+		}
+		var reasons []string
+		for _, p := range rec.Reasons(2) {
+			reasons = append(reasons, p.Text)
+		}
+		fmt.Fprintf(&b, "• <b>%s</b> skor %+.0f: %s\n  Beli maks %s · SL %s · Target %s\n", rec.Ticker, rec.Score,
+			html.EscapeString(strings.Join(reasons, "; ")), rp(rec.MaxEntry), rp(rec.Stop), rp(rec.Target))
+	}
+	if len(r.Recommended) > 0 && r.Watching > 0 {
+		fmt.Fprintf(&b, "%d saham lain berlabel Pantau.\n", r.Watching)
 	}
 
 	if len(r.Bought) > 0 || len(r.Sold) > 0 {
@@ -118,6 +141,7 @@ func statsTable(stats []ruleStats) string {
 		strategyPull, strategyBrk, strategyBasePrefx + strategyBrk,
 		strategyRSI2, strategyBasePrefx + strategyRSI2,
 		strategyBrkTrail, strategyBasePrefx + strategyBrkTrail,
+		strategyRec,
 	}
 	for _, rule := range rows {
 		s := byKey[key{rule, "all"}]

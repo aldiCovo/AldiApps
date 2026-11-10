@@ -154,12 +154,23 @@ func parseBrokerSummary(text string) (brokerSummary, error) {
 	return s, nil
 }
 
-// readTable reads the broker lines. They come in pairs, buyer then seller, until one side runs
-// out; after that every line is the longer side's. Each side is sorted by value, biggest first,
-// which tells which side a line belongs to once the pairs stop.
+// readTable reads the broker lines. They come in pairs, buyer then seller. Once one side runs
+// out, Stockbit fills its cells with "-", which keeps the pairs exact. Without those dashes
+// (an older copy, or a cut one) the leftover lines are placed by value: each side is sorted
+// biggest first, so a line bigger than that side's last can't be on it.
 func (s *brokerSummary) readTable(lines []string) error {
-	var entries []brokerLine
+	var entries []*brokerLine // nil is an empty cell
+	dashes := false
 	for i := 0; i < len(lines); {
+		if lines[i] == "-" {
+			if i+3 >= len(lines) || lines[i+1] != "-" || lines[i+2] != "-" || lines[i+3] != "-" {
+				return errors.New(`sel kosong harus empat tanda "-"`)
+			}
+			entries = append(entries, nil)
+			dashes = true
+			i += 4
+			continue
+		}
 		if !brokerCode.MatchString(lines[i]) {
 			return fmt.Errorf("baris %q tidak terbaca sebagai kode broker", lines[i])
 		}
@@ -172,8 +183,20 @@ func (s *brokerSummary) readTable(lines []string) error {
 		if err := errors.Join(err1, err2, err3); err != nil {
 			return fmt.Errorf("broker %s: %w", lines[i], err)
 		}
-		entries = append(entries, brokerLine{Broker: lines[i], Value: value, Lots: lots, Avg: avg})
+		entries = append(entries, &brokerLine{Broker: lines[i], Value: value, Lots: lots, Avg: avg})
 		i += 4
+	}
+	if dashes {
+		for k, e := range entries {
+			switch {
+			case e == nil:
+			case k%2 == 0:
+				s.Buy = append(s.Buy, *e)
+			default:
+				s.Sell = append(s.Sell, *e)
+			}
+		}
+		return nil
 	}
 	wantBuy := true
 	for _, e := range entries {
@@ -186,9 +209,9 @@ func (s *brokerSummary) readTable(lines []string) error {
 			buy = true
 		}
 		if buy {
-			s.Buy = append(s.Buy, e)
+			s.Buy = append(s.Buy, *e)
 		} else {
-			s.Sell = append(s.Sell, e)
+			s.Sell = append(s.Sell, *e)
 		}
 		wantBuy = !buy
 	}

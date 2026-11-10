@@ -637,12 +637,7 @@ var templateFuncs = template.FuncMap{
 	},
 	"persen": func(f float64) string { return fmt.Sprintf("%.0f%%", f*100) },
 	"inc":    func(i int) int { return i + 1 },
-	"poin": func(f float64) string {
-		if f == 0 {
-			return "0"
-		}
-		return strings.Replace(fmt.Sprintf("%+g", f), "-", "−", 1)
-	},
+	"poin":   poin,
 	// miliar writes rupiah in billions the Indonesian way, signed: "+262,3 M", "−287,2 M".
 	"miliar": miliar,
 	// nilai is an amount in billions without a sign, for columns that are all buying or selling.

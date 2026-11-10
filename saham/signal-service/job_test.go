@@ -103,7 +103,13 @@ func TestBriefFitsTelegram(t *testing.T) {
 			Parts: []recPart{{Group: "Teknikal", Text: "Tren naik: harga di atas MA200 (Rp 9.000) dan MA50 di atas MA200", Points: 2},
 				{Group: "Broker", Text: "Net investor asing +262,3 M, +6,1% dari nilai transaksi 3 Nov – 7 Nov 2026", Points: 2}}})
 	}
-	r.Watching = 7
+	for i := range 7 {
+		r.Watching = append(r.Watching, recommendation{Ticker: fmt.Sprintf("W%02d", i), Score: 2, HasPlan: true, MaxEntry: 1020, Stop: 950, Target: 1100,
+			Parts: []recPart{{Group: "Teknikal", Text: "Tren naik: harga di atas MA200 (Rp 9.000) dan MA50 di atas MA200", Points: 2}}})
+	}
+	r.WithBroker = []recommendation{{Ticker: "BBRI", Label: recAvoid, Score: -5, Technical: -3, Broker: -2,
+		Parts: []recPart{{Group: "Teknikal", Text: "Tren turun", Points: -2},
+			{Group: "Broker", Text: "Net investor asing −506,4 M, −13,2% dari nilai transaksi", Points: -2}}}}
 	brief := composeBrief(r)
 	if n := len([]rune(brief)); n > 4096 {
 		t.Errorf("brief has %d characters, Telegram takes 4096", n)
@@ -111,7 +117,8 @@ func TestBriefFitsTelegram(t *testing.T) {
 	if strings.Contains(brief, "Close 1000 > high") {
 		t.Error("a reason's > wasn't escaped for Telegram's HTML")
 	}
-	for _, want := range []string{"LEMAH", "18 dari 45", "…dan 28 lainnya", "−0,8%", "Rekomendasi", "<b>R00</b> skor +5", "…dan 3 lainnya", "7 saham lain berlabel Pantau"} {
+	for _, want := range []string{"LEMAH", "18 dari 45", "…dan 28 lainnya", "−0,8%", "Rekomendasi", "<b>R00</b> skor +5", "…dan 4 lainnya di halaman", "<b>W00</b> skor +2", "…dan 4 lainnya di halaman",
+		"<b>BBRI</b> Hindari, skor −5 (teknikal −3, broker −2): Net investor asing"} {
 		if !strings.Contains(brief, want) {
 			t.Errorf("brief lacks %q:\n%s", want, brief)
 		}

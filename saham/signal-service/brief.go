@@ -11,7 +11,8 @@ import (
 // maxScreener and maxRecommended keep the brief within Telegram's 4096 characters on a busy day.
 const (
 	maxScreener    = 12
-	maxRecommended = 5
+	maxRecommended = 4
+	maxOtherRecs   = 3
 )
 
 var bulan = []string{"", "Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"}
@@ -59,22 +60,18 @@ func composeBrief(r dayReport) string {
 
 	b.WriteString("\n⭐ <b>Rekomendasi</b> <i>(skor teknikal + broker, belum terbukti)</i>\n")
 	if len(r.Recommended) == 0 {
-		fmt.Fprintf(&b, "Tidak ada kandidat beli hari ini. %d saham berlabel Pantau.\n", r.Watching)
+		b.WriteString("Tidak ada kandidat beli (skor 4 ke atas) hari ini.\n")
+	} else {
+		b.WriteString("<b>Kandidat beli:</b>\n")
+		writeRecs(&b, r.Recommended, maxRecommended, false)
 	}
-	for i, rec := range r.Recommended {
-		if i == maxRecommended {
-			fmt.Fprintf(&b, "…dan %d lainnya\n", len(r.Recommended)-maxRecommended)
-			break
-		}
-		var reasons []string
-		for _, p := range rec.Reasons(2) {
-			reasons = append(reasons, p.Text)
-		}
-		fmt.Fprintf(&b, "• <b>%s</b> skor %+.0f: %s\n  Beli maks %s · SL %s · Target %s\n", rec.Ticker, rec.Score,
-			html.EscapeString(strings.Join(reasons, "; ")), rp(rec.MaxEntry), rp(rec.Stop), rp(rec.Target))
+	if len(r.Watching) > 0 {
+		b.WriteString("<b>Pantau</b> (skor 2–3, tunggu konfirmasi):\n")
+		writeRecs(&b, r.Watching, maxOtherRecs, false)
 	}
-	if len(r.Recommended) > 0 && r.Watching > 0 {
-		fmt.Fprintf(&b, "%d saham lain berlabel Pantau.\n", r.Watching)
+	if len(r.WithBroker) > 0 {
+		b.WriteString("<b>Saham dengan data broker:</b>\n")
+		writeRecs(&b, r.WithBroker, maxOtherRecs, true)
 	}
 
 	if len(r.Bought) > 0 || len(r.Sold) > 0 {
@@ -224,4 +221,42 @@ func pct(f float64) string {
 		s = "+0,0%"
 	}
 	return strings.Replace(s, "-", "−", 1)
+}
+
+// writeRecs lists recommendations with their main reasons, and the plan when there is one. With
+// broker, the label is shown and the reasons are the broker ones.
+func writeRecs(b *strings.Builder, recs []recommendation, limit int, broker bool) {
+	for i, rec := range recs {
+		if i == limit {
+			fmt.Fprintf(b, "…dan %d lainnya di halaman Rekomendasi\n", len(recs)-limit)
+			return
+		}
+		var reasons []string
+		for _, p := range rec.Reasons(2) {
+			reasons = append(reasons, p.Text)
+		}
+		if broker {
+			reasons = reasons[:0]
+			for _, p := range rec.Parts {
+				if p.Group == "Broker" && p.Points != 0 {
+					reasons = append(reasons, p.Text)
+				}
+			}
+			fmt.Fprintf(b, "• <b>%s</b> %s, skor %s (teknikal %s, broker %s): %s\n", rec.Ticker, rec.Label,
+				poin(rec.Score), poin(rec.Technical), poin(rec.Broker), html.EscapeString(strings.Join(reasons, "; ")))
+			continue
+		}
+		fmt.Fprintf(b, "• <b>%s</b> skor %s: %s\n", rec.Ticker, poin(rec.Score), html.EscapeString(strings.Join(reasons, "; ")))
+		if rec.HasPlan {
+			fmt.Fprintf(b, "  Beli maks %s · SL %s · Target %s\n", rp(rec.MaxEntry), rp(rec.Stop), rp(rec.Target))
+		}
+	}
+}
+
+// poin writes a score signed, with a real minus sign.
+func poin(f float64) string {
+	if f == 0 {
+		return "0"
+	}
+	return strings.Replace(fmt.Sprintf("%+g", f), "-", "−", 1)
 }

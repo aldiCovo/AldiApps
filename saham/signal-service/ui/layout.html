@@ -17,6 +17,7 @@
     <a class="brand" href="/"><img src="/static/icon.svg" alt="" width="24" height="24"> Saham</a>
     <nav>
       <a href="/" {{if eq .Active "home"}}aria-current="page"{{end}}>Ringkasan</a>
+      <a href="/rekomendasi" {{if eq .Active "rekomendasi"}}aria-current="page"{{end}}>Rekomendasi</a>
       <a href="/saham" {{if eq .Active "stocks"}}aria-current="page"{{end}}>LQ45</a>
       <a href="/paper" {{if eq .Active "paper"}}aria-current="page"{{end}}>Paper trading</a>
       <a href="/momentum" {{if eq .Active "momentum"}}aria-current="page"{{end}}>Momentum</a>

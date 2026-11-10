@@ -24,6 +24,21 @@
   </div>
 </section>
 
+{{with $d.Rec}}{{if .Label}}
+<section>
+  <div class="section-head"><h2>Analisa gabungan</h2><a href="/rekomendasi">Semua rekomendasi →</a></div>
+  <div class="card rec">
+    <div class="rec-head"><span class="badge big-badge {{.Class}}">{{.Label}}</span> <span class="big {{arah .Score}}">{{poin .Score}}</span>
+      <span class="muted">teknikal {{poin .Technical}} · broker {{if .Summary}}{{poin .Broker}} ({{tanggal .Summary.Start}} – {{tanggal .Summary.End}}, {{investorName .Summary.Investor}}){{else}}tanpa data{{end}}</span></div>
+    <ul class="parts">
+    {{range .Parts}}<li><span class="pts {{arah .Points}}">{{poin .Points}}</span> <span class="grp">{{.Group}}</span> {{.Text}}</li>{{end}}
+    </ul>
+    {{if .HasPlan}}<p class="plan"><b>Rencana:</b> beli maks {{rp .MaxEntry}} · SL {{rp .Stop}} · target {{rp .Target}} · reward/risk {{printf "%.1f" .RewardRisk}} · maks 20 hari{{with .Summary}}{{if .Buy}} · pembeli terbesar {{(index .Buy 0).Broker}} rata-rata {{rp (index .Buy 0).Avg}}{{end}}{{end}}</p>{{end}}
+    <p class="note">Skor penilaian, belum terbukti. Kandidat beli dicatat di paper trading (aturan Rekomendasi) untuk diuji ke depan. Bukan saran investasi.</p>
+  </div>
+</section>
+{{end}}{{end}}
+
 <section>
   <div class="section-head"><h2>Grafik</h2><span class="legend"><i class="ma50"></i>MA50 <i class="ma200"></i>MA200 <i class="entry"></i>beli <i class="exit"></i>jual (paper)</span></div>
   <div class="chart tall" data-chart="{{$r.Ticker}}" data-rsi="rsi-{{$r.Ticker}}"></div>

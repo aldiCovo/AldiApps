@@ -22,6 +22,7 @@ const (
 	strategyRSI2      = "rsi2"           // RSI(2) below 10 in an uptrend, out above MA5
 	strategyBrkTrail  = "breakout-trail" // 20-day high on volume, trailing stop
 	strategyMomentum  = "momentum"       // monthly: the 5 strongest stocks over 6 months
+	strategyRec       = "rekomendasi"    // the combined technical and broker score's buy candidates
 	strategyBasePrefx = "acak/"          // random entries with a rule's exits, to compare
 )
 

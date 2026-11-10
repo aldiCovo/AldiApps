@@ -125,6 +125,8 @@ func TestPages(t *testing.T) {
 		"/paper":            "Saat IHSG di atas MA200",
 		"/paper?acak=1":     "Sembunyikan acak",
 		"/momentum":         "Peringkat sekarang",
+		"/rekomendasi":      "Dengan data broker",
+		"/saham/BBRI":       "Analisa gabungan",
 		"/static/style.css": "--accent",
 		"/static/app.js":    "LightweightCharts",
 	} {

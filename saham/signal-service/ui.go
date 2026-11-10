@@ -48,7 +48,7 @@ func newWebUI(j *job, st *store, password string, runAt time.Duration) (*webUI, 
 	key := sha256.Sum256([]byte("saham-ui-session\x00" + password))
 	u := &webUI{job: j, store: st, password: []byte(password), key: key[:], runAt: runAt,
 		pages: map[string]*template.Template{}, now: time.Now}
-	for _, name := range []string{"login", "loading", "home", "stocks", "stock", "paper", "momentum", "broker", "broker_detail", "broker_foreign"} {
+	for _, name := range []string{"login", "loading", "home", "stocks", "stock", "paper", "momentum", "broker", "broker_detail", "broker_foreign", "rekomendasi"} {
 		t, err := template.New("layout.html").Funcs(templateFuncs).ParseFS(uiFiles, "ui/layout.html", "ui/"+name+".html")
 		if err != nil {
 			return nil, fmt.Errorf("page %s: %w", name, err)
@@ -75,6 +75,7 @@ func (u *webUI) handler() http.Handler {
 	mux.Handle("GET /paper", u.private(u.paper))
 	mux.Handle("GET /momentum", u.private(u.momentum))
 	mux.Handle("GET /data/{ticker}", u.private(u.chartData))
+	mux.Handle("GET /rekomendasi", u.private(u.recommendations))
 	mux.Handle("GET /broker", u.private(u.brokerForm))
 	mux.Handle("POST /broker", u.private(u.brokerPaste))
 	mux.Handle("GET /broker/asing", u.private(u.foreignForm))
@@ -273,6 +274,7 @@ type stockData struct {
 	Signals  []Signal
 	Trades   []tradeRow
 	Brokers  []brokerItem
+	Rec      recommendation
 	LastDate time.Time
 }
 
@@ -309,10 +311,16 @@ func (u *webUI) stock(w http.ResponseWriter, r *http.Request) {
 		u.fail(w, err)
 		return
 	}
-	if d.Brokers, _, err = u.brokerItems(r, ticker, 20); err != nil {
+	var foreign map[string]bool
+	if d.Brokers, foreign, err = u.brokerItems(r, ticker, 20); err != nil {
 		u.fail(w, err)
 		return
 	}
+	summaries := make([]brokerSummary, len(d.Brokers))
+	for k, b := range d.Brokers {
+		summaries[k] = b.brokerSummary
+	}
+	d.Rec, _ = recommend(v, ticker, pickBroker(summaries, ticker, v.Day), foreign)
 	u.render(w, r, http.StatusOK, "stock", page{Title: ticker, Active: "stocks", View: v, Data: d})
 }
 
@@ -457,11 +465,12 @@ func statsRows(stats []ruleStats) []statsRow {
 	}
 	yes, no := true, false
 	var out []statsRow
-	for _, rule := range []string{strategyPull, strategyBrk, strategyRSI2, strategyBrkTrail} {
+	for _, rule := range []string{strategyPull, strategyBrk, strategyRSI2, strategyBrkTrail, strategyRec} {
 		row := statsRow{Rule: rule, All: find(rule, nil), Healthy: find(rule, &yes), Weak: find(rule, &no)}
-		// Pullback has no random twin of its own; its exits are breakout's.
+		// Pullback and the recommendations have no random twin of their own; their exits are
+		// breakout's.
 		random := strategyBasePrefx + rule
-		if rule == strategyPull {
+		if rule == strategyPull || rule == strategyRec {
 			random = strategyBasePrefx + strategyBrk
 		}
 		row.Random = random
@@ -628,6 +637,12 @@ var templateFuncs = template.FuncMap{
 	},
 	"persen": func(f float64) string { return fmt.Sprintf("%.0f%%", f*100) },
 	"inc":    func(i int) int { return i + 1 },
+	"poin": func(f float64) string {
+		if f == 0 {
+			return "0"
+		}
+		return strings.Replace(fmt.Sprintf("%+g", f), "-", "−", 1)
+	},
 	// miliar writes rupiah in billions the Indonesian way, signed: "+262,3 M", "−287,2 M".
 	"miliar": miliar,
 	// nilai is an amount in billions without a sign, for columns that are all buying or selling.
@@ -718,6 +733,8 @@ func ruleLabel(rule string) string {
 		return "Breakout trailing"
 	case strategyMomentum:
 		return "Momentum"
+	case strategyRec:
+		return "Rekomendasi"
 	}
 	return rule
 }
@@ -732,6 +749,8 @@ func ruleExplanation(rule string) string {
 		return "Di atas MA200 tapi RSI(2) di bawah 10. Jual saat close di atas MA5, SL 3 ATR, maks 10 hari."
 	case strategyBrkTrail:
 		return "Breakout yang sama, keluar dengan trailing stop 3 ATR, maks 40 hari."
+	case strategyRec:
+		return "Kandidat beli dari skor gabungan teknikal + broker (halaman Rekomendasi). SL 2 ATR, target 3 ATR, maks 20 hari."
 	}
 	return ""
 }
@@ -769,4 +788,44 @@ func miliar(f float64) string {
 		v = "+0,0 M"
 	}
 	return strings.Replace(v, "-", "−", 1)
+}
+
+type recData struct {
+	Recs                  []recommendation
+	Buy, Watch, Wait, Avd int
+	WithBroker            int
+}
+
+func (u *webUI) recommendations(w http.ResponseWriter, r *http.Request) {
+	v, ok := u.withView(w, r, "Rekomendasi", "rekomendasi")
+	if !ok {
+		return
+	}
+	summaries, err := u.store.BrokerSummariesSince(r.Context(), v.Day.Add(-brokerMaxAge))
+	if err != nil {
+		u.fail(w, err)
+		return
+	}
+	foreign, err := u.store.ForeignBrokers(r.Context())
+	if err != nil {
+		u.fail(w, err)
+		return
+	}
+	d := recData{Recs: recommendAll(v, summaries, foreign)}
+	for _, rec := range d.Recs {
+		switch rec.Label {
+		case recBuy:
+			d.Buy++
+		case recWatch:
+			d.Watch++
+		case recWait:
+			d.Wait++
+		default:
+			d.Avd++
+		}
+		if rec.Summary != nil {
+			d.WithBroker++
+		}
+	}
+	u.render(w, r, http.StatusOK, "rekomendasi", page{Title: "Rekomendasi", Active: "rekomendasi", View: v, Data: d})
 }

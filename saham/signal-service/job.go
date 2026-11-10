@@ -62,6 +62,9 @@ type dayReport struct {
 	Started   time.Time
 	Missing   []string // stocks Yahoo had no prices for today
 	Suspended []string
+	// The combined score's buy candidates, and how many stocks it says to watch.
+	Recommended []recommendation
+	Watching    int
 }
 
 type marketState struct {
@@ -115,7 +118,8 @@ func (j *job) Run(ctx context.Context, force bool) (string, error) {
 	if len(missing) > len(j.tickers)/5 {
 		return "", fmt.Errorf("no prices for %d of %d stocks: %s", len(missing), len(j.tickers), strings.Join(missing, ", "))
 	}
-	j.view.Store(buildView(j.tickers, index, all, missing, time.Now()))
+	view := buildView(j.tickers, index, all, missing, time.Now())
+	j.view.Store(view)
 	healthy := marketFilter(index, marketMA200)
 	r := dayReport{Day: day, Missing: missing, Market: readMarket(index, all)}
 
@@ -123,6 +127,9 @@ func (j *job) Run(ctx context.Context, force bool) (string, error) {
 		return "", err
 	}
 	if err := j.addSignals(ctx, all, day, healthy, &r); err != nil {
+		return "", err
+	}
+	if err := j.addRecommendations(ctx, view, day, healthy, &r); err != nil {
 		return "", err
 	}
 	started, ok, err := j.store.FirstDay(ctx)
@@ -284,6 +291,50 @@ func (j *job) addSignals(ctx context.Context, all map[string]*series, day time.T
 				continue
 			}
 			if err := j.store.AddSignal(ctx, sig, marketOK); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// addRecommendations scores every stock with its latest broker summary and records each buy
+// candidate as a paper trade, to see whether the score beats random entries.
+func (j *job) addRecommendations(ctx context.Context, v *marketView, day time.Time, healthy map[string]bool, r *dayReport) error {
+	summaries, err := j.store.BrokerSummariesSince(ctx, day.Add(-brokerMaxAge))
+	if err != nil {
+		return err
+	}
+	foreign, err := j.store.ForeignBrokers(ctx)
+	if err != nil {
+		return err
+	}
+	marketOK := healthy[day.Format(time.DateOnly)]
+	for _, rec := range recommendAll(v, summaries, foreign) {
+		switch rec.Label {
+		case recWatch:
+			r.Watching++
+			continue
+		case recBuy:
+		default:
+			continue
+		}
+		s := v.Stocks[rec.Ticker]
+		last := len(s.bars) - 1
+		if !s.bars[last].Date.Equal(day) || last < warmupBars || math.IsNaN(s.atr14[last]) {
+			continue
+		}
+		r.Recommended = append(r.Recommended, rec)
+		var reasons []string
+		for _, p := range rec.Reasons(4) {
+			reasons = append(reasons, p.Text)
+		}
+		busy, err := j.store.HasUnfinished(ctx, strategyRec, rec.Ticker)
+		if err != nil {
+			return err
+		}
+		if !busy {
+			if err := j.store.AddSignal(ctx, s.signal(last, strategyRec, reasons...), marketOK); err != nil {
 				return err
 			}
 		}

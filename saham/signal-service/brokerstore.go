@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"sort"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -98,6 +99,22 @@ func (s *store) FindBrokerSummary(ctx context.Context, b brokerSummary) (brokerS
 func (s *store) BrokerSummaries(ctx context.Context, ticker string, limit int) ([]brokerSummary, error) {
 	rows, err := s.pool.Query(ctx, `SELECT `+brokerSummaryColumns+` FROM broker_summaries
 		WHERE $1 = '' OR ticker = $1 ORDER BY period_end DESC, period_start DESC, ticker, id DESC LIMIT $2`, ticker, limit)
+	if err != nil {
+		return nil, err
+	}
+	list, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (brokerSummary, error) {
+		return scanBrokerSummary(row)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return list, s.addBrokerLines(ctx, list)
+}
+
+// BrokerSummariesSince lists the summaries whose period ended on or after a day, with lines.
+func (s *store) BrokerSummariesSince(ctx context.Context, since time.Time) ([]brokerSummary, error) {
+	rows, err := s.pool.Query(ctx, `SELECT `+brokerSummaryColumns+` FROM broker_summaries
+		WHERE period_end >= $1 ORDER BY period_end DESC, id DESC`, since)
 	if err != nil {
 		return nil, err
 	}

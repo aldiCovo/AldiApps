@@ -81,6 +81,18 @@ func (s *store) BrokerSummary(ctx context.Context, id int64) (brokerSummary, err
 	return list[0], nil
 }
 
+// FindBrokerSummary returns the summary already kept for the same stock, period and filter,
+// without its lines, or errNotFound.
+func (s *store) FindBrokerSummary(ctx context.Context, b brokerSummary) (brokerSummary, error) {
+	found, err := scanBrokerSummary(s.pool.QueryRow(ctx, `SELECT `+brokerSummaryColumns+` FROM broker_summaries
+		WHERE ticker = $1 AND period_start = $2 AND period_end = $3 AND investor = $4 AND market = $5 AND mode = $6`,
+		b.Ticker, b.Start, b.End, b.Investor, b.Market, b.Mode))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return found, errNotFound
+	}
+	return found, err
+}
+
 // BrokerSummaries lists summaries with their lines, newest period first, of one stock when
 // ticker isn't empty.
 func (s *store) BrokerSummaries(ctx context.Context, ticker string, limit int) ([]brokerSummary, error) {

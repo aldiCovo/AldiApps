@@ -160,6 +160,25 @@ func TestPages(t *testing.T) {
 	if w := do("POST", "/broker", session, url.Values{"text": {pasted}}); w.Header().Get("Location") != detail {
 		t.Errorf("a repeated paste went to %q, want %q", w.Header().Get("Location"), detail)
 	}
+	// A different paste for the same stock, period and filter asks first, and replaces only
+	// with the old one's id confirmed.
+	changed := strings.Replace(pasted, "ZP\n\n120B", "ZP\n\n121B", 1)
+	if changed == pasted {
+		t.Fatal("the fixture didn't change")
+	}
+	id := strings.TrimPrefix(detail, "/broker/")
+	if w := do("POST", "/broker", session, url.Values{"text": {changed}}); w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "Ya, timpa") {
+		t.Errorf("a different paste gave %d, want a question: %.800s", w.Code, w.Body.String())
+	}
+	if w := do("POST", "/broker", session, url.Values{"text": {changed}, "replace": {"999999"}}); w.Code != http.StatusConflict {
+		t.Errorf("confirming another summary gave %d", w.Code)
+	}
+	if w := do("POST", "/broker", session, url.Values{"text": {changed}, "investor": {"foreign"}}); w.Code != http.StatusSeeOther || w.Header().Get("Location") == detail {
+		t.Errorf("the same text as Asing gave %d to %q, want a new summary", w.Code, w.Header().Get("Location"))
+	}
+	if w := do("POST", "/broker", session, url.Values{"text": {changed}, "replace": {id}}); w.Code != http.StatusSeeOther || w.Header().Get("Location") != detail {
+		t.Errorf("a confirmed replace gave %d to %q", w.Code, w.Header().Get("Location"))
+	}
 	for path, want := range map[string]string{
 		detail:          "Net broker asing",
 		"/broker":       "BBCA",

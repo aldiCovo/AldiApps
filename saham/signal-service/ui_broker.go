@@ -44,7 +44,10 @@ type brokerItem struct {
 }
 
 type brokerFormData struct {
-	Error    string
+	Error string
+	// Existing is the summary a paste would replace, with New the paste, shown for a yes or no.
+	Existing *brokerSummary
+	New      *brokerSummary
 	Text     string
 	Investor string
 	Market   string
@@ -98,6 +101,19 @@ func (u *webUI) brokerPaste(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.Investor, s.Market, s.Mode = d.Investor, d.Market, d.Mode
+	// A different paste for the same stock, period and filter replaces the kept one only once
+	// confirmed, and the confirmation names which one, so a changed filter is checked again.
+	existing, err := u.store.FindBrokerSummary(r.Context(), s)
+	switch {
+	case errors.Is(err, errNotFound):
+	case err != nil:
+		u.fail(w, err)
+		return
+	case !samePaste(existing.Pasted, s.Pasted) && r.PostFormValue("replace") != strconv.FormatInt(existing.ID, 10):
+		d.Existing, d.New = &existing, &s
+		u.renderBrokerForm(w, r, http.StatusConflict, d)
+		return
+	}
 	id, err := u.store.SaveBrokerSummary(r.Context(), s)
 	if err != nil {
 		u.fail(w, err)

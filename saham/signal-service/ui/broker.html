@@ -1,0 +1,52 @@
+{{define "content"}}
+{{$d := .Data}}
+<h1>Broker summary</h1>
+<p class="note">Di stockbit.com (browser laptop), buka Broker Summary satu saham, blok semua teksnya dari judul sampai baris broker terakhir, salin, lalu tempel di sini. Scroll tabel Stockbit sampai bawah dulu kalau ingin semua broker ikut. Tempelan dengan saham, periode dan filter yang sama menggantikan yang lama.</p>
+
+<form class="paste" method="post" action="/broker">
+  {{with $d.Error}}<p class="error" role="alert">{{.}}</p>{{end}}
+  <label for="text">Teks dari Stockbit</label>
+  <textarea id="text" name="text" rows="10" required placeholder="Broker Summary&#10;BBRI&#10;01 Nov 26&#10;–&#10;09 Nov 26&#10;…">{{$d.Text}}</textarea>
+  <div class="filters">
+    <label>Investor
+      <select name="investor">
+        <option value="all" {{if eq $d.Investor "all"}}selected{{end}}>Semua investor</option>
+        <option value="foreign" {{if eq $d.Investor "foreign"}}selected{{end}}>Asing</option>
+        <option value="domestic" {{if eq $d.Investor "domestic"}}selected{{end}}>Domestik</option>
+      </select></label>
+    <label>Pasar
+      <select name="market">
+        <option value="regular" {{if eq $d.Market "regular"}}selected{{end}}>Reguler</option>
+        <option value="negotiated" {{if eq $d.Market "negotiated"}}selected{{end}}>Nego</option>
+        <option value="cash" {{if eq $d.Market "cash"}}selected{{end}}>Tunai</option>
+      </select></label>
+    <label>Mode
+      <select name="mode">
+        <option value="net" {{if eq $d.Mode "net"}}selected{{end}}>Net</option>
+        <option value="gross" {{if eq $d.Mode "gross"}}selected{{end}}>Gross</option>
+      </select></label>
+  </div>
+  <p class="note">Samakan pilihan ini dengan dropdown di Stockbit, karena pilihannya tidak ikut tersalin.</p>
+  <button type="submit">Simpan dan analisis</button>
+</form>
+
+<section>
+  <div class="section-head"><h2>Tersimpan</h2><a href="/broker/asing">Daftar broker asing →</a></div>
+  <p class="note">Broker asing sekarang: {{join $d.Foreign ", "}}.</p>
+  {{if $d.Recent}}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Saham</th><th>Periode</th><th>Filter</th><th>Stockbit</th><th class="num">Net broker asing</th><th class="num">Net broker lokal</th></tr></thead>
+    <tbody>
+    {{range $d.Recent}}
+      <tr><td><a class="ticker" href="/broker/{{.ID}}">{{.Ticker}}</a></td><td>{{tanggal .Start}} – {{tanggal .End}}</td>
+      <td>{{investorName .Investor}} · {{marketName .Market}} · {{modeName .Mode}}</td>
+      <td>{{if .AccDist}}<span class="badge {{if isDist .AccDist}}bad{{else if isAcc .AccDist}}good{{else}}info{{end}}">{{.AccDist}}</span>{{else}}-{{end}}</td>
+      <td class="num {{arah .Analysis.ForeignNet}}">{{miliar .Analysis.ForeignNet}}</td>
+      <td class="num {{arah .Analysis.LocalNet}}">{{miliar .Analysis.LocalNet}}</td></tr>
+    {{end}}
+    </tbody>
+  </table></div>
+  <p class="note">M = miliar rupiah. Dihitung dari baris broker yang tersalin saja.</p>
+  {{else}}<p class="empty-line">Belum ada broker summary yang ditempel.</p>{{end}}
+</section>
+{{end}}

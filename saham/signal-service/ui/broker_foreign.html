@@ -1,0 +1,9 @@
+{{define "content"}}
+<h1>Broker asing</h1>
+<p class="note">Kode broker (2 huruf) yang dihitung sebagai asing, dipisah spasi atau koma. Daftar awal berisi broker milik institusi asing; broker asing juga melayani nasabah lokal, dan kepemilikan broker bisa berubah, jadi sesuaikan sendiri. Untuk arus asing yang sebenarnya, tempel broker summary dengan filter Investor: Asing.</p>
+<form class="paste" method="post" action="/broker/asing">
+  <label for="codes">Kode broker</label>
+  <textarea id="codes" name="codes" rows="3">{{.Data}}</textarea>
+  <button type="submit">Simpan</button>
+</form>
+{{end}}

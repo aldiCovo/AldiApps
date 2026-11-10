@@ -1,0 +1,71 @@
+{{define "content"}}
+{{$d := .Data}}
+<h1>Paper trading</h1>
+<p class="note">Setiap sinyal dicatat seolah dibeli di open hari berikutnya, lalu diikuti sampai keluar, setelah biaya beli 0,15% dan jual 0,25%. Sekitar 1 dari 10 hari, tiap saham juga mendapat entry <b>acak</b> dengan cara keluar yang sama: aturan baru berguna kalau hasilnya lebih baik dari acak.{{if $d.HasStarted}} Mulai {{tanggal $d.Started}}.{{end}}</p>
+
+
+<section>
+  <h2>Semua hari</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Aturan</th><th class="num">Selesai</th><th class="num">Menang</th><th class="num">Rata2</th><th class="num">Acak selesai</th><th class="num">Acak rata2</th><th class="num">Selisih</th><th class="num">Dipegang</th></tr></thead>
+    <tbody>{{range $d.Stats}}<tr><td title="{{penjelasan .Rule}}">{{aturan .Rule}}</td><td class="num">{{.All.Closed}}</td><td class="num">{{winRate .All}}</td><td class="num">{{meanPct .All}}</td><td class="num">{{.RandAll.Closed}}</td><td class="num">{{meanPct .RandAll}}</td><td class="num {{arahSelisih .All .RandAll}}">{{selisih .All .RandAll}}</td><td class="num">{{.All.Open}}</td></tr>{{end}}</tbody>
+  </table></div>
+</section>
+<section>
+  <h2>Saat IHSG di atas MA200</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Aturan</th><th class="num">Selesai</th><th class="num">Menang</th><th class="num">Rata2</th><th class="num">Acak selesai</th><th class="num">Acak rata2</th><th class="num">Selisih</th><th class="num">Dipegang</th></tr></thead>
+    <tbody>{{range $d.Stats}}<tr><td>{{aturan .Rule}}</td><td class="num">{{.Healthy.Closed}}</td><td class="num">{{winRate .Healthy}}</td><td class="num">{{meanPct .Healthy}}</td><td class="num">{{.RandHealthy.Closed}}</td><td class="num">{{meanPct .RandHealthy}}</td><td class="num {{arahSelisih .Healthy .RandHealthy}}">{{selisih .Healthy .RandHealthy}}</td><td class="num">{{.Healthy.Open}}</td></tr>{{end}}</tbody>
+  </table></div>
+</section>
+<section>
+  <h2>Saat IHSG di bawah MA200</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Aturan</th><th class="num">Selesai</th><th class="num">Menang</th><th class="num">Rata2</th><th class="num">Acak selesai</th><th class="num">Acak rata2</th><th class="num">Selisih</th><th class="num">Dipegang</th></tr></thead>
+    <tbody>{{range $d.Stats}}<tr><td>{{aturan .Rule}}</td><td class="num">{{.Weak.Closed}}</td><td class="num">{{winRate .Weak}}</td><td class="num">{{meanPct .Weak}}</td><td class="num">{{.RandWk.Closed}}</td><td class="num">{{meanPct .RandWk}}</td><td class="num {{arahSelisih .Weak .RandWk}}">{{selisih .Weak .RandWk}}</td><td class="num">{{.Weak.Open}}</td></tr>{{end}}</tbody>
+  </table></div>
+</section>
+
+<section>
+  <h3>Aturan</h3>
+  <dl class="rules">{{range $d.Stats}}<dt>{{aturan .Rule}}</dt><dd>{{penjelasan .Rule}}</dd>{{end}}</dl>
+</section>
+
+<section>
+  <div class="section-head">
+    <h2>Menunggu dan dipegang</h2>
+    {{if $d.WithRandom}}<a href="/paper">Sembunyikan acak</a>{{else}}<a href="/paper?acak=1">Tampilkan acak</a>{{end}}
+  </div>
+  {{if $d.Unfinished}}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Saham</th><th>Aturan</th><th>Sinyal</th><th>Status</th><th class="num">Beli</th><th class="num">SL</th><th class="num">Target</th><th class="num">Sekarang</th><th class="num">Hasil</th><th class="num">Hari</th></tr></thead>
+    <tbody>
+    {{range $d.Unfinished}}
+      <tr {{if .Random}}class="random"{{end}}><td><a class="ticker" href="/saham/{{.Ticker}}">{{.Ticker}}</a></td><td>{{aturan .Rule}}</td><td>{{tanggal .SignalDate}}</td>
+      <td>{{status .Status}}</td><td class="num">{{if .EntryPrice}}{{rpPtr .EntryPrice}}{{else}}≤ {{rp .MaxEntry}}{{end}}</td>
+      <td class="num">{{rp .Stop}}{{if eq .Exit "trail"}}*{{end}}</td><td class="num">{{if gt .Target 0.0}}{{rp .Target}}{{else if eq .Exit "ma5"}}MA5{{else}}-{{end}}</td>
+      <td class="num">{{rp .Now}}</td><td class="num {{arah .Return}}">{{pct .Return}}</td><td class="num">{{.Days}}/{{.MaxDays}}</td></tr>
+    {{end}}
+    </tbody>
+  </table></div>
+  <p class="note">* SL awal; trailing stop naik mengikuti close tertinggi. Hasil = kalau dijual di close terakhir, setelah biaya.</p>
+  {{else}}<p class="empty-line">Tidak ada trade yang menunggu atau dipegang.</p>{{end}}
+</section>
+
+<section>
+  <h2>Selesai</h2>
+  {{if $d.Closed}}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Saham</th><th>Aturan</th><th>Sinyal</th><th>Keluar</th><th class="num">Beli</th><th class="num">Jual</th><th class="num">Hari</th><th class="num">Hasil</th></tr></thead>
+    <tbody>
+    {{range $d.Closed}}
+      <tr {{if .Random}}class="random"{{end}}><td><a class="ticker" href="/saham/{{.Ticker}}">{{.Ticker}}</a></td><td>{{aturan .Rule}}</td><td>{{tanggal .SignalDate}}</td>
+      <td>{{status .Status}}{{if .ExitDate}} {{tanggalPtr .ExitDate}}{{end}}</td><td class="num">{{rpPtr .EntryPrice}}</td>
+      <td class="num">{{if .EntryPrice}}{{rpPtr .ExitPrice}}{{else}}-{{end}}</td><td class="num">{{.Days}}</td><td class="num {{arahPtr .ReturnPct}}">{{pctPtr .ReturnPct}}</td></tr>
+    {{end}}
+    </tbody>
+  </table></div>
+  <p class="note">Batal beli: open hari berikutnya di atas batas beli atau sudah di bawah SL. 200 terakhir.</p>
+  {{else}}<p class="empty-line">Belum ada trade yang selesai.</p>{{end}}
+</section>
+{{end}}

@@ -1,0 +1,82 @@
+{{define "content"}}
+{{$v := .View}}{{$m := $v.Market}}
+<h1>Pasar {{tanggal $v.Day}}</h1>
+
+<section class="cards">
+  <div class="card">
+    <div class="label">IHSG</div>
+    <div class="big">{{rp $m.Close}}</div>
+    <div><span class="{{arah $m.Change1d}}">{{pct $m.Change1d}}</span> hari ini · <span class="{{arah $m.Change20d}}">{{pct $m.Change20d}}</span> 20 hari</div>
+  </div>
+  <div class="card">
+    <div class="label">Kondisi</div>
+    {{if and $m.Healthy (gt $m.MA50 $m.MA200)}}
+      <div class="big"><span class="badge good">SEHAT</span></div>
+      <div class="muted">Di atas MA200, dan MA50 di atas MA200.</div>
+    {{else if $m.Healthy}}
+      <div class="big"><span class="badge warn">WASPADA</span></div>
+      <div class="muted">Di atas MA200, tapi MA50 masih di bawahnya.</div>
+    {{else}}
+      <div class="big"><span class="badge bad">LEMAH</span></div>
+      <div class="muted">Di bawah MA200. Aturan screener jarang menyala, dan momentum memegang kas.</div>
+    {{end}}
+    <div class="small">MA50 {{rp $m.MA50}} · MA200 {{rp $m.MA200}}</div>
+  </div>
+  <div class="card">
+    <div class="label">Saham LQ45 di atas MA200</div>
+    <div class="big">{{$m.Above200}} <span class="muted">dari {{$m.Counted}}</span></div>
+    {{$b := breadth $m}}
+    <div class="meter"><span class="{{lebar $b}} {{if ge $b 0.5}}good{{else if ge $b 0.3}}warn{{else}}bad{{end}}"></span></div>
+    <div class="muted">{{persen $b}} saham dalam tren naik jangka panjang.</div>
+  </div>
+</section>
+
+<section>
+  <div class="section-head"><h2>IHSG</h2><span class="legend"><i class="ma50"></i>MA50 <i class="ma200"></i>MA200</span></div>
+  <div class="chart" data-chart="IHSG"></div>
+</section>
+
+<section>
+  <h2>Screener {{tanggal $v.Day}}</h2>
+  <p class="note">Belum terbukti menguntungkan di backtest, bukan rekomendasi. Semua sinyal ikut paper trading untuk diuji ke depan.</p>
+  {{if $v.Screener}}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Saham</th><th>Aturan</th><th>Alasan</th><th class="num">Beli maks</th><th class="num">SL</th><th>Keluar</th></tr></thead>
+    <tbody>
+    {{range $v.Screener}}
+      <tr><td><a class="ticker" href="/saham/{{.Ticker}}">{{.Ticker}}</a></td><td>{{aturan .Strategy}}</td>
+      <td class="reasons">{{join .Reasons "; "}}</td><td class="num">{{rp .MaxEntry}}</td><td class="num">{{rp .Stop}}</td><td>{{keluar .}}</td></tr>
+    {{end}}
+    </tbody>
+  </table></div>
+  {{else}}
+  <p class="empty-line">Tidak ada saham yang memenuhi aturan di close terakhir.</p>
+  {{end}}
+</section>
+
+<section>
+  <div class="section-head"><h2>Paper trading</h2><a href="/paper">Detail →</a></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Aturan</th><th class="num">Selesai</th><th class="num">Menang</th><th class="num">Rata2</th><th class="num">Acak</th><th class="num">Selisih</th></tr></thead>
+    <tbody>
+    {{range .Data.Stats}}
+      <tr><td>{{aturan .Rule}}</td><td class="num">{{.All.Closed}}</td><td class="num">{{winRate .All}}</td>
+      <td class="num">{{meanPct .All}}</td><td class="num">{{meanPct .RandAll}}</td>
+      <td class="num {{arahSelisih .All .RandAll}}">{{selisih .All .RandAll}}</td></tr>
+    {{end}}
+    </tbody>
+  </table></div>
+  <p class="note">{{.Data.Open}} trade sedang menunggu atau dipegang. Rata2 per trade setelah biaya; aturan berguna kalau lebih baik dari acak dengan cara keluar yang sama.</p>
+</section>
+
+<section>
+  <div class="section-head"><h2>Momentum bulanan</h2><a href="/momentum">Detail →</a></div>
+  {{with .Data.Momentum}}
+    {{if not .HasMonth}}<p class="empty-line">Mulai di akhir bulan ini.</p>
+    {{else if not .MarketOK}}<p>Sejak {{tanggal .Since}}: <b>kas</b>, karena IHSG di bawah MA200.</p>
+    {{else}}<p>Sejak {{tanggal .Since}}: {{range $i, $t := .Current}}{{if $i}}, {{end}}<a class="ticker" href="/saham/{{$t}}">{{$t}}</a>{{end}} · <span class="{{arah .Running}}">{{pct .Running}}</span> bulan ini</p>{{end}}
+    {{if .Months}}<p class="muted">Total {{pct .Total}} dalam {{.Months}} bulan selesai.</p>{{end}}
+  {{end}}
+</section>
+{{end}}
+{{define "scripts"}}<script src="/static/lightweight-charts.js"></script><script src="/static/app.js"></script>{{end}}

@@ -1,0 +1,48 @@
+{{define "content"}}
+{{$d := .Data}}{{$s := $d.State}}
+<h1>Momentum bulanan</h1>
+<p class="note">Setelah close terakhir tiap bulan, pilih 5 saham LQ45 dengan kenaikan 6 bulan terbesar (tanpa bulan terakhir, yang cenderung berbalik), beli di open berikutnya dan pegang sebulan. Saat IHSG di bawah MA200, pegang kas. Di backtest 2024–2026 aturan ini kalah dari rata-rata LQ45, jadi ini ujian ke depan.</p>
+
+<section class="cards">
+  <div class="card">
+    <div class="label">Bulan ini</div>
+    {{if not $s.HasMonth}}<div class="big">-</div><div class="muted">Mulai di akhir bulan ini.</div>
+    {{else if not $s.MarketOK}}<div class="big">Kas</div><div class="muted">Sejak {{tanggal $s.Since}}, IHSG di bawah MA200.</div>
+    {{else}}<div class="big {{arah $s.Running}}">{{pct $s.Running}}</div><div>Sejak {{tanggal $s.Since}}: {{range $i, $t := $s.Current}}{{if $i}}, {{end}}<a class="ticker" href="/saham/{{$t}}">{{$t}}</a>{{end}}</div>{{end}}
+  </div>
+  <div class="card">
+    <div class="label">Total</div>
+    <div class="big {{arah $s.Total}}">{{if $s.HasMonth}}{{pct $s.Total}}{{else}}-{{end}}</div>
+    <div class="muted">{{$s.Months}} bulan selesai, setelah biaya.</div>
+  </div>
+</section>
+
+<section>
+  <h2>Peringkat sekarang</h2>
+  <p class="note">Yang akan dipilih kalau bulan berakhir hari ini{{if not .View.Market.Healthy}}, tapi IHSG di bawah MA200 sehingga aturan memegang kas{{end}}.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>#</th><th>Saham</th><th class="num">Momentum</th><th class="num">Close</th><th class="num">vs MA200</th><th class="num">20 hari</th></tr></thead>
+    <tbody>
+    {{range $i, $r := $d.Ranking}}
+      <tr {{if lt $i 5}}class="pick"{{end}}><td>{{inc $i}}</td><td><a class="ticker" href="/saham/{{.Ticker}}">{{.Ticker}}</a></td><td class="num {{arah .Momentum}}">{{pct .Momentum}}</td>
+      <td class="num">{{rp .Close}}</td><td class="num {{arah .VsMA200}}">{{pct .VsMA200}}</td><td class="num {{arah .Change20d}}">{{pct .Change20d}}</td></tr>
+    {{end}}
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2>Riwayat</h2>
+  {{if $d.Months}}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Akhir bulan</th><th>Pilihan</th><th>IHSG</th><th class="num">Hasil bulan berikutnya</th></tr></thead>
+    <tbody>
+    {{range $d.Months}}
+      <tr><td>{{tanggal .MonthEnd}}</td><td>{{join .Picks ", "}}</td><td>{{if .MarketOK}}di atas MA200{{else}}di bawah MA200 (kas){{end}}</td>
+      <td class="num {{arahPtr .ReturnPct}}">{{if .ReturnPct}}{{pctPtr .ReturnPct}}{{else}}berjalan{{end}}</td></tr>
+    {{end}}
+    </tbody>
+  </table></div>
+  {{else}}<p class="empty-line">Belum ada bulan yang tercatat.</p>{{end}}
+</section>
+{{end}}

@@ -79,6 +79,8 @@ func serve(ctx context.Context) error {
 		background.Wait()
 	}()
 	background.Go(func() { j.schedule(ctx, runAt) })
+	// The pages need prices before the first run; the run above may already bring them.
+	background.Go(func() { j.keepViewFresh(ctx) })
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -135,11 +137,36 @@ func serve(ctx context.Context) error {
 	}
 	defer serveMetrics()()
 
-	serveErr := make(chan error, 1)
-	go func() {
-		slog.Info("listening", "addr", server.Addr, "run_at", runAt.String())
-		serveErr <- server.ListenAndServe()
-	}()
+	servers := []*http.Server{server}
+	// The web pages, on their own port, only with a password set.
+	if password := os.Getenv("UI_PASSWORD"); password != "" {
+		uiPort := os.Getenv("UI_PORT")
+		if uiPort == "" {
+			uiPort = "8081"
+		}
+		ui, err := newWebUI(j, st, password, runAt)
+		if err != nil {
+			return err
+		}
+		servers = append(servers, &http.Server{
+			Addr:              ":" + uiPort,
+			Handler:           instrument(ui.handler()),
+			ReadHeaderTimeout: 5 * time.Second,
+			ReadTimeout:       10 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			IdleTimeout:       60 * time.Second,
+		})
+	} else {
+		slog.Info("UI_PASSWORD is not set, so the web pages are off")
+	}
+
+	serveErr := make(chan error, len(servers))
+	for _, srv := range servers {
+		go func() {
+			slog.Info("listening", "addr", srv.Addr, "run_at", runAt.String())
+			serveErr <- srv.ListenAndServe()
+		}()
+	}
 	select {
 	case err := <-serveErr:
 		return err
@@ -147,7 +174,13 @@ func serve(ctx context.Context) error {
 	}
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	return server.Shutdown(shutdownCtx)
+	var firstErr error
+	for _, srv := range servers {
+		if err := srv.Shutdown(shutdownCtx); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
 }
 
 // parseClock reads a time of day such as "17:00" into the time since midnight.

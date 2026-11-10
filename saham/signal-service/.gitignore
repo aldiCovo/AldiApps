@@ -1,0 +1,2 @@
+# go build in the folder writes the binary here.
+/signal-service

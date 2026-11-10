@@ -1,0 +1,61 @@
+{{define "content"}}
+{{$d := .Data}}{{$r := $d.Row}}
+<div class="section-head">
+  <h1>{{$r.Ticker}}</h1>
+  <a href="/saham">← LQ45</a>
+</div>
+<section class="cards">
+  <div class="card">
+    <div class="label">Close {{tanggal $d.LastDate}}</div>
+    <div class="big">{{rp $r.Close}}</div>
+    <div><span class="{{arah $r.Change1d}}">{{pct $r.Change1d}}</span> hari ini · <span class="{{arah $r.Change20d}}">{{pct $r.Change20d}}</span> 20 hari</div>
+  </div>
+  <div class="card">
+    <div class="label">Tren</div>
+    <div>MA50 <b>{{rp $d.MA50}}</b> · MA200 <b>{{rp $d.MA200}}</b></div>
+    <div>Harga <span class="{{arah $r.VsMA200}}">{{pct $r.VsMA200}}</span> dari MA200</div>
+    <div class="small">52 minggu {{rp $d.Low52}} – {{rp $d.High52}}</div>
+  </div>
+  <div class="card">
+    <div class="label">Indikator</div>
+    <div>RSI(14) <b>{{angka $r.RSI14}}</b> · RSI(2) <b>{{angka $d.RSI2}}</b></div>
+    <div>ATR(14) <b>{{rp $d.ATR}}</b> · Momentum <span class="{{arah $r.Momentum}}">{{pct $r.Momentum}}</span></div>
+    <div class="small">Volume rata-rata 20 hari {{juta $d.AvgVol}} lembar</div>
+  </div>
+</section>
+
+<section>
+  <div class="section-head"><h2>Grafik</h2><span class="legend"><i class="ma50"></i>MA50 <i class="ma200"></i>MA200 <i class="entry"></i>beli <i class="exit"></i>jual (paper)</span></div>
+  <div class="chart tall" data-chart="{{$r.Ticker}}" data-rsi="rsi-{{$r.Ticker}}"></div>
+  <div class="chart rsi" id="rsi-{{$r.Ticker}}"></div>
+  <p class="note">Harga disesuaikan dengan dividen, jadi harga lama bisa lebih rendah dari yang tercatat di bursa saat itu. Garis putus-putus RSI di 30 dan 70.</p>
+</section>
+
+<section>
+  <h2>Sinyal close terakhir</h2>
+  {{if $d.Signals}}
+  <ul class="signals">
+  {{range $d.Signals}}
+    <li><b>{{aturan .Strategy}}</b>: {{join .Reasons "; "}}.<br>Beli maks {{rp .MaxEntry}} · SL {{rp .Stop}} · {{keluar .}} · maks {{.MaxDays}} hari</li>
+  {{end}}
+  </ul>
+  {{else}}<p class="empty-line">Tidak ada sinyal.</p>{{end}}
+</section>
+
+<section>
+  <h2>Paper trading {{$r.Ticker}}</h2>
+  {{if $d.Trades}}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Sinyal</th><th>Aturan</th><th>Status</th><th class="num">Beli</th><th class="num">Jual</th><th class="num">Hari</th><th class="num">Hasil</th></tr></thead>
+    <tbody>
+    {{range $d.Trades}}
+      <tr {{if .Random}}class="random"{{end}}><td>{{tanggal .SignalDate}}</td><td>{{aturan .Rule}}</td><td>{{status .Status}}</td>
+      <td class="num">{{rpPtr .EntryPrice}}</td><td class="num">{{if ne .Status "open"}}{{rpPtr .ExitPrice}}{{else}}-{{end}}</td>
+      <td class="num">{{.Days}}</td>{{if eq .Status "open"}}<td class="num flat">-</td>{{else}}<td class="num {{arahPtr .ReturnPct}}">{{pctPtr .ReturnPct}}</td>{{end}}</tr>
+    {{end}}
+    </tbody>
+  </table></div>
+  {{else}}<p class="empty-line">Belum ada trade.</p>{{end}}
+</section>
+{{end}}
+{{define "scripts"}}<script src="/static/lightweight-charts.js"></script><script src="/static/app.js"></script>{{end}}

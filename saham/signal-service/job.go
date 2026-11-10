@@ -62,9 +62,11 @@ type dayReport struct {
 	Started   time.Time
 	Missing   []string // stocks Yahoo had no prices for today
 	Suspended []string
-	// The combined score's buy candidates, and how many stocks it says to watch.
+	// The combined score's buy candidates, the stocks it says to watch, and the other stocks
+	// with a recent broker summary.
 	Recommended []recommendation
-	Watching    int
+	Watching    []recommendation
+	WithBroker  []recommendation
 }
 
 type marketState struct {
@@ -311,11 +313,14 @@ func (j *job) addRecommendations(ctx context.Context, v *marketView, day time.Ti
 	}
 	marketOK := healthy[day.Format(time.DateOnly)]
 	for _, rec := range recommendAll(v, summaries, foreign) {
-		switch rec.Label {
-		case recWatch:
-			r.Watching++
+		switch {
+		case rec.Label == recWatch:
+			r.Watching = append(r.Watching, rec)
 			continue
-		case recBuy:
+		case rec.Label == recBuy:
+		case rec.Summary != nil:
+			r.WithBroker = append(r.WithBroker, rec)
+			continue
 		default:
 			continue
 		}

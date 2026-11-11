@@ -284,12 +284,33 @@
           <section id="akun-biodata" class="account-panel" aria-labelledby="akun-biodata-title" hidden>
             <h2 id="akun-biodata-title" class="panel-title">Biodata diri</h2>
             <div class="bio-layout">
-              <span id="akun-bio-avatar" class="avatar huge" aria-hidden="true"></span>
-              <dl class="bio-rows">
-                <div><dt>Nama</dt><dd id="akun-bio-name"></dd></div>
-                <div><dt>Email</dt><dd id="akun-bio-email"></dd></div>
-                <div><dt>Bergabung</dt><dd id="akun-bio-since"></dd></div>
-              </dl>
+              <div class="bio-photo">
+                <span id="akun-bio-avatar" class="avatar huge" aria-hidden="true"></span>
+                <input id="akun-photo-input" class="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp" tabindex="-1" aria-hidden="true">
+                <button id="akun-photo-pick" class="secondary small" type="button">Ganti foto</button>
+                <button id="akun-photo-remove" class="link" type="button" hidden>Hapus foto</button>
+                <p class="hint">JPG, PNG atau WEBP, maksimal 5 MB. Foto dipotong persegi otomatis.</p>
+                <p id="akun-photo-status" class="status" role="status" aria-live="polite"></p>
+              </div>
+              <form id="akun-bio-form" class="address-form bio-form" novalidate>
+                <label class="wide">Nama lengkap <input id="akun-bio-name" type="text" maxlength="200" required autocomplete="name"></label>
+                <label>Tanggal lahir <input id="akun-bio-birth" type="date" min="1900-01-01" autocomplete="bday"></label>
+                <fieldset class="bio-gender">
+                  <legend>Jenis kelamin</legend>
+                  <div class="chips">
+                    <button class="chip pick-chip" type="button" data-gender="female" aria-pressed="false">Perempuan</button>
+                    <button class="chip pick-chip" type="button" data-gender="male" aria-pressed="false">Laki-laki</button>
+                  </div>
+                </fieldset>
+                <label>Nomor HP <input id="akun-bio-phone" type="tel" maxlength="20" autocomplete="tel" inputmode="tel" placeholder="0812 3456 7890"><span class="hint">Boleh dikosongkan.</span></label>
+                <label>Email <input id="akun-bio-email" type="email" readonly><span class="hint">Email dipakai untuk masuk dan belum bisa diganti di sini.</span></label>
+                <p id="akun-bio-error" class="error wide" role="alert" hidden></p>
+                <div class="address-actions wide">
+                  <button id="akun-bio-save" class="primary" type="submit">Simpan perubahan</button>
+                  <p id="akun-bio-status" class="status" role="status" aria-live="polite"></p>
+                </div>
+                <p id="akun-bio-since" class="hint wide"></p>
+              </form>
             </div>
           </section>
 
@@ -322,13 +343,30 @@
 
           <section id="akun-keamanan" class="account-panel" aria-labelledby="akun-keamanan-title" hidden>
             <h2 id="akun-keamanan-title" class="panel-title">Keamanan</h2>
-            <p class="panel-sub">Ganti password secara berkala agar akunmu tetap aman.</p>
+            <p class="panel-sub">Ganti password tanpa keluar dari akun.</p>
+            <form id="akun-password-form" class="address-form password-form" novalidate>
+                <label class="wide">Password sekarang
+                  <span class="password-field"><input id="akun-password-current" type="password" maxlength="128" required autocomplete="current-password"><button class="password-toggle" type="button" aria-controls="akun-password-current" aria-pressed="false" aria-label="Tampilkan password"></button></span>
+                </label>
+                <label class="wide">Password baru
+                  <span class="password-field"><input id="akun-password-new" type="password" maxlength="128" required autocomplete="new-password"><button class="password-toggle" type="button" aria-controls="akun-password-new" aria-pressed="false" aria-label="Tampilkan password"></button></span><span class="hint">Minimal 8 karakter.</span>
+                </label>
+                <label class="wide">Ulangi password baru
+                  <span class="password-field"><input id="akun-password-repeat" type="password" maxlength="128" required autocomplete="new-password"><button class="password-toggle" type="button" aria-controls="akun-password-repeat" aria-pressed="false" aria-label="Tampilkan password"></button></span>
+                </label>
+                <p id="akun-password-error" class="error wide" role="alert" hidden></p>
+                <div class="address-actions wide">
+                  <button id="akun-password-save" class="primary" type="submit">Ganti password</button>
+                  <p id="akun-password-status" class="status" role="status" aria-live="polite"></p>
+                </div>
+              </form>
             <div class="security-box">
-              <h3>Ganti password</h3>
+              <h3>Lupa password sekarang?</h3>
               <p id="akun-security-text"></p>
-              <button id="akun-security-send" class="primary" type="button">Kirim link ganti password</button>
+              <button id="akun-security-send" class="secondary small" type="button">Kirim link</button>
               <p id="akun-security-status" class="status" role="status" aria-live="polite"></p>
             </div>
+            <p class="security-note">Setelah password diganti, kamu tetap masuk di perangkat ini.</p>
           </section>
         </div>
       </div>

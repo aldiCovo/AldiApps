@@ -31,7 +31,14 @@ const icons = {
   logout: "M10 5H5v14h5 M14 8l4 4-4 4 M18 12H9",
   right: "M9 6l6 6-6 6",
   down: "M6 9l6 6 6-6",
+  eye: "M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
+  eyeOff: "M3 3l18 18 M10.6 5.1A10 10 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4 M6.6 6.6C3.9 8.4 2 12 2 12s3.6 7 10 7c1.9 0 3.6-.6 5-1.5 M9.9 9.9a3 3 0 0 0 4.2 4.2",
+  camera: "M4 8h3l2-3h6l2 3h3v11H4z M12 17a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z",
 };
+// The photo is made small and square here, so the upload is quick and the shop stores little.
+const photoSide = 320;
+const maxPhotoFile = 5 * 1024 * 1024;
+const maxPhotoUpload = 45 * 1024;
 const ordersPerPage = 5;
 // The order list is rate limited, so it's read again only after this long or after a change.
 const ordersFreshFor = 30000;
@@ -65,6 +72,13 @@ const icon = (path, className = "line-icon") => {
   return svg;
 };
 const initialOf = (name) => (Array.from((name || "").trim())[0] || "?").toUpperCase();
+
+// The customer's photo over their initial. The initial stays when there is none or it can't load.
+function fillAvatar(node, user) {
+  node.replaceChildren(initialOf(user.name));
+  if (user.photo_version) addPhoto(node, `/api/me/photo?v=${user.photo_version}`, "avatar-photo");
+  return node;
+}
 const firstName = (name) => (name || "").trim().split(/\s+/)[0] || "Akun";
 
 function groupOf(order) {
@@ -149,7 +163,7 @@ function accountMenu(user) {
   trigger.id = "account-trigger";
   trigger.setAttribute("aria-expanded", "false");
   trigger.setAttribute("aria-controls", "account-dropdown");
-  const avatar = el("span", "avatar", initialOf(user.name));
+  const avatar = fillAvatar(el("span", "avatar"), user);
   avatar.setAttribute("aria-hidden", "true");
   const name = el("span", "account-first", firstName(user.name));
   name.prepend(el("span", "visually-hidden", "Akun "));
@@ -177,7 +191,7 @@ function fillMenu() {
   if (!panel || !currentUser) return;
   const profile = el("a", "menu-profile");
   profile.href = "#akun/biodata";
-  const avatar = el("span", "avatar large", initialOf(currentUser.name));
+  const avatar = fillAvatar(el("span", "avatar large"), currentUser);
   avatar.setAttribute("aria-hidden", "true");
   const text = el("span", "profile-text");
   text.append(el("span", "profile-name", currentUser.name), el("span", "profile-email", currentUser.email));
@@ -328,13 +342,12 @@ function routeAccount() {
 
 function fillProfile() {
   const user = currentUser;
-  for (const id of ["akun-avatar", "akun-bio-avatar"]) $(id).textContent = initialOf(user.name);
+  for (const id of ["akun-avatar", "akun-bio-avatar"]) fillAvatar($(id), user);
+  $("akun-photo-remove").hidden = !user.photo_version;
   $("akun-name").textContent = user.name;
   $("akun-email").textContent = user.email;
-  $("akun-bio-name").textContent = user.name;
-  $("akun-bio-email").textContent = user.email;
   const since = user.created_at ? new Date(user.created_at) : null;
-  $("akun-bio-since").textContent = since ? shortDate.format(since) : "–";
+  $("akun-bio-since").textContent = since ? `Member sejak ${monthYear.format(since)}` : "";
   $("akun-since").textContent = since ? `Member sejak ${monthYear.format(since)}` : "";
   $("akun-security-text").textContent = `Kami akan mengirim link ke ${user.email}. Buka link itu untuk membuat password baru.`;
 }
@@ -390,7 +403,11 @@ function showSection(section) {
   if (section === "favorit") loadAccountFavorites();
   if (section === "voucher") loadVoucherPanel();
   if (section === "alamat") loadAddress();
-  if (section === "keamanan") $("akun-security-status").textContent = "";
+  if (section === "biodata") fillBioForm();
+  if (section === "keamanan") {
+    $("akun-security-status").textContent = "";
+    $("akun-password-status").textContent = "";
+  }
 }
 
 // Opens one order in the order dialog, where it can be paid, cancelled, received or reviewed.
@@ -737,6 +754,226 @@ async function sendPasswordLink() {
     button.disabled = false;
   }
 }
+
+// After the profile changes: the header menu and the page show the new name and photo.
+function profileChanged(profile) {
+  currentUser = profile;
+  const wasOpen = $("account-dropdown") && !$("account-dropdown").hidden;
+  $("account").replaceChildren(accountMenu(currentUser));
+  if (wasOpen) openMenu();
+  fillProfile();
+}
+
+function fillBioForm() {
+  const user = currentUser;
+  $("akun-bio-name").value = user.name;
+  $("akun-bio-birth").value = user.birth_date || "";
+  $("akun-bio-birth").max = new Date().toISOString().slice(0, 10);
+  $("akun-bio-phone").value = user.phone || "";
+  $("akun-bio-email").value = user.email;
+  setGender(user.gender || "");
+  $("akun-bio-error").hidden = true;
+  $("akun-bio-status").textContent = "";
+}
+
+function setGender(value) {
+  for (const chip of document.querySelectorAll(".bio-gender [data-gender]")) {
+    chip.setAttribute("aria-pressed", String(chip.dataset.gender === value));
+  }
+}
+
+function chosenGender() {
+  const chip = document.querySelector('.bio-gender [aria-pressed="true"]');
+  return chip ? chip.dataset.gender : "";
+}
+
+function showFormError(id, text) {
+  $(id).textContent = text;
+  $(id).hidden = false;
+}
+
+async function submitBio(event) {
+  event.preventDefault();
+  const name = $("akun-bio-name").value.trim();
+  $("akun-bio-error").hidden = true;
+  $("akun-bio-status").textContent = "";
+  if (!name) {
+    showFormError("akun-bio-error", "Nama lengkap wajib diisi.");
+    $("akun-bio-name").focus();
+    return;
+  }
+  const button = $("akun-bio-save");
+  button.disabled = true;
+  try {
+    const profile = await send("PUT", "/me", {
+      name,
+      phone: $("akun-bio-phone").value.trim(),
+      birth_date: $("akun-bio-birth").value,
+      gender: chosenGender(),
+    });
+    profileChanged(profile);
+    fillBioForm();
+    $("akun-bio-status").textContent = "Biodata tersimpan.";
+  } catch (error) {
+    if (error.status === 401) {
+      renderAccount(null);
+      return;
+    }
+    showFormError("akun-bio-error", error.status === 400
+      ? "Periksa lagi isinya. Nomor HP harus nomor ponsel Indonesia, dan tanggal lahir sebelum hari ini."
+      : "Biodata belum bisa disimpan. Coba lagi sebentar lagi.");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function blobAsBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(String(reader.result).split(",")[1]));
+    reader.addEventListener("error", () => reject(reader.error));
+    reader.readAsDataURL(blob);
+  });
+}
+
+// Cuts the middle square out of the picture and makes it photoSide wide, as a JPEG small
+// enough for the shop to accept.
+async function squarePhoto(file) {
+  const bitmap = await createImageBitmap(file);
+  const side = Math.min(bitmap.width, bitmap.height);
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = photoSide;
+  const context = canvas.getContext("2d");
+  context.fillStyle = "#fff";
+  context.fillRect(0, 0, photoSide, photoSide);
+  context.drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, photoSide, photoSide);
+  bitmap.close();
+  for (const quality of [0.86, 0.75, 0.6, 0.45]) {
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+    if (blob && blob.size <= maxPhotoUpload) return blob;
+  }
+  throw new Error("photo too large");
+}
+
+async function uploadPhoto(event) {
+  const file = event.target.files[0];
+  event.target.value = "";
+  if (!file) return;
+  const status = $("akun-photo-status");
+  status.classList.remove("error");
+  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > maxPhotoFile) {
+    status.textContent = "Pilih foto JPG, PNG atau WEBP, maksimal 5 MB.";
+    status.classList.add("error");
+    return;
+  }
+  const pick = $("akun-photo-pick");
+  pick.disabled = true;
+  status.textContent = "Mengunggah foto…";
+  try {
+    let blob;
+    try {
+      blob = await squarePhoto(file);
+    } catch {
+      status.textContent = "Foto ini belum bisa dibaca. Coba foto lain.";
+      status.classList.add("error");
+      return;
+    }
+    profileChanged(await send("PUT", "/me/photo", { image: await blobAsBase64(blob) }));
+    status.textContent = "Foto profil tersimpan.";
+  } catch (error) {
+    if (error.status === 401) {
+      renderAccount(null);
+      return;
+    }
+    status.textContent = "Foto belum bisa disimpan. Coba lagi sebentar lagi.";
+    status.classList.add("error");
+  } finally {
+    pick.disabled = false;
+  }
+}
+
+async function removePhoto() {
+  const status = $("akun-photo-status");
+  status.classList.remove("error");
+  const button = $("akun-photo-remove");
+  button.disabled = true;
+  try {
+    await send("DELETE", "/me/photo");
+    profileChanged({ ...currentUser, photo_version: 0 });
+    status.textContent = "Foto profil dihapus.";
+    $("akun-photo-pick").focus();
+  } catch (error) {
+    if (error.status === 401) {
+      renderAccount(null);
+      return;
+    }
+    status.textContent = "Foto belum bisa dihapus. Coba lagi sebentar lagi.";
+    status.classList.add("error");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function submitPassword(event) {
+  event.preventDefault();
+  const current = $("akun-password-current");
+  const next = $("akun-password-new");
+  const repeat = $("akun-password-repeat");
+  $("akun-password-error").hidden = true;
+  $("akun-password-status").textContent = "";
+  const problem = !current.value ? [current, "Isi password sekarang."]
+    : Array.from(next.value).length < 8 ? [next, "Password baru minimal 8 karakter."]
+    : next.value !== repeat.value ? [repeat, "Ulangi password baru belum sama."]
+    : null;
+  if (problem) {
+    showFormError("akun-password-error", problem[1]);
+    problem[0].focus();
+    return;
+  }
+  const button = $("akun-password-save");
+  button.disabled = true;
+  try {
+    await send("PUT", "/me/password", { current_password: current.value, new_password: next.value });
+    for (const input of [current, next, repeat]) input.value = "";
+    $("akun-password-status").textContent = "Password sudah diganti.";
+  } catch (error) {
+    if (error.status === 401) {
+      renderAccount(null);
+      return;
+    }
+    if (error.status === 403) {
+      showFormError("akun-password-error", "Password sekarang salah.");
+      current.focus();
+      return;
+    }
+    showFormError("akun-password-error", error.status === 400
+      ? "Password baru minimal 8 karakter."
+      : "Password belum bisa diganti. Coba lagi sebentar lagi.");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+for (const toggle of document.querySelectorAll(".password-toggle")) {
+  toggle.append(icon(icons.eye, "line-icon small"));
+  toggle.addEventListener("click", () => {
+    const input = $(toggle.getAttribute("aria-controls"));
+    const shown = input.type === "password";
+    input.type = shown ? "text" : "password";
+    toggle.setAttribute("aria-pressed", String(shown));
+    toggle.setAttribute("aria-label", shown ? "Sembunyikan password" : "Tampilkan password");
+    toggle.replaceChildren(icon(shown ? icons.eyeOff : icons.eye, "line-icon small"));
+  });
+}
+for (const chip of document.querySelectorAll(".bio-gender [data-gender]")) {
+  // Pressing the chosen one again leaves it empty.
+  chip.addEventListener("click", () => setGender(chip.getAttribute("aria-pressed") === "true" ? "" : chip.dataset.gender));
+}
+$("akun-bio-form").addEventListener("submit", submitBio);
+$("akun-photo-pick").addEventListener("click", () => $("akun-photo-input").click());
+$("akun-photo-input").addEventListener("change", uploadPhoto);
+$("akun-photo-remove").addEventListener("click", removePhoto);
+$("akun-password-form").addEventListener("submit", submitPassword);
 
 $("akun-login").addEventListener("click", () => openAuth());
 $("akun-logout").addEventListener("click", logout);

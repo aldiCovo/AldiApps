@@ -69,7 +69,7 @@ func newTestServer(t *testing.T, passwords *Passwords) *testServer {
 	if err := migrate(ctx, pool); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, "TRUNCATE users, addresses, password_resets RESTART IDENTITY"); err != nil {
+	if _, err := pool.Exec(ctx, "TRUNCATE users, addresses, password_resets, user_photos RESTART IDENTITY"); err != nil {
 		t.Fatal(err)
 	}
 	if passwords == nil {

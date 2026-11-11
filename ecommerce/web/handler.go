@@ -110,6 +110,17 @@ func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, 
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("GET /api/me", g.me)
+	for _, path := range []string{"/me", "/me/password", "/me/photo"} {
+		mux.HandleFunc("PUT /api"+path, func(w http.ResponseWriter, r *http.Request) {
+			if body, ok := readBody(w, r); ok {
+				g.withSession(w, r, g.userURL+path, body)
+			}
+		})
+	}
+	mux.HandleFunc("DELETE /api/me/photo", func(w http.ResponseWriter, r *http.Request) {
+		g.withSession(w, r, g.userURL+"/me/photo", nil)
+	})
+	mux.HandleFunc("GET /api/me/photo", g.mePhoto)
 	mux.HandleFunc("GET /api/me/address", func(w http.ResponseWriter, r *http.Request) {
 		g.withSession(w, r, g.userURL+"/me/address", nil)
 	})
@@ -565,6 +576,35 @@ func orderPath(w http.ResponseWriter, r *http.Request) (string, bool) {
 
 func (g *gateway) me(w http.ResponseWriter, r *http.Request) {
 	g.withSession(w, r, g.userURL+"/me", nil)
+}
+
+// mePhoto passes the account's picture on as an image. The page asks for it with
+// ?v=photo_version, so a new picture is a new address and the old copy can be kept.
+func (g *gateway) mePhoto(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie(sessionCookie)
+	if err != nil {
+		w.Header().Set("Cache-Control", "no-store")
+		writeError(w, http.StatusUnauthorized, "not logged in")
+		return
+	}
+	resp, data, err := g.call(r, g.userURL+"/me/photo", nil, cookie.Value)
+	if err != nil {
+		writeUpstreamError(w, err)
+		return
+	}
+	if resp.StatusCode != http.StatusOK || resp.Header.Get("Content-Type") != "image/jpeg" {
+		w.Header().Set("Cache-Control", "no-store")
+		if resp.StatusCode == http.StatusUnauthorized {
+			setSession(w, "", -1)
+		}
+		writeRaw(w, resp, data)
+		return
+	}
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+	if _, err := w.Write(data); err != nil {
+		slog.Error("writing response failed", "error", err)
+	}
 }
 
 // withSession passes the cookie's token on as the service expects it. Personal answers must

@@ -251,6 +251,10 @@ func TestVoucherRoutesPass(t *testing.T) {
 		{http.MethodPost, "/admin/api/vouchers", `{"code":"HEMAT10"}`, `POST /vouchers Bearer tok-123 {"code":"HEMAT10"}`},
 		{http.MethodPut, "/admin/api/vouchers/4", `{"code":"HEMAT20"}`, `PUT /vouchers/4 Bearer tok-123 {"code":"HEMAT20"}`},
 		{http.MethodDelete, "/admin/api/vouchers/4", "", "DELETE /vouchers/4 Bearer tok-123 "},
+		{http.MethodGet, "/admin/api/looks", "", "GET /looks Bearer tok-123 "},
+		{http.MethodPost, "/admin/api/looks", `{"title":"A"}`, `POST /looks Bearer tok-123 {"title":"A"}`},
+		{http.MethodPut, "/admin/api/looks/2", `{"title":"B"}`, `PUT /looks/2 Bearer tok-123 {"title":"B"}`},
+		{http.MethodDelete, "/admin/api/looks/2", "", "DELETE /looks/2 Bearer tok-123 "},
 	} {
 		if resp := request(t, server, c.method, c.path, c.body, cookie, true); resp.StatusCode != http.StatusOK {
 			t.Fatalf("%s %s: %d", c.method, c.path, resp.StatusCode)

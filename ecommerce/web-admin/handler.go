@@ -113,6 +113,10 @@ func newHandler(adminURL string) http.Handler {
 		{http.MethodPost, "/vouchers", true},
 		{http.MethodPut, "/vouchers/{id}", true},
 		{http.MethodDelete, "/vouchers/{id}", false},
+		{http.MethodGet, "/looks", false},
+		{http.MethodPost, "/looks", true},
+		{http.MethodPut, "/looks/{id}", true},
+		{http.MethodDelete, "/looks/{id}", false},
 	} {
 		mux.HandleFunc(route.method+" /admin/api"+route.path, func(w http.ResponseWriter, r *http.Request) {
 			path := route.path
@@ -212,7 +216,7 @@ func versionedPage(files fs.FS) ([]byte, map[string]string) {
 		panic(err)
 	}
 	assets := make(map[string]string)
-	for _, name := range []string{"admin.css", "admin.js", "products.js", "photos.js", "users.js", "vouchers.js"} {
+	for _, name := range []string{"admin.css", "admin.js", "products.js", "photos.js", "users.js", "vouchers.js", "looks.js"} {
 		content, err := fs.ReadFile(files, name)
 		if err != nil {
 			panic(err)
@@ -427,6 +431,15 @@ func (g *gateway) addPhotoRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/api/photos/products/{id}/{slot}/first", func(w http.ResponseWriter, r *http.Request) {
 		if path, ok := productSlot(w, r); ok && isJSON(w, r) {
 			g.withSession(w, r, http.MethodPost, path+"/first", nil)
+		}
+	})
+	mux.HandleFunc("PUT /admin/api/looks/{id}/photo", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		if photo, contentType, ok := readPhoto(w, r); ok {
+			g.withSessionTyped(w, r, http.MethodPut, "/looks/"+id+"/photo", photo, contentType)
 		}
 	})
 	mux.HandleFunc("GET /admin/api/photos/categories", func(w http.ResponseWriter, r *http.Request) {

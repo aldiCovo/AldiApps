@@ -226,7 +226,7 @@ func TestCreateCopiesPricesAndAsksForStock(t *testing.T) {
 	if err := h.store.pool.QueryRow(context.Background(), `SELECT data::text FROM outbox_events WHERE type = $1`, eventOrderCreated).Scan(&data); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(data, `"variant_id": 1`) || !strings.Contains(data, `"quantity": 2`) {
+	if !strings.Contains(data, `"variant_id": 1`) || !strings.Contains(data, `"quantity": 2`) || !strings.Contains(data, `"price": 350000`) {
 		t.Fatalf("event %s", data)
 	}
 }

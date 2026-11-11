@@ -53,6 +53,10 @@ type Sale struct {
 	Price    int64     `json:"price"`
 	StartsAt time.Time `json:"starts_at"`
 	EndsAt   time.Time `json:"ends_at"`
+	// A Flash Sale sells only Quota items at this price. Sold counts the reserved ones.
+	Flash bool   `json:"flash"`
+	Quota *int32 `json:"quota,omitempty"`
+	Sold  int32  `json:"sold"`
 }
 
 type Product struct {
@@ -75,9 +79,11 @@ const (
 	categoryColumns = "id, name, created_at, updated_at"
 	// saleOn is true while a product's sale runs. The database's clock decides, so reads and
 	// the sale announcer always agree.
-	saleOn         = "(sale_price IS NOT NULL AND sale_starts_at <= now() AND now() < sale_ends_at)"
+	// A Flash Sale also stops when its quota is sold.
+	saleOn = "(sale_price IS NOT NULL AND sale_starts_at <= now() AND now() < sale_ends_at" +
+		" AND (sale_quota IS NULL OR sale_sold < sale_quota))"
 	productColumns = "id, category_id, name, description, price, sale_price, sale_starts_at, sale_ends_at, " +
-		saleOn + ", created_at, updated_at"
+		"sale_flash, sale_quota, sale_sold, " + saleOn + ", created_at, updated_at"
 	variantColumns = "id, product_id, size, color, stock, created_at, updated_at"
 )
 
@@ -176,12 +182,14 @@ func scanProduct(row pgx.Row) (Product, error) {
 	p := Product{Variants: []Variant{}}
 	var salePrice *int64
 	var saleStarts, saleEnds *time.Time
-	var onSale bool
+	var onSale, flash bool
+	var quota *int32
+	var sold int32
 	err := row.Scan(&p.ID, &p.CategoryID, &p.Name, &p.Description, &p.RegularPrice,
-		&salePrice, &saleStarts, &saleEnds, &onSale, &p.CreatedAt, &p.UpdatedAt)
+		&salePrice, &saleStarts, &saleEnds, &flash, &quota, &sold, &onSale, &p.CreatedAt, &p.UpdatedAt)
 	p.Price = p.RegularPrice
 	if err == nil && salePrice != nil {
-		p.Sale = &Sale{Price: *salePrice, StartsAt: *saleStarts, EndsAt: *saleEnds}
+		p.Sale = &Sale{Price: *salePrice, StartsAt: *saleStarts, EndsAt: *saleEnds, Flash: flash, Quota: quota, Sold: sold}
 		if onSale {
 			regular := p.RegularPrice
 			p.Price, p.OriginalPrice = *salePrice, &regular
@@ -290,6 +298,31 @@ func (s *Store) Create(ctx context.Context, categoryID *int64, name, description
 
 func (s *Store) Get(ctx context.Context, id int64) (Product, error) {
 	return getProduct(ctx, s.pool, id)
+}
+
+// maxFlashListed is how many Flash Sale products the shop's section shows.
+const maxFlashListed = 12
+
+// ListFlash returns the products whose Flash Sale runs now, the one ending first first.
+func (s *Store) ListFlash(ctx context.Context) ([]Product, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT `+productColumns+` FROM products
+		 WHERE sale_flash AND `+saleOn+`
+		 ORDER BY sale_ends_at, id LIMIT $1`, maxFlashListed)
+	if err != nil {
+		return nil, err
+	}
+	products, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (Product, error) { return scanProduct(row) })
+	if err != nil {
+		return nil, err
+	}
+	if products == nil {
+		products = []Product{}
+	}
+	if err := attachVariants(ctx, s.pool, products); err != nil {
+		return nil, err
+	}
+	return products, nil
 }
 
 // List returns all products, or only one category's when categoryID is set.

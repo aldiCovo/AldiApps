@@ -154,6 +154,7 @@ func TestEachOutcomeHasItsOwnWords(t *testing.T) {
 	}{
 		{eventOrderPaid, "", "sudah dibayar", "sudah kami terima"},
 		{eventOrderRejected, "out_of_stock", "tidak bisa diproses", "stok barang"},
+		{eventOrderRejected, "sale_sold_out", "tidak bisa diproses", "kuota Flash Sale"},
 		{eventOrderCancelled, "payment_failed", "dibatalkan", "Pembayaran pesanan kamu gagal"},
 		{eventOrderCancelled, "expired", "dibatalkan", "waktu pembayaran habis"},
 		{eventOrderCancelled, "cancelled_by_customer", "dibatalkan", "sesuai permintaanmu"},

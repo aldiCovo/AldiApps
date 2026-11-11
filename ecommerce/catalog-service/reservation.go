@@ -22,6 +22,8 @@ const (
 	eventStockRejected  = "stock.rejected"
 
 	reasonOutOfStock = "out_of_stock"
+	// The order was priced at a Flash Sale price, and the sale's quota ran out first.
+	reasonSaleSoldOut = "sale_sold_out"
 
 	reservationRetryDelay = 5 * time.Second
 	reservationPrefetch   = 20
@@ -30,6 +32,11 @@ const (
 type ReservationItem struct {
 	VariantID int64 `json:"variant_id"`
 	Quantity  int32 `json:"quantity"`
+	// The price the order charges for it. Orders made before prices were sent have none.
+	Price int64 `json:"price,omitempty"`
+	// Set by Reserve on items that took from a Flash Sale's quota, so Release gives them back.
+	ProductID int64 `json:"product_id,omitempty"`
+	Flash     bool  `json:"flash,omitempty"`
 }
 
 type stockEvent struct {
@@ -66,14 +73,10 @@ func (s *Store) Reserve(ctx context.Context, orderID int64, items []ReservationI
 		}
 		needed[item.VariantID] += int64(item.Quantity)
 	}
-	body, err := json.Marshal(items)
-	if err != nil {
-		return err
-	}
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx,
-			`INSERT INTO stock_reservations (order_id, status, items) VALUES ($1, 'reserved', $2)
-			 ON CONFLICT (order_id) DO NOTHING`, orderID, body)
+			`INSERT INTO stock_reservations (order_id, status, items) VALUES ($1, 'reserved', '[]')
+			 ON CONFLICT (order_id) DO NOTHING`, orderID)
 		if err != nil {
 			return err
 		}
@@ -84,26 +87,74 @@ func (s *Store) Reserve(ctx context.Context, orderID int64, items []ReservationI
 		if err != nil {
 			return err
 		}
-		rows, err := tx.Query(ctx, `SELECT id, stock FROM product_variants WHERE id = ANY($1)`, variantIDs)
+		rows, err := tx.Query(ctx, `SELECT id, product_id, stock FROM product_variants WHERE id = ANY($1)`, variantIDs)
 		if err != nil {
 			return err
 		}
 		available := make(map[int64]int64, len(variantIDs))
-		var id, stock int64
-		if _, err := pgx.ForEachRow(rows, []any{&id, &stock}, func() error {
+		productOf := make(map[int64]int64, len(variantIDs))
+		var id, productID, stock int64
+		if _, err := pgx.ForEachRow(rows, []any{&id, &productID, &stock}, func() error {
 			available[id] = stock
+			productOf[id] = productID
 			return nil
 		}); err != nil {
 			return err
 		}
+		reject := func(reason string) error {
+			body, err := json.Marshal(items)
+			if err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx,
+				`UPDATE stock_reservations SET status = 'rejected', items = $2, updated_at = now() WHERE order_id = $1`, orderID, body); err != nil {
+				return err
+			}
+			return addEvent(ctx, tx, eventStockRejected, stockEvent{OrderID: orderID, Reason: reason})
+		}
 		for variantID, quantity := range needed {
 			if stock, found := available[variantID]; !found || stock < quantity {
-				if _, err := tx.Exec(ctx,
-					`UPDATE stock_reservations SET status = 'rejected', updated_at = now() WHERE order_id = $1`, orderID); err != nil {
-					return err
-				}
-				return addEvent(ctx, tx, eventStockRejected, stockEvent{OrderID: orderID, Reason: reasonOutOfStock})
+				return reject(reasonOutOfStock)
 			}
+		}
+		// Items priced at a running Flash Sale's price take from its quota. The products are
+		// locked, so orders reserved at the same time can't together pass it.
+		flash, err := runningFlashSales(ctx, tx, products)
+		if err != nil {
+			return err
+		}
+		taken := map[int64]int64{}
+		for i, item := range items {
+			productID := productOf[item.VariantID]
+			sale, found := flash[productID]
+			if !found || item.Price != sale.price {
+				continue
+			}
+			items[i].ProductID, items[i].Flash = productID, true
+			taken[productID] += int64(item.Quantity)
+		}
+		for productID, quantity := range taken {
+			if sale := flash[productID]; sale.sold+quantity > sale.quota {
+				return reject(reasonSaleSoldOut)
+			}
+		}
+		for productID, quantity := range taken {
+			if _, err := tx.Exec(ctx,
+				`UPDATE products SET sale_sold = sale_sold + $2 WHERE id = $1`, productID, quantity); err != nil {
+				return err
+			}
+			// The product event below carries the price after this order, so a sale that just
+			// sold out needs no second one from the sale announcer.
+			if _, err := tx.Exec(ctx, `UPDATE products SET sale_announced = `+saleOn+` WHERE id = $1`, productID); err != nil {
+				return err
+			}
+		}
+		body, err := json.Marshal(items)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE stock_reservations SET items = $2 WHERE order_id = $1`, orderID, body); err != nil {
+			return err
 		}
 		for variantID, quantity := range needed {
 			if _, err := tx.Exec(ctx,
@@ -118,6 +169,28 @@ func (s *Store) Reserve(ctx context.Context, orderID int64, items []ReservationI
 		}
 		return addEvent(ctx, tx, eventStockReserved, stockEvent{OrderID: orderID})
 	})
+}
+
+type flashSale struct {
+	price, quota, sold int64
+}
+
+// runningFlashSales reads the Flash Sales running now on these products, by product id.
+func runningFlashSales(ctx context.Context, tx pgx.Tx, products []int64) (map[int64]flashSale, error) {
+	rows, err := tx.Query(ctx,
+		`SELECT id, sale_price, sale_quota, sale_sold FROM products
+		 WHERE id = ANY($1) AND sale_flash AND `+saleOn, products)
+	if err != nil {
+		return nil, err
+	}
+	found := map[int64]flashSale{}
+	var id int64
+	var sale flashSale
+	_, err = pgx.ForEachRow(rows, []any{&id, &sale.price, &sale.quota, &sale.sold}, func() error {
+		found[id] = sale
+		return nil
+	})
+	return found, err
 }
 
 // Release returns a cancelled order's stock. Variants deleted since then have nothing to return to.
@@ -149,6 +222,18 @@ func (s *Store) Release(ctx context.Context, orderID int64) error {
 			if _, err := tx.Exec(ctx,
 				`UPDATE product_variants SET stock = LEAST(stock + $2, $3), updated_at = now() WHERE id = $1`,
 				item.VariantID, item.Quantity, maxStock); err != nil {
+				return err
+			}
+		}
+		// Flash Sale items give their quota back, unless the sale was removed or replaced since.
+		for _, item := range items {
+			if !item.Flash {
+				continue
+			}
+			// The sale may start again, which the sale announcer sends within saleCheckInterval.
+			if _, err := tx.Exec(ctx,
+				`UPDATE products SET sale_sold = GREATEST(sale_sold - $2, 0) WHERE id = $1 AND sale_flash`,
+				item.ProductID, item.Quantity); err != nil {
 				return err
 			}
 		}

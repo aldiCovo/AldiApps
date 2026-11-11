@@ -71,6 +71,9 @@ func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, 
 	mux.HandleFunc("GET /api/categories", func(w http.ResponseWriter, r *http.Request) {
 		g.pass(w, r, g.catalogURL+"/categories", nil, "")
 	})
+	mux.HandleFunc("GET /api/flash-sale", func(w http.ResponseWriter, r *http.Request) {
+		g.pass(w, r, g.catalogURL+"/flash-sale", nil, "")
+	})
 	mux.HandleFunc("GET /api/products/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
 		if !numericID.MatchString(id) {

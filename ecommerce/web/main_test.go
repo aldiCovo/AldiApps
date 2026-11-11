@@ -119,6 +119,7 @@ func TestAllowedRequestsReachTheRightService(t *testing.T) {
 	cases := []struct{ method, path, body, want string }{
 		{"GET", "/api/categories", "", "catalog GET /categories"},
 		{"GET", "/api/products/12", "", "catalog GET /products/12"},
+		{"GET", "/api/flash-sale", "", "catalog GET /flash-sale"},
 		{"GET", "/api/search?q=dress+merah&in_stock=true", "", "search GET /search?q=dress+merah&in_stock=true"},
 		{"POST", "/api/register", `{"email":"a@b.c"}`, "user POST /register"},
 		{"POST", "/api/password/forgot", `{"email":"a@b.c"}`, "user POST /password/forgot"},

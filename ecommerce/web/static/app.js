@@ -282,13 +282,8 @@ function chevron(path) {
 const maxOffset = 9900;
 
 // Page numbers: the first, the last, and the current one with its neighbours. A gap of one
-// page shows that page rather than "…".
-function renderPager() {
-  const pages = Math.min(Math.ceil(state.total / pageSize), Math.floor(maxOffset / pageSize) + 1);
-  $("pager").hidden = pages <= 1;
-  if (pages <= 1) return;
-  const page = state.page;
-  const go = (n) => () => loadProducts(n, true);
+// page shows that page rather than "…". go(n) opens page n.
+function pagerItems(page, pages, go) {
   const step = (label, path, target) => {
     const button = el("button", "pager-step");
     button.type = "button";
@@ -296,7 +291,7 @@ function renderPager() {
     const text = el("span", "pager-step-label", label);
     if (path.startsWith("M15")) button.append(chevron(path), text);
     else button.append(text, chevron(path));
-    button.addEventListener("click", go(target));
+    button.addEventListener("click", () => go(target));
     return button;
   };
   const number = (n) => {
@@ -304,7 +299,7 @@ function renderPager() {
     button.type = "button";
     button.setAttribute("aria-label", `Halaman ${n}`);
     if (n === page) button.setAttribute("aria-current", "page");
-    button.addEventListener("click", go(n));
+    button.addEventListener("click", () => go(n));
     return button;
   };
   const shown = [...new Set([1, page - 1, page, page + 1, pages])].filter((n) => n >= 1 && n <= pages).sort((a, b) => a - b);
@@ -320,7 +315,14 @@ function renderPager() {
     items.push(number(n));
   });
   items.push(step("Berikutnya", "M9 6l6 6-6 6", page + 1));
-  $("pager-pages").replaceChildren(...items);
+  return items;
+}
+
+function renderPager() {
+  const pages = Math.min(Math.ceil(state.total / pageSize), Math.floor(maxOffset / pageSize) + 1);
+  $("pager").hidden = pages <= 1;
+  if (pages <= 1) return;
+  $("pager-pages").replaceChildren(...pagerItems(state.page, pages, (n) => loadProducts(n, true)));
   const last = Math.min(state.offset + pageSize, state.total);
   $("pager-range").textContent = `Menampilkan ${state.offset + 1}–${last} dari ${counted.format(state.total)} produk`;
 }
@@ -380,7 +382,6 @@ const pickKinds = [
 ];
 const pickMax = 10;
 const pickEvery = 5000;
-const picks = { lists: {}, kind: "", timer: null, hovered: false, focused: false, touchedAt: 0 };
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 let catalogSampleRequest = null;
@@ -404,38 +405,6 @@ function pickLists(products, ratings) {
   return lists;
 }
 
-async function loadPicks() {
-  let products;
-  try {
-    products = await catalogSample();
-  } catch {
-    return;
-  }
-  picks.lists = pickLists(products, state.ratings || {});
-  const kinds = pickKinds.filter((kind) => picks.lists[kind.id].length > 0);
-  $("picks").hidden = kinds.length === 0;
-  if (kinds.length === 0) return;
-  $("picks-tabs").replaceChildren(...kinds.map((kind) => {
-    const chip = el("button", "chip pick-chip", kind.label);
-    chip.type = "button";
-    chip.dataset.kind = kind.id;
-    chip.addEventListener("click", () => showPicks(kind.id));
-    return chip;
-  }));
-  showPicks(kinds[0].id);
-  clearInterval(picks.timer);
-  if (!reducedMotion.matches) picks.timer = setInterval(advancePicks, pickEvery);
-}
-
-function showPicks(id) {
-  picks.kind = id;
-  for (const chip of $("picks-tabs").children) chip.setAttribute("aria-pressed", String(chip.dataset.kind === id));
-  $("picks-note").textContent = pickKinds.find((kind) => kind.id === id).note;
-  $("picks-track").replaceChildren(...picks.lists[id].map((product, index) => pickCard(product, id, index)));
-  $("picks-track").scrollLeft = 0;
-  renderPickDots();
-}
-
 // A product card with a label saying why it's here. Discounts already show "Hemat x%".
 function pickCard(product, kind, index) {
   const wrap = productCard(product);
@@ -451,67 +420,118 @@ function pickCard(product, kind, index) {
   return wrap;
 }
 
-// The row moves by as many cards as fit, and always stops at a card's edge. Each dot is one
-// such step.
-function pickLayout() {
-  const track = $("picks-track");
-  const cards = [...track.children];
-  if (cards.length === 0) return { cards, perView: 1, pages: 1, step: 1 };
-  const width = cards[0].getBoundingClientRect().width;
-  const gap = parseFloat(getComputedStyle(track).columnGap) || 0;
-  const view = track.clientWidth - parseFloat(getComputedStyle(track).paddingLeft) - parseFloat(getComputedStyle(track).paddingRight);
-  const perView = Math.max(1, Math.floor((view + gap + 1) / (width + gap)));
-  return { cards, perView, pages: Math.ceil(cards.length / perView), step: (width + gap) * perView };
+// One sliding row of highlights. Its parts are the elements with ids id, id-tabs, id-note,
+// id-track, id-dots, id-prev and id-next, so the homepage and the account page each have one.
+function createPicks(id) {
+  const part = (name) => $(`${id}-${name}`);
+  const section = $(id);
+  const track = part("track");
+  const self = { lists: {}, timer: null, hovered: false, focused: false, touchedAt: 0 };
+
+  // The row moves by as many cards as fit, and always stops at a card's edge. Each dot is one
+  // such step.
+  const layout = () => {
+    const cards = [...track.children];
+    if (cards.length === 0) return { cards, perView: 1, pages: 1, step: 1 };
+    const style = getComputedStyle(track);
+    const width = cards[0].getBoundingClientRect().width;
+    const gap = parseFloat(style.columnGap) || 0;
+    const view = track.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+    const perView = Math.max(1, Math.floor((view + gap + 1) / (width + gap)));
+    return { cards, perView, pages: Math.ceil(cards.length / perView), step: (width + gap) * perView };
+  };
+  const current = () => {
+    const { pages, step } = layout();
+    if (track.scrollLeft >= track.scrollWidth - track.clientWidth - 2) return pages - 1;
+    return Math.min(pages - 1, Math.round(track.scrollLeft / step));
+  };
+  const scrollTo = (page) => {
+    const { cards, perView, pages } = layout();
+    if (cards.length === 0) return;
+    const target = ((page % pages) + pages) % pages;
+    const card = cards[target * perView];
+    const left = card.getBoundingClientRect().left - track.getBoundingClientRect().left + track.scrollLeft - parseFloat(getComputedStyle(track).paddingLeft);
+    track.scrollTo({ left: Math.min(left, track.scrollWidth - track.clientWidth), behavior: reducedMotion.matches ? "auto" : "smooth" });
+  };
+  const renderDots = () => {
+    const { pages } = layout();
+    const now = current();
+    const dots = [];
+    for (let i = 0; i < pages && pages > 1; i++) {
+      const dot = el("button", "picks-dot");
+      dot.type = "button";
+      dot.setAttribute("aria-label", `Bagian ${i + 1} dari ${pages}`);
+      if (i === now) dot.setAttribute("aria-current", "true");
+      dot.addEventListener("click", () => scrollTo(i));
+      dots.push(dot);
+    }
+    part("dots").replaceChildren(...dots);
+  };
+  const markDot = () => {
+    const now = current();
+    [...part("dots").children].forEach((dot, i) => {
+      if (i === now) dot.setAttribute("aria-current", "true");
+      else dot.removeAttribute("aria-current");
+    });
+  };
+  const show = (kindId) => {
+    for (const chip of part("tabs").children) chip.setAttribute("aria-pressed", String(chip.dataset.kind === kindId));
+    part("note").textContent = pickKinds.find((kind) => kind.id === kindId).note;
+    track.replaceChildren(...self.lists[kindId].map((product, index) => pickCard(product, kindId, index)));
+    track.scrollLeft = 0;
+    renderDots();
+  };
+  // Slides on by itself while it's on screen, but waits while someone points at it, works in
+  // it, or just swiped it.
+  const advance = () => {
+    if (section.hidden || section.offsetParent === null || document.hidden || self.hovered || self.focused) return;
+    if (Date.now() - self.touchedAt < 2 * pickEvery) return;
+    scrollTo(current() + 1);
+  };
+
+  part("prev").addEventListener("click", () => scrollTo(current() - 1));
+  part("next").addEventListener("click", () => scrollTo(current() + 1));
+  let frame = 0;
+  track.addEventListener("scroll", () => {
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(markDot);
+  }, { passive: true });
+  track.addEventListener("touchstart", () => { self.touchedAt = Date.now(); }, { passive: true });
+  section.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") self.hovered = true; });
+  section.addEventListener("pointerleave", () => { self.hovered = false; });
+  section.addEventListener("focusin", () => { self.focused = true; });
+  section.addEventListener("focusout", (event) => { self.focused = section.contains(event.relatedTarget); });
+  window.addEventListener("resize", () => { if (!section.hidden) renderDots(); });
+
+  return {
+    async load() {
+      let products;
+      try {
+        products = await catalogSample();
+      } catch {
+        return;
+      }
+      self.lists = pickLists(products, state.ratings || {});
+      const kinds = pickKinds.filter((kind) => self.lists[kind.id].length > 0);
+      section.hidden = kinds.length === 0;
+      if (kinds.length === 0) return;
+      part("tabs").replaceChildren(...kinds.map((kind) => {
+        const chip = el("button", "chip pick-chip", kind.label);
+        chip.type = "button";
+        chip.dataset.kind = kind.id;
+        chip.addEventListener("click", () => show(kind.id));
+        return chip;
+      }));
+      show(kinds[0].id);
+      clearInterval(self.timer);
+      if (!reducedMotion.matches) self.timer = setInterval(advance, pickEvery);
+    },
+    // A row drawn while hidden has no width, so its dots are counted again once it shows.
+    refresh: renderDots,
+  };
 }
 
-const pickPages = () => pickLayout().pages;
-
-function pickPage() {
-  const track = $("picks-track");
-  const { pages, step } = pickLayout();
-  if (track.scrollLeft >= track.scrollWidth - track.clientWidth - 2) return pages - 1;
-  return Math.min(pages - 1, Math.round(track.scrollLeft / step));
-}
-
-function scrollPicks(page) {
-  const track = $("picks-track");
-  const { cards, perView, pages } = pickLayout();
-  if (cards.length === 0) return;
-  const target = ((page % pages) + pages) % pages;
-  const card = cards[target * perView];
-  const left = card.getBoundingClientRect().left - track.getBoundingClientRect().left + track.scrollLeft - parseFloat(getComputedStyle(track).paddingLeft);
-  track.scrollTo({ left: Math.min(left, track.scrollWidth - track.clientWidth), behavior: reducedMotion.matches ? "auto" : "smooth" });
-}
-
-function renderPickDots() {
-  const pages = pickPages();
-  const current = pickPage();
-  const dots = [];
-  for (let i = 0; i < pages && pages > 1; i++) {
-    const dot = el("button", "picks-dot");
-    dot.type = "button";
-    dot.setAttribute("aria-label", `Bagian ${i + 1} dari ${pages}`);
-    if (i === current) dot.setAttribute("aria-current", "true");
-    dot.addEventListener("click", () => scrollPicks(i));
-    dots.push(dot);
-  }
-  $("picks-dots").replaceChildren(...dots);
-}
-
-function markPickDot() {
-  const current = pickPage();
-  [...$("picks-dots").children].forEach((dot, i) => {
-    if (i === current) dot.setAttribute("aria-current", "true");
-    else dot.removeAttribute("aria-current");
-  });
-}
-
-// Slides on by itself, but waits while someone points at it, works in it, or just swiped it.
-function advancePicks() {
-  if ($("picks").hidden || document.hidden || picks.hovered || picks.focused) return;
-  if (Date.now() - picks.touchedAt < 2 * pickEvery) return;
-  scrollPicks(pickPage() + 1);
-}
+const homePicks = createPicks("picks");
 
 async function loadCategories() {
   const photos = api("/category-photos").catch(() => ({}));
@@ -1137,6 +1157,8 @@ function photoKey(event) {
 let authMode = "login";
 let loggedIn = false;
 let currentUser = null;
+// Whether /me has answered, so the account page knows to ask for a login.
+let accountKnown = false;
 
 function setAuthMode(mode) {
   authMode = mode;
@@ -1284,6 +1306,9 @@ function renderAccount(user) {
       openAuth();
     }
   }
+  accountKnown = true;
+  // account.js runs after this file. Should the answer come first, it draws these itself.
+  if (typeof accountChanged === "function") accountChanged(user);
   const account = $("account");
   if (!user) {
     const login = el("button", "secondary", "Masuk");
@@ -1292,20 +1317,8 @@ function renderAccount(user) {
     account.replaceChildren(login);
     return;
   }
-  const logout = el("button", "link", "Keluar");
-  logout.type = "button";
-  logout.addEventListener("click", async () => {
-    try {
-      await post("/logout", {});
-      renderAccount(null);
-    } catch {
-      setStatus("Belum bisa keluar. Coba lagi sebentar lagi.", true);
-    }
-  });
-  const orders = el("button", "link", "Pesanan");
-  orders.type = "button";
-  orders.addEventListener("click", openOrders);
-  account.replaceChildren(el("span", "", `Halo, ${user.name}`), orders, logout);
+  // The menu under the name, and the account page, are in account.js.
+  if (typeof accountMenu === "function") account.replaceChildren(accountMenu(user));
 }
 
 async function loadAccount() {
@@ -2750,10 +2763,7 @@ window.addEventListener("resize", () => {
 $("order-now").addEventListener("click", orderNow);
 $("cart-open").addEventListener("click", openCart);
 $("footer-cart").addEventListener("click", openCart);
-$("footer-orders").addEventListener("click", () => {
-  if (loggedIn) openOrders();
-  else openAuth("Masuk dulu untuk melihat pesananmu.");
-});
+$("footer-orders").addEventListener("click", () => { location.hash = "#akun/pesanan"; });
 $("cart-note-open").addEventListener("click", () => {
   $("product-dialog").close();
   openCart();
@@ -2794,19 +2804,6 @@ $("search-form").addEventListener("submit", (event) => {
 $("size-filter").addEventListener("change", (event) => { state.size = event.target.value; loadProducts(); });
 $("color-filter").addEventListener("change", (event) => { state.color = event.target.value; loadProducts(); });
 $("stock-filter").addEventListener("change", (event) => { state.inStock = event.target.checked; loadProducts(); });
-$("picks-prev").addEventListener("click", () => scrollPicks(pickPage() - 1));
-$("picks-next").addEventListener("click", () => scrollPicks(pickPage() + 1));
-let pickScrollFrame = 0;
-$("picks-track").addEventListener("scroll", () => {
-  cancelAnimationFrame(pickScrollFrame);
-  pickScrollFrame = requestAnimationFrame(markPickDot);
-}, { passive: true });
-$("picks-track").addEventListener("touchstart", () => { picks.touchedAt = Date.now(); }, { passive: true });
-$("picks").addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") picks.hovered = true; });
-$("picks").addEventListener("pointerleave", () => { picks.hovered = false; });
-$("picks").addEventListener("focusin", () => { picks.focused = true; });
-$("picks").addEventListener("focusout", (event) => { picks.focused = $("picks").contains(event.relatedTarget); });
-window.addEventListener("resize", () => { if (!$("picks").hidden) renderPickDots(); });
 $("auth-form").addEventListener("submit", submitAuth);
 $("auth-switch").addEventListener("click", () => setAuthMode(authMode === "login" ? "register" : "login"));
 $("forgot-open").addEventListener("click", openForgot);
@@ -2834,13 +2831,14 @@ openResetFromLink();
 loadFilterChoices();
 loadPromo();
 // Category names appear on the cards, so the list loads after them.
-loadCategories().then(() => {
+// The highlights sort by ratings and show category names, so they wait for both.
+const shopReady = loadCategories().then(() => {
   loadProducts();
   loadFlash();
   loadLook();
-  // The highlights sort by ratings, so they wait for them.
-  loadRatings().then(loadPicks);
+  return loadRatings();
 });
+shopReady.then(() => homePicks.load());
 $("product-rating").addEventListener("click", () => {
   $("product-reviews").scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
 });

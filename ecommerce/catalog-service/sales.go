@@ -16,7 +16,9 @@ const (
 )
 
 // SetSale sells the product for price from startsAt until endsAt, replacing any sale it had.
-func (s *Store) SetSale(ctx context.Context, id, price int64, startsAt, endsAt time.Time) (p Product, err error) {
+// A quota makes it a Flash Sale. Changing a sale keeps what it sold; a sale with another start
+// is a new one and counts from zero.
+func (s *Store) SetSale(ctx context.Context, id, price int64, startsAt, endsAt time.Time, quota *int32) (p Product, err error) {
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if err := lockProduct(ctx, tx, id); err != nil {
 			return err
@@ -31,9 +33,16 @@ func (s *Store) SetSale(ctx context.Context, id, price int64, startsAt, endsAt t
 		// The event below already carries the new price, so the announcer has nothing to send.
 		_, err := tx.Exec(ctx,
 			`UPDATE products SET sale_price = $2, sale_starts_at = $3, sale_ends_at = $4,
-			     sale_announced = ($3 <= now() AND now() < $4), updated_at = now()
+			     sale_flash = $5::integer IS NOT NULL, sale_quota = $5,
+			     sale_sold = CASE WHEN sale_starts_at IS NOT DISTINCT FROM $3 THEN sale_sold ELSE 0 END,
+			     updated_at = now()
 			 WHERE id = $1`,
-			id, price, startsAt, endsAt)
+			id, price, startsAt, endsAt, quota)
+		if err != nil {
+			return err
+		}
+		// Whether it runs now depends on what it sold, so it's read back after the change.
+		_, err = tx.Exec(ctx, `UPDATE products SET sale_announced = `+saleOn+` WHERE id = $1`, id)
 		if err != nil {
 			return err
 		}
@@ -53,6 +62,7 @@ func (s *Store) ClearSale(ctx context.Context, id int64) (p Product, err error) 
 		}
 		tag, err := tx.Exec(ctx,
 			`UPDATE products SET sale_price = NULL, sale_starts_at = NULL, sale_ends_at = NULL,
+			     sale_flash = false, sale_quota = NULL, sale_sold = 0,
 			     sale_announced = false, updated_at = now()
 			 WHERE id = $1 AND sale_price IS NOT NULL`, id)
 		if err != nil {

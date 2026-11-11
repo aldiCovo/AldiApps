@@ -19,6 +19,7 @@ const catalogMessages = {
   "stock would leave the allowed range": "Stok tidak boleh kurang dari 0.",
   "category_id does not exist": "Kategori itu sudah tidak ada. Muat ulang halaman.",
   "the sale price must be below the regular price": "Harga coret harus lebih rendah dari harga normal.",
+  "quota must be empty or between 1 and 100000": "Kuota Flash Sale harus 1 sampai 100.000.",
   "the price must stay above the sale price; change or remove the sale first":
     "Harga normal harus di atas harga promo. Ubah atau hapus harga coretnya dulu.",
   "ends_at must be in the future": "Waktu selesai sudah lewat.",
@@ -387,12 +388,14 @@ function saleSection(product, card, status) {
   if (sale) {
     const [label, tone] = saleState(sale);
     const percent = Math.floor((1 - sale.price / product.regular_price) * 100);
+    const soldOut = sale.flash && sale.sold >= sale.quota && label === "Berjalan";
     summary.append(
-      el("span", "", "Harga coret"),
+      el("span", "", sale.flash ? "Flash Sale" : "Harga coret"),
       el("strong", "num", `${rupiah.format(sale.price)}${percent >= 1 ? ` (hemat ${percent}%)` : ""}`),
       el("span", "muted small", `${when(sale.starts_at)} – ${when(sale.ends_at)}`),
-      el("span", `state ${tone}`, label),
     );
+    if (sale.flash) summary.append(el("span", "muted small", `Terjual ${sale.sold} dari kuota ${sale.quota}`));
+    summary.append(soldOut ? el("span", "state bad", "Kuota habis") : el("span", `state ${tone}`, label));
   } else {
     summary.append(el("span", "muted small", "Tidak ada harga coret."));
   }
@@ -445,6 +448,16 @@ function saleForm(product, card, onCancel) {
   // localInput comes from vouchers.js.
   const starts = localInput(sale ? sale.starts_at : new Date().toISOString());
   const ends = localInput(sale ? sale.ends_at : new Date(Date.now() + 7 * 86400000).toISOString());
+  const flash = el("input");
+  flash.type = "checkbox";
+  flash.checked = Boolean(sale && sale.flash);
+  const flashField = el("label", "check");
+  flashField.append(flash, document.createTextNode(" Flash Sale (tampil di beranda dengan kuota)"));
+  const quota = numberInput(sale && sale.quota ? sale.quota : "", 1, 100000);
+  const quotaField = field("Kuota Flash Sale (jumlah barang dengan harga ini)", quota);
+  const showQuota = () => { quotaField.hidden = !flash.checked; };
+  flash.addEventListener("change", showQuota);
+  showQuota();
   const error = el("p", "error", "");
   error.setAttribute("role", "alert");
   error.hidden = true;
@@ -454,6 +467,8 @@ function saleForm(product, card, onCancel) {
     field(`Harga promo (Rp), normal ${rupiah.format(regular)}`, price),
     field("Mulai", starts),
     field("Selesai", ends),
+    flashField,
+    quotaField,
     save,
     button("Batal", "link", onCancel),
     error,
@@ -463,7 +478,9 @@ function saleForm(product, card, onCancel) {
     const value = wholeNumber(price, 1, maxPrice);
     const startsAt = starts.value ? new Date(starts.value) : null;
     const endsAt = ends.value ? new Date(ends.value) : null;
+    const quotaNumber = flash.checked ? wholeNumber(quota, 1, 100000) : null;
     const problem = value === null ? [price, "Harga promo harus angka bulat dari 1."]
+      : flash.checked && quotaNumber === null ? [quota, "Kuota Flash Sale harus angka bulat 1 sampai 100.000."]
       : value >= regular ? [price, `Harga promo harus lebih rendah dari harga normal ${rupiah.format(regular)}.`]
       : !startsAt || !endsAt ? [startsAt ? ends : starts, "Isi waktu mulai dan selesai."]
       : endsAt <= startsAt ? [ends, "Waktu selesai harus setelah waktu mulai."]
@@ -479,7 +496,7 @@ function saleForm(product, card, onCancel) {
     setBusy(form, true);
     try {
       await send("PUT", `/products/${product.id}/sale`, {
-        price: value, starts_at: startsAt.toISOString(), ends_at: endsAt.toISOString(),
+        price: value, starts_at: startsAt.toISOString(), ends_at: endsAt.toISOString(), quota: quotaNumber,
       });
       await refreshProduct(card, product.id, "Harga coret disimpan.");
     } catch (failure) {

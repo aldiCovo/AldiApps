@@ -225,7 +225,8 @@ function orderCard(order) {
   const card = el("article", "order");
   card.dataset.id = order.id;
   const head = el("div", "order-head");
-  const [label, tone] = statusNames[order.status] || [order.status, ""];
+  const [label, tone] = order.status === "rejected" && order.reason === "sale_sold_out" ? ["Ditolak: kuota Flash Sale habis", "bad"]
+    : statusNames[order.status] || [order.status, ""];
   head.append(el("h2", "", `Pesanan #${order.id}`), el("span", `state ${tone}`, label));
   card.append(head);
 

@@ -78,10 +78,15 @@ func (in *productInput) validate() (err error) {
 // maxSalePrice matches the admin pages' price limit.
 const maxSalePrice = 1_000_000_000
 
+// maxFlashQuota matches the largest stock a variant can hold.
+const maxFlashQuota = 100_000
+
 type saleInput struct {
 	Price    *int64     `json:"price"`
 	StartsAt *time.Time `json:"starts_at"`
 	EndsAt   *time.Time `json:"ends_at"`
+	// Set for a Flash Sale: how many items sell at the sale price.
+	Quota *int32 `json:"quota"`
 }
 
 func (in *saleInput) validate(now time.Time) error {
@@ -96,6 +101,8 @@ func (in *saleInput) validate(now time.Time) error {
 		return errors.New("ends_at must be after starts_at")
 	case !in.EndsAt.After(now):
 		return errors.New("ends_at must be in the future")
+	case in.Quota != nil && (*in.Quota < 1 || *in.Quota > maxFlashQuota):
+		return fmt.Errorf("quota must be empty or between 1 and %d", maxFlashQuota)
 	}
 	return nil
 }
@@ -266,6 +273,18 @@ func newHandler(store *Store, internalToken string) http.Handler {
 		writeJSON(w, http.StatusCreated, p)
 	})
 
+	// The products on Flash Sale now, for the shop's section. Short-lived, since what's left
+	// changes with each order.
+	mux.HandleFunc("GET /flash-sale", func(w http.ResponseWriter, r *http.Request) {
+		products, err := store.ListFlash(r.Context())
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		w.Header().Set("Cache-Control", "public, max-age=15")
+		writeJSON(w, http.StatusOK, map[string]any{"products": products})
+	})
+
 	mux.HandleFunc("GET /products/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id, ok := pathID(w, r)
 		if !ok {
@@ -325,7 +344,7 @@ func newHandler(store *Store, internalToken string) http.Handler {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		p, err := store.SetSale(r.Context(), id, *in.Price, *in.StartsAt, *in.EndsAt)
+		p, err := store.SetSale(r.Context(), id, *in.Price, *in.StartsAt, *in.EndsAt, in.Quota)
 		if err != nil {
 			writeStoreError(w, err)
 			return

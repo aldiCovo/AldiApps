@@ -21,8 +21,9 @@ const (
 	eventOrderShipped   = "order.shipped"
 	eventOrderCompleted = "order.completed"
 
-	reasonExpired    = "expired"
-	reasonByCustomer = "cancelled_by_customer"
+	reasonExpired     = "expired"
+	reasonByCustomer  = "cancelled_by_customer"
+	reasonSaleSoldOut = "sale_sold_out"
 )
 
 // Event is the message body.
@@ -140,6 +141,9 @@ func compose(kind string, order FinishedOrder, user User) Email {
 	case kind == eventOrderCompleted:
 		subject = "Pesanan #%d selesai"
 		opening = "Pesanan kamu sudah sampai dan kami tandai selesai. Terima kasih sudah berbelanja di Prastika."
+	case kind == eventOrderRejected && order.Reason == reasonSaleSoldOut:
+		subject = "Pesanan #%d tidak bisa diproses"
+		opening = "Maaf, kuota Flash Sale untuk barang yang kamu pesan sudah habis lebih dulu. Tidak ada pembayaran yang ditagih. Barangnya masih bisa dipesan dengan harga normal."
 	case kind == eventOrderRejected:
 		subject = "Pesanan #%d tidak bisa diproses"
 		opening = "Maaf, stok barang yang kamu pesan tidak cukup. Tidak ada pembayaran yang ditagih."

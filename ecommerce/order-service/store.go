@@ -72,6 +72,8 @@ type Order struct {
 type reservationItem struct {
 	VariantID int64 `json:"variant_id"`
 	Quantity  int32 `json:"quantity"`
+	// What the order charges, so catalog-service can count a Flash Sale's quota.
+	Price int64 `json:"price"`
 }
 
 type orderCreatedEvent struct {
@@ -184,7 +186,7 @@ func (s *Store) Create(ctx context.Context, userID int64, items []OrderItem, add
 	subtotal := subtotalOf(items)
 	reserve := make([]reservationItem, len(items))
 	for i, item := range items {
-		reserve[i] = reservationItem{VariantID: item.VariantID, Quantity: item.Quantity}
+		reserve[i] = reservationItem{VariantID: item.VariantID, Quantity: item.Quantity, Price: item.Price}
 	}
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		// One order at a time per user, or simultaneous requests could all pass the count.

@@ -42,6 +42,7 @@
     <nav class="site-nav" aria-label="Menu utama">
       <a href="#katalog">Koleksi</a>
       <a href="#shop-by">Kategori</a>
+      <a id="nav-flash" href="#flash" hidden>Flash Sale</a>
     </nav>
     <form id="search-form" class="search" role="search">
       <label class="visually-hidden" for="search-input">Cari produk</label>
@@ -82,6 +83,22 @@
         <div class="arch tone-0"><svg class="garment" viewBox="0 0 120 150"><use href="#garment-dress"/></svg></div>
         <div class="arch tone-1"><svg class="garment" viewBox="0 0 120 150"><use href="#garment-rok"/></svg></div>
       </div>
+    </section>
+
+    <section id="flash" class="flash" aria-labelledby="flash-title" hidden>
+      <div class="section-head flash-head">
+        <div class="flash-title-row">
+          <h2 id="flash-title" class="section-title"><svg class="flash-bolt" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>Flash Sale</h2>
+          <div class="countdown" role="timer" aria-live="off">
+            <span class="countdown-label">Berakhir dalam</span>
+            <span id="flash-hh" class="countdown-box">00</span><span class="countdown-colon" aria-hidden="true">:</span>
+            <span id="flash-mm" class="countdown-box">00</span><span class="countdown-colon" aria-hidden="true">:</span>
+            <span id="flash-ss" class="countdown-box">00</span>
+          </div>
+        </div>
+        <p class="flash-note">Harga berlaku selama kuota masih ada.</p>
+      </div>
+      <div id="flash-products" class="products flash-products"></div>
     </section>
 
     <section id="shop-by" class="shop-by" aria-labelledby="shop-by-title" hidden>

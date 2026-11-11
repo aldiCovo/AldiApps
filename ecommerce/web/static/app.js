@@ -142,6 +142,13 @@ function saleBadge(product) {
   return el("span", "badge sale", percent >= 1 ? `Hemat ${percent}%` : "Promo");
 }
 
+// How many more sell at a running Flash Sale's price, or null when none runs.
+function flashLeft(product) {
+  const sale = product.sale;
+  if (!product.original_price || !sale || !sale.flash || !sale.quota) return null;
+  return Math.max(sale.quota - sale.sold, 0);
+}
+
 function productCard(product) {
   const card = el("button", "card");
   card.type = "button";
@@ -166,6 +173,15 @@ function productCard(product) {
   const price = el("span", "card-price");
   price.append(...priceParts(product));
   card.append(price);
+  const left = flashLeft(product);
+  if (left !== null) {
+    const meter = el("span", "flash-meter");
+    meter.setAttribute("aria-hidden", "true");
+    const fill = el("span");
+    fill.style.width = `${Math.round((product.sale.sold / product.sale.quota) * 100)}%`;
+    meter.append(fill);
+    card.append(meter, el("span", "flash-left", `Tersisa ${left} dengan harga ini`));
+  }
   card.addEventListener("click", () => openProduct(product.id));
   // A button can't hold another, so the heart sits beside the card in a wrapper.
   const wrap = el("div", "card-wrap");
@@ -227,6 +243,35 @@ async function loadCategories() {
 }
 
 // The hero shows the dress, hijab and blouse photos. Without all three, the drawings stay.
+// The Flash Sale section: products whose Flash Sale runs now, and a countdown to the first
+// one to end. When it ends the list is read again, since prices have changed.
+let flashTimer = null;
+
+async function loadFlash() {
+  clearInterval(flashTimer);
+  let products;
+  try {
+    ({ products } = await api("/flash-sale"));
+  } catch {
+    products = [];
+  }
+  $("flash").hidden = products.length === 0;
+  $("nav-flash").hidden = products.length === 0;
+  if (products.length === 0) return;
+  $("flash-products").replaceChildren(...products.map(productCard));
+  const end = Math.min(...products.map((product) => Date.parse(product.sale.ends_at)));
+  const pad = (n) => String(n).padStart(2, "0");
+  const tick = () => {
+    const left = Math.max(0, Math.floor((end - Date.now()) / 1000));
+    $("flash-hh").textContent = pad(Math.floor(left / 3600));
+    $("flash-mm").textContent = pad(Math.floor((left % 3600) / 60));
+    $("flash-ss").textContent = pad(left % 60);
+    if (left === 0) setTimeout(loadFlash, 10000);
+    return left;
+  };
+  if (tick() > 0) flashTimer = setInterval(() => { if (tick() === 0) clearInterval(flashTimer); }, 1000);
+}
+
 // The voucher the admins put in the bar above the header, if one can be used now.
 async function loadPromo() {
   let voucher;
@@ -372,7 +417,10 @@ async function openProduct(id) {
     $("product-title").textContent = product.name;
     $("product-price").replaceChildren(...priceParts(product));
     if (product.original_price && product.sale) {
-      $("product-price").append(el("span", "price-until", `Harga promo sampai ${dateTime.format(new Date(product.sale.ends_at))}`));
+      const left = flashLeft(product);
+      const until = `sampai ${dateTime.format(new Date(product.sale.ends_at))}`;
+      $("product-price").append(el("span", "price-until",
+        left === null ? `Harga promo ${until}` : `Flash Sale ${until} · tersisa ${left} dengan harga ini`));
     }
     $("product-description").textContent = product.description;
     $("product-variants").replaceChildren(...(product.variants || []).map(variantChoice));
@@ -827,6 +875,7 @@ let liveRetry = 1000;
 const isLive = () => liveSocket !== null && liveSocket.readyState === WebSocket.OPEN;
 
 function orderState(order) {
+  if (order.status === "rejected" && order.reason === "sale_sold_out") return ["Ditolak: kuota Flash Sale habis", "bad"];
   if (order.status === "cancelled") {
     const reasons = { expired: "Dibatalkan: waktu pembayaran habis", cancelled_by_customer: "Dibatalkan atas permintaanmu" };
     return [reasons[order.reason] || "Dibatalkan: pembayaran gagal", "bad"];
@@ -2110,4 +2159,7 @@ openResetFromLink();
 loadFilterChoices();
 loadPromo();
 // Category names appear on the cards, so the list loads after them.
-loadCategories().then(() => loadProducts());
+loadCategories().then(() => {
+  loadProducts();
+  loadFlash();
+});

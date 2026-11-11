@@ -151,9 +151,11 @@ function productCard(product) {
   fillSwatch(swatch, product);
   art.append(swatch);
   const stock = totalStock(product);
-  if (stock === 0) art.append(el("span", "badge sold-out", "Stok habis"));
-  else if (stock <= 5) art.append(el("span", "badge", `Sisa ${stock}`));
-  if (product.original_price) art.append(saleBadge(product));
+  const badges = el("span", "card-badges");
+  if (stock === 0) badges.append(el("span", "badge sold-out", "Stok habis"));
+  else if (stock <= 5) badges.append(el("span", "badge", `Sisa ${stock}`));
+  if (product.original_price) badges.append(saleBadge(product));
+  if (badges.children.length > 0) art.append(badges);
   art.append(el("span", "card-view", "Lihat detail"));
   card.append(art);
   const category = state.categories.get(product.category_id);
@@ -165,7 +167,10 @@ function productCard(product) {
   price.append(...priceParts(product));
   card.append(price);
   card.addEventListener("click", () => openProduct(product.id));
-  return card;
+  // A button can't hold another, so the heart sits beside the card in a wrapper.
+  const wrap = el("div", "card-wrap");
+  wrap.append(card, favButton(product));
+  return wrap;
 }
 
 function showSkeletons() {
@@ -375,6 +380,7 @@ async function openProduct(id) {
     $("order-error").hidden = true;
     $("cart-note").hidden = true;
     shownProductId = product.id;
+    markFavorites();
     const first = document.querySelector('input[name="variant"]:not(:disabled)');
     if (first) first.checked = true;
     $("cart-add").disabled = !first;
@@ -747,7 +753,12 @@ function renderAccount(user) {
   if (user) {
     if ($("cart-dialog").open) refreshCart();
     else syncAccountCart();
+    if ($("fav-dialog").open) refreshFavorites();
+    else syncAccountFavorites();
   } else if (wasLoggedIn) {
+    favorites = loadGuestFavorites();
+    markFavorites();
+    if ($("fav-dialog").open) refreshFavorites();
     cart = loadCart();
     showCartCount();
     // Only an ended session gets here with the cart open, because logging out is behind it.
@@ -1186,6 +1197,165 @@ async function orderNow() {
 // it follows them to any browser and leaves this one when they log out. Logging in moves a
 // guest's cart to the account. Both hold only ids and quantities: names, prices and stock are
 // read again each time the cart opens, so it never shows old ones.
+// Favorites: product ids, newest first. A guest's stay in this browser and move to the account
+// when they log in, like the cart.
+const favKey = "prastika-favorites";
+const favMax = 100;
+const heartPath = "M12 20s-7.5-4.6-9.2-9.4C1.6 7.2 3.8 4 7.2 4c2 0 3.6 1.1 4.8 2.8C13.2 5.1 14.8 4 16.8 4c3.4 0 5.6 3.2 4.4 6.6C19.5 15.4 12 20 12 20z";
+let favorites = loadGuestFavorites();
+let favSync = null;
+
+function loadGuestFavorites() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(favKey));
+    if (!Array.isArray(saved)) return [];
+    return [...new Set(saved.filter((id) => Number.isSafeInteger(id) && id > 0))].slice(0, favMax);
+  } catch {
+    return [];
+  }
+}
+
+function saveGuestFavorites(ids) {
+  try {
+    if (ids.length === 0) localStorage.removeItem(favKey);
+    else localStorage.setItem(favKey, JSON.stringify(ids));
+  } catch {
+    // Without storage the favorites still work until the page closes.
+  }
+}
+
+function heartIcon() {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "1.8");
+  svg.setAttribute("stroke-linejoin", "round");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", heartPath);
+  svg.append(path);
+  return svg;
+}
+
+function favButton(product) {
+  const button = el("button", "fav-toggle");
+  button.type = "button";
+  button.dataset.id = product.id;
+  button.dataset.name = product.name;
+  button.append(heartIcon());
+  markFavorite(button);
+  button.addEventListener("click", () => toggleFavorite(product.id));
+  return button;
+}
+
+function markFavorite(button) {
+  const on = favorites.includes(Number(button.dataset.id));
+  button.setAttribute("aria-pressed", String(on));
+  button.setAttribute("aria-label", `${on ? "Hapus dari favorit" : "Simpan ke favorit"}: ${button.dataset.name}`);
+}
+
+// Shows the favorites everywhere they appear: the count, the hearts and the product page.
+function markFavorites() {
+  const count = favorites.length;
+  $("fav-count").textContent = count > 99 ? "99+" : count;
+  $("fav-count").hidden = count === 0;
+  $("fav-open").setAttribute("aria-label", `Favorit, ${count} produk`);
+  for (const button of document.querySelectorAll(".fav-toggle")) markFavorite(button);
+  const on = shownProductId !== null && favorites.includes(shownProductId);
+  $("product-fav").setAttribute("aria-pressed", String(on));
+  $("product-fav").querySelector("span").textContent = on ? "Tersimpan di favorit" : "Simpan ke favorit";
+}
+
+// Reads the account's favorites, first moving a guest's into it. Requests share one run.
+function syncAccountFavorites() {
+  favSync ||= (async () => {
+    const guest = loadGuestFavorites();
+    try {
+      const result = guest.length > 0 ? await post("/favorites/merge", { product_ids: guest }) : await api("/favorites");
+      if (guest.length > 0) saveGuestFavorites([]);
+      if (!loggedIn) return false;
+      favorites = result.product_ids;
+      markFavorites();
+      return true;
+    } catch (error) {
+      if (error.status === 401) renderAccount(null);
+      return false;
+    }
+  })().finally(() => { favSync = null; });
+  return favSync;
+}
+
+// Changes the heart at once, and puts it back if the account couldn't save it.
+async function toggleFavorite(id) {
+  const before = favorites;
+  const adding = !favorites.includes(id);
+  if (adding && favorites.length >= favMax) {
+    setStatus(`Favorit sudah penuh (${favMax} produk). Hapus beberapa dulu.`, true);
+    return;
+  }
+  favorites = adding ? [id, ...favorites] : favorites.filter((item) => item !== id);
+  markFavorites();
+  if (!loggedIn) {
+    saveGuestFavorites(favorites);
+    if ($("fav-dialog").open && !adding) renderFavorites();
+    return;
+  }
+  try {
+    const result = await send(adding ? "PUT" : "DELETE", `/favorites/${id}`, adding ? {} : undefined);
+    favorites = result.product_ids;
+  } catch (error) {
+    favorites = before;
+    if (error.status === 401) renderAccount(null);
+    else setStatus("Favorit belum bisa disimpan. Coba lagi sebentar lagi.", true);
+  }
+  markFavorites();
+  if ($("fav-dialog").open && !adding) renderFavorites();
+}
+
+let favDetails = new Map();
+let latestFavRequest = 0;
+
+function renderFavorites(note = "") {
+  const shown = favorites.filter((id) => favDetails.has(id));
+  $("fav-list").replaceChildren(...shown.map((id) => productCard(favDetails.get(id))));
+  $("fav-status").textContent = note || (shown.length === 0 ? "Belum ada favorit. Ketuk ikon hati di produk untuk menyimpannya di sini." : "");
+}
+
+async function refreshFavorites() {
+  const request = ++latestFavRequest;
+  $("fav-list").replaceChildren();
+  $("fav-status").textContent = "Memuat favorit…";
+  if (loggedIn && !(await syncAccountFavorites())) {
+    if (request === latestFavRequest) $("fav-status").textContent = "Favorit belum bisa dimuat. Tutup lalu buka lagi sebentar lagi.";
+    return;
+  }
+  const ids = [...favorites];
+  const results = await Promise.allSettled(ids.map((id) => api(`/products/${id}`)));
+  if (request !== latestFavRequest) return;
+  if (results.some((result) => result.status === "rejected" && result.reason.status !== 404)) {
+    $("fav-status").textContent = "Favorit belum bisa dimuat. Tutup lalu buka lagi sebentar lagi.";
+    return;
+  }
+  favDetails = new Map();
+  results.forEach((result, i) => {
+    if (result.status === "fulfilled") favDetails.set(ids[i], result.value);
+  });
+  // Products no longer sold leave the list.
+  const gone = ids.filter((id) => !favDetails.has(id));
+  if (gone.length > 0) {
+    favorites = favorites.filter((id) => !gone.includes(id));
+    markFavorites();
+    if (loggedIn) Promise.allSettled(gone.map((id) => send("DELETE", `/favorites/${id}`)));
+    else saveGuestFavorites(favorites);
+  }
+  renderFavorites(gone.length > 0 ? `${gone.length} produk dihapus karena sudah tidak dijual.` : "");
+}
+
+function openFavorites() {
+  $("fav-dialog").showModal();
+  refreshFavorites();
+}
+
 const cartKey = "prastika-cart";
 const cartMaxItems = 20;
 const cartMaxQuantity = 20;
@@ -1927,8 +2097,13 @@ for (const button of document.querySelectorAll("[data-close]")) {
   button.addEventListener("click", () => button.closest("dialog").close());
 }
 
+$("fav-open").addEventListener("click", openFavorites);
+$("product-fav").addEventListener("click", () => {
+  if (shownProductId !== null) toggleFavorite(shownProductId);
+});
 addStepper($("order-quantity"));
 showCartCount();
+markFavorites();
 renderCategories();
 loadAccount();
 openResetFromLink();

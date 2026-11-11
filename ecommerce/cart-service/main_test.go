@@ -43,7 +43,7 @@ func newHarness(t *testing.T) *harness {
 	if err := migrate(ctx, pool); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, "TRUNCATE cart_items"); err != nil {
+	if _, err := pool.Exec(ctx, "TRUNCATE cart_items, favorites"); err != nil {
 		t.Fatal(err)
 	}
 	public, private, err := ed25519.GenerateKey(rand.Reader)

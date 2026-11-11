@@ -158,9 +158,21 @@ main { max-width: 1320px; margin: 0 auto; padding: 0 var(--gutter); }
 .art svg { width: 64%; transition: transform .35s; }
 .card:hover .art svg { transform: scale(1.04); }
 /* Frosted labels over the photo. */
-.badge { position: absolute; top: 12px; left: 12px; padding: 3px 12px; border-radius: 999px; background: var(--glass); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); color: var(--ink); font-size: .78rem; font-weight: 600; }
+.card-badges { position: absolute; top: 12px; left: 12px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; pointer-events: none; }
+.badge { padding: 3px 12px; border-radius: 999px; background: var(--glass); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); color: var(--ink); font-size: .78rem; font-weight: 600; }
 .badge.sold-out { background: var(--ink); color: #fff; }
-.badge.sale { left: auto; right: 12px; color: var(--accent-dark); font-weight: 700; }
+.badge.sale { color: var(--accent-dark); font-weight: 700; }
+/* Favorites: a heart on each card, beside the card's own button rather than inside it. */
+.card-wrap { position: relative; align-self: start; }
+.fav-toggle { position: absolute; top: 8px; right: 8px; z-index: 1; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: var(--glass); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); color: var(--ink); transition: transform .18s, color .18s; }
+.fav-toggle:hover { transform: scale(1.08); color: var(--accent); }
+.fav-toggle svg, .fav-inline svg { width: 22px; height: 22px; fill: none; }
+.fav-toggle[aria-pressed="true"], .fav-inline[aria-pressed="true"] { color: var(--accent); }
+.fav-toggle[aria-pressed="true"] svg, .fav-inline[aria-pressed="true"] svg { fill: currentColor; }
+.fav-inline { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; margin: 4px 0 0; padding: 0 16px 0 12px; border: 1px solid var(--line); border-radius: 999px; background: none; color: var(--ink); font-size: .9rem; font-weight: 600; }
+.fav-inline:hover { border-color: var(--accent); color: var(--accent); }
+.fav-sheet { width: min(720px, calc(100vw - 32px)); }
+.fav-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 20px 14px; margin-top: 16px; }
 .price-was { color: var(--muted); font-weight: 400; font-size: .88em; }
 .price-sale { color: var(--accent); }
 .price-until { display: block; margin-top: 4px; color: var(--muted); font-size: .8rem; font-weight: 400; }
@@ -448,6 +460,9 @@ legend { margin-bottom: 10px; padding: 0; font-size: .92rem; font-weight: 600; }
   .tiles { display: flex; gap: 12px; margin-inline: calc(var(--gutter) * -1); padding: 12px var(--gutter) 20px; overflow-x: auto; scrollbar-width: none; }
   .tile { flex: none; width: 104px; }
   .products { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 12px; }
+  .fav-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .card-badges { top: 8px; left: 8px; }
+  .fav-toggle { top: 4px; right: 4px; }
   .card-name { font-size: .92rem; }
   .sheet { padding: 24px 20px; }
   .product-sheet { padding: 0; }

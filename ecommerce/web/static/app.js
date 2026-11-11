@@ -272,6 +272,92 @@ async function loadFlash() {
   if (tick() > 0) flashTimer = setInterval(() => { if (tick() === 0) clearInterval(flashTimer); }, 1000);
 }
 
+// Shop the look: the admins' photo of an outfit, with a point on each product worn. Products
+// no longer sold are left out, and the section stays hidden without any.
+async function loadLook() {
+  let look;
+  try {
+    ({ look } = await api("/look"));
+  } catch {
+    return;
+  }
+  if (!look) return;
+  const results = await Promise.allSettled(look.items.map((item) => api(`/products/${item.product_id}`)));
+  const shown = look.items
+    .map((item, i) => ({ ...item, product: results[i].status === "fulfilled" ? results[i].value : null }))
+    .filter((item) => item.product);
+  if (shown.length === 0) return;
+  $("look-eyebrow").textContent = look.eyebrow;
+  $("look-eyebrow").hidden = !look.eyebrow;
+  $("look-title").replaceChildren(look.title);
+  if (look.accent) $("look-title").append(", ", el("em", "", look.accent));
+  $("look-img").src = look.photo_url;
+  $("look-img").alt = [look.title, look.accent].filter(Boolean).join(", ");
+  const dots = shown.map((item) => {
+    const dot = el("button", "look-dot");
+    dot.type = "button";
+    dot.style.left = `${item.x}%`;
+    dot.style.top = `${item.y}%`;
+    dot.setAttribute("aria-label", `Lihat ${item.product.name}`);
+    dot.append(el("span"));
+    return dot;
+  });
+  const rows = shown.map(({ product }) => lookRow(product));
+  const choose = (index) => {
+    dots.forEach((dot, i) => dot.setAttribute("aria-pressed", String(i === index)));
+    rows.forEach((row, i) => row.classList.toggle("chosen", i === index));
+  };
+  dots.forEach((dot, i) => dot.addEventListener("click", () => {
+    choose(i);
+    if (window.matchMedia("(max-width: 820px)").matches) rows[i].scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }));
+  choose(0);
+  $("look-photo").querySelectorAll(".look-dot").forEach((dot) => dot.remove());
+  $("look-photo").append(...dots);
+  $("look-items").replaceChildren(...rows);
+  $("look").hidden = false;
+}
+
+// A product in the look. With one size and colour in stock it goes straight to the cart;
+// otherwise its page opens to choose.
+function lookRow(product) {
+  const row = el("div", "look-row");
+  const thumb = el("span");
+  fillSwatch(thumb, product, "look-thumb");
+  thumb.setAttribute("aria-hidden", "true");
+  const name = el("button", "look-name");
+  name.type = "button";
+  const price = el("span", "card-price");
+  price.append(...priceParts(product));
+  name.append(el("strong", "", product.name), price);
+  name.addEventListener("click", () => openProduct(product.id));
+  const inStock = (product.variants || []).filter((variant) => variant.stock > 0);
+  const add = el("button", "look-add", inStock.length === 0 ? "Stok habis" : "+ Keranjang");
+  add.type = "button";
+  add.disabled = inStock.length === 0;
+  add.setAttribute("aria-label", `Tambah ${product.name} ke keranjang`);
+  add.addEventListener("click", async () => {
+    if (inStock.length !== 1) {
+      openProduct(product.id);
+      return;
+    }
+    add.disabled = true;
+    try {
+      const skipped = await addToCart([{ product_id: product.id, variant_id: inStock[0].id, quantity: 1 }]);
+      add.textContent = skipped > 0 ? "Keranjang penuh" : "Masuk ✓";
+    } catch (error) {
+      add.textContent = "Coba lagi";
+      setStatus(cartWriteMessage(error), true);
+    }
+    setTimeout(() => {
+      add.textContent = "+ Keranjang";
+      add.disabled = false;
+    }, 2000);
+  });
+  row.append(thumb, name, add);
+  return row;
+}
+
 // The voucher the admins put in the bar above the header, if one can be used now.
 async function loadPromo() {
   let voucher;
@@ -2162,4 +2248,5 @@ loadPromo();
 loadCategories().then(() => {
   loadProducts();
   loadFlash();
+  loadLook();
 });

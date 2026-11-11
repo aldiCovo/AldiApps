@@ -219,6 +219,7 @@ func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, 
 		g.withSession(w, r, g.cartURL+"/favorites/"+id, nil)
 	})
 	mux.HandleFunc("GET /api/events", g.openEvents)
+	addLookRoutes(mux, photosDir)
 	categoryPhotosDir := filepath.Join(photosDir, "categories")
 	mux.HandleFunc("GET /api/category-photos", func(w http.ResponseWriter, r *http.Request) {
 		listCategoryPhotos(w, categoryPhotosDir)

@@ -78,6 +78,7 @@ function show(view) {
   $("products-view").hidden = view !== "products";
   $("users-view").hidden = view !== "users";
   $("vouchers-view").hidden = view !== "vouchers";
+  $("looks-view").hidden = view !== "looks";
   $("who").hidden = view === "login";
   $("nav").hidden = view === "login";
   for (const link of document.querySelectorAll(".nav-link")) {
@@ -97,6 +98,9 @@ function openView(view) {
   } else if (view === "vouchers") {
     show("vouchers");
     loadVouchers();
+  } else if (view === "looks") {
+    show("looks");
+    loadLooks();
   } else {
     show("orders");
     loadOrders(true);
@@ -140,7 +144,7 @@ async function start() {
 function loggedIn(me) {
   currentAdmin = me;
   $("who-name").textContent = `${me.name} (${me.email})`;
-  const views = { "#produk": "products", "#pengguna": "users", "#voucher": "vouchers" };
+  const views = { "#produk": "products", "#pengguna": "users", "#voucher": "vouchers", "#look": "looks" };
   openView(views[location.hash] || "orders");
 }
 

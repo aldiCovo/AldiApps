@@ -208,6 +208,35 @@ main { max-width: 1320px; margin: 0 auto; padding: 0 var(--gutter); }
 .more:has(> [hidden]) { padding: 20px 0; }
 
 /* What the shop does for you, in three short lines. */
+/* Shop the look: a photo with a point on each product worn, and the products beside it. */
+.look { padding: clamp(48px, 7vw, 80px) 0; }
+.look[hidden] { display: none; }
+.look-card { display: flex; flex-wrap: wrap; align-items: center; gap: clamp(24px, 4vw, 48px); padding: clamp(20px, 3.5vw, 40px); border-radius: 16px; background: rgb(164 90 102 / .1); }
+.look-photo { position: relative; flex: none; width: min(390px, 100%); aspect-ratio: 3 / 4; overflow: hidden; border-radius: var(--radius); }
+.look-photo img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center top; }
+.look-dot { position: absolute; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; background: none; transform: translate(-50%, -50%); }
+.look-dot span { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: rgb(255 255 255 / .8); box-shadow: 0 2px 8px rgb(43 36 32 / .3); animation: look-pulse 2.4s ease-in-out infinite; }
+.look-dot span::after { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+.look-dot[aria-pressed="true"] span { background: var(--accent); }
+.look-dot[aria-pressed="true"] span::after { background: #fff; }
+@keyframes look-pulse { 50% { box-shadow: 0 0 0 8px rgb(255 255 255 / .35), 0 2px 8px rgb(43 36 32 / .3); } }
+.look-info { display: flex; flex: 1 1 340px; flex-direction: column; gap: 14px; min-width: 0; }
+.look-info .eyebrow { margin: 0; }
+.look-info .section-title em { color: var(--accent); font-style: italic; }
+.look-hint { margin: 0; color: var(--muted); }
+.look-list { display: grid; gap: 12px; margin-top: 4px; }
+.look-row { display: flex; align-items: center; gap: 14px; padding: 10px 12px; border: 2px solid transparent; border-radius: var(--radius); background: rgb(255 255 255 / .65); transition: border-color .18s; }
+.look-row.chosen { border-color: var(--accent); }
+.look-thumb { position: relative; flex: none; width: 64px; height: 80px; overflow: hidden; border-radius: 8px; }
+.look-thumb svg { width: auto; height: 70%; }
+.look-name { flex: 1; min-width: 0; padding: 0; border: 0; background: none; text-align: left; }
+.look-name strong { display: block; font-weight: 500; overflow-wrap: anywhere; }
+.look-name:hover strong { color: var(--accent); }
+.look-name .card-price { margin-top: 2px; }
+.look-add { flex: none; min-height: 44px; padding: 0 16px; border: 0; border-radius: 999px; background: var(--accent); color: #fff; font-size: .82rem; font-weight: 600; }
+.look-add:hover { background: var(--accent-dark); }
+.look-add:disabled { opacity: .55; }
+
 .perks { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 28px 32px; padding: 44px 0; border-bottom: 1px solid var(--line); }
 .perk { display: flex; align-items: flex-start; gap: 16px; }
 .perk-icon { display: grid; flex: none; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: var(--soft); color: var(--accent); }
@@ -478,6 +507,8 @@ legend { margin-bottom: 10px; padding: 0; font-size: .92rem; font-weight: 600; }
   .tile { flex: none; width: 104px; }
   .products { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 12px; }
   .fav-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .look-card { margin-inline: calc(var(--gutter) * -1); border-radius: 0; }
+  .look-add { padding: 0 12px; }
   .card-badges { top: 8px; left: 8px; }
   .fav-toggle { top: 4px; right: 4px; }
   .card-name { font-size: .92rem; }

@@ -11,6 +11,7 @@
   <script src="/admin/photos.js" defer></script>
   <script src="/admin/users.js" defer></script>
   <script src="/admin/vouchers.js" defer></script>
+  <script src="/admin/looks.js" defer></script>
 </head>
 <body>
   <header class="bar">
@@ -19,6 +20,7 @@
       <a class="nav-link" href="#pesanan" data-view="orders">Pesanan</a>
       <a class="nav-link" href="#produk" data-view="products">Produk</a>
       <a class="nav-link" href="#voucher" data-view="vouchers">Voucher</a>
+      <a class="nav-link" href="#look" data-view="looks">Shop the look</a>
       <a class="nav-link" href="#pengguna" data-view="users">Pengguna</a>
     </nav>
     <div id="who" class="who" hidden>
@@ -115,6 +117,16 @@
       <p class="muted small intro">Pembeli mengetik kodenya saat checkout. Potongan dihitung dari harga barang, kecuali voucher gratis ongkir yang memotong ongkos kirim. Pesanan yang batal atau gagal mengembalikan kuotanya. Voucher yang sudah dipakai pesanan tidak bisa dihapus, hanya dinonaktifkan.</p>
       <p id="vouchers-status" class="status" role="status" aria-live="polite"></p>
       <div id="voucher-list" class="user-list"></div>
+    </section>
+
+    <section id="looks-view" hidden aria-labelledby="looks-title">
+      <div class="view-head">
+        <h1 id="looks-title">Shop the look</h1>
+        <button id="new-look" class="primary" type="button">Buat look</button>
+      </div>
+      <p class="muted small intro">Foto satu gaya lengkap, dengan titik bernomor di tiap produk yang dipakai. Beranda toko menampilkan look aktif yang terakhir diubah, asalkan sudah ada foto dan produknya. Foto tegak 3:4 terlihat paling baik.</p>
+      <p id="looks-status" class="status" role="status" aria-live="polite"></p>
+      <div id="look-list" class="user-list"></div>
     </section>
   </main>
 </body>

@@ -218,37 +218,69 @@ async function loadCategories() {
   state.categoryPhotos = await photos;
   state.productPhotos = await productPhotos;
   renderCategories();
+  renderHero();
+}
+
+// The hero shows the dress, hijab and blouse photos. Without all three, the drawings stay.
+function renderHero() {
+  const urls = ["Dress", "Hijab", "Blouse"].map(categoryPhotoURL);
+  if (urls.some((url) => !url)) return;
+  const images = urls.map((url, index) => {
+    const image = el("img", `hero-photo hero-photo-${index}`);
+    image.src = url;
+    image.alt = "";
+    image.decoding = "async";
+    return image;
+  });
+  let loaded = 0;
+  for (const image of images) {
+    image.addEventListener("load", () => {
+      loaded += 1;
+      if (loaded === images.length) {
+        $("hero-art").replaceChildren(...images);
+        $("hero-art").classList.add("has-photos");
+      }
+    });
+  }
+}
+
+// Picking a category filters the catalog. Picking it again shows every category.
+function chooseCategory(id) {
+  state.categoryId = id;
+  markCategories();
+  loadProducts();
+}
+
+// Marks the chosen category on the chips and tiles in place, so a tile can rise smoothly.
+function markCategories() {
+  for (const button of document.querySelectorAll("#categories .chip, #category-tiles .tile")) {
+    button.setAttribute("aria-pressed", String(button.dataset.id === state.categoryId));
+  }
 }
 
 function renderCategories() {
-  const choose = (id) => {
-    state.categoryId = id;
-    renderCategories();
-    loadProducts();
-  };
   const chip = (label, id) => {
     const button = el("button", "chip", label);
     button.type = "button";
-    button.setAttribute("aria-pressed", String(state.categoryId === id));
-    button.addEventListener("click", () => choose(id));
+    button.dataset.id = id;
+    button.addEventListener("click", () => chooseCategory(id));
     return button;
   };
   const tile = (id, name, index) => {
     const button = el("button", "tile");
     button.type = "button";
+    button.dataset.id = String(id);
     const art = el("span", `tile-art tone-${index % 5}`);
     art.setAttribute("aria-hidden", "true");
     fillArt(art, name, name);
-    const label = el("span", "tile-label");
-    label.append(el("span", "tile-name", name));
     if (addCategoryPhoto(art, name, "tile-photo", () => button.classList.remove("has-photo"))) {
       button.classList.add("has-photo");
-      label.append(el("span", "tile-cta", "Lihat koleksi"));
     }
-    button.append(art, label);
+    button.append(art, el("span", "tile-name", name));
     button.addEventListener("click", () => {
-      choose(String(id));
-      $("katalog").scrollIntoView();
+      const again = state.categoryId === String(id);
+      chooseCategory(again ? "" : String(id));
+      if (!again) $("katalog").scrollIntoView();
     });
     return button;
   };
@@ -256,6 +288,7 @@ function renderCategories() {
   $("categories").replaceChildren(chip("Semua", ""), ...categories.map(([id, name]) => chip(name, String(id))));
   $("category-tiles").replaceChildren(...categories.map(([id, name], index) => tile(id, name, index)));
   $("shop-by").hidden = categories.length === 0;
+  markCategories();
 }
 
 function addOptions(select, values) {
@@ -1806,6 +1839,11 @@ window.addEventListener("resize", () => {
 });
 $("order-now").addEventListener("click", orderNow);
 $("cart-open").addEventListener("click", openCart);
+$("footer-cart").addEventListener("click", openCart);
+$("footer-orders").addEventListener("click", () => {
+  if (loggedIn) openOrders();
+  else openAuth("Masuk dulu untuk melihat pesananmu.");
+});
 $("cart-note-open").addEventListener("click", () => {
   $("product-dialog").close();
   openCart();

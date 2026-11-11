@@ -783,3 +783,9 @@ document.addEventListener("focusin", (event) => {
 // Should /me have answered before this file ran, the header and page are drawn now.
 if (accountKnown && currentUser) $("account").replaceChildren(accountMenu(currentUser));
 routeAccount();
+
+// Opening the page at #akun makes the browser jump to the section, under the
+// sticky header. The account page fills the screen, so start at the top.
+window.addEventListener("load", () => {
+  if (document.body.classList.contains("on-account")) window.scrollTo(0, 0);
+});

@@ -9,6 +9,7 @@
   <link rel="preload" href="/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/style.css">
   <script src="/app.js" defer></script>
+  <script src="/account.js" defer></script>
 </head>
 <body>
   <!-- Drawings of each kind of garment, until products have photos. -->
@@ -180,6 +181,175 @@
         <span class="perk-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg></span>
         <div><h3>Alamat tersimpan</h3><p>Checkout lebih cepat dengan alamat yang sudah kamu simpan.</p></div>
       </div>
+    </section>
+
+    <!-- The account page, shown instead of the sections above while the address is #akun. -->
+    <section id="akun" class="account-page" aria-labelledby="akun-title" hidden>
+      <p class="crumbs"><a href="#">Beranda</a> <span aria-hidden="true">/</span> Akun saya</p>
+      <h1 id="akun-title" class="account-title">Akun saya</h1>
+
+      <div id="akun-guest" class="account-guest" hidden>
+        <p id="akun-guest-text">Masuk untuk melihat pesanan, favorit, dan alamatmu.</p>
+        <button id="akun-login" class="primary" type="button">Masuk</button>
+      </div>
+
+      <div id="akun-layout" class="account-layout" hidden>
+        <aside class="account-side">
+          <a class="account-card account-profile" href="#akun/biodata">
+            <span id="akun-avatar" class="avatar large" aria-hidden="true"></span>
+            <span class="profile-text"><span id="akun-name" class="profile-name"></span><span id="akun-email" class="profile-email"></span></span>
+          </a>
+
+          <div class="account-card account-strip-card">
+            <div class="strip-head"><h2>Pesanan saya</h2><a href="#akun/pesanan">Lihat semua</a></div>
+            <div id="akun-strip" class="status-strip"></div>
+          </div>
+
+          <nav class="account-card account-nav" aria-label="Menu akun">
+            <p class="nav-group">Belanja</p>
+            <a href="#akun/pesanan" data-section="pesanan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1.2 12H6.2z M9 8V6a3 3 0 0 1 6 0v2"/></svg><span class="nav-label">Pesanan saya</span><span class="nav-count" data-count="pesanan" hidden></span></a>
+            <a href="#akun/favorit" data-section="favorit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7.5-4.6-9.2-9.4C1.6 7.2 3.8 4 7.2 4c2 0 3.6 1.1 4.8 2.8C13.2 5.1 14.8 4 16.8 4c3.4 0 5.6 3.2 4.4 6.6C19.5 15.4 12 20 12 20z"/></svg><span class="nav-label">Favorit</span><span class="nav-count" data-count="favorit" hidden></span></a>
+            <a href="#akun/ulasan" data-section="ulasan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.2 4.1 1 5.8L12 16.9 6.7 19.6l1-5.8-4.2-4.1 5.9-.9z"/></svg><span class="nav-label">Ulasan</span><span class="nav-count" data-count="ulasan" hidden></span></a>
+            <a href="#akun/voucher" data-section="voucher"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v3a2 2 0 0 0 0 4v3H3v-3a2 2 0 0 0 0-4z M14 7v2 M14 11v2 M14 15v2"/></svg><span class="nav-label">Voucher saya</span><span class="nav-count" data-count="voucher" hidden></span></a>
+            <hr>
+            <p class="nav-group">Pengaturan akun</p>
+            <a href="#akun/biodata" data-section="biodata"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M4 20c1.5-3.5 4.5-5 8-5s6.5 1.5 8 5"/></svg><span class="nav-label">Biodata diri</span></a>
+            <a href="#akun/alamat" data-section="alamat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6-5.6-6-11a6 6 0 0 1 12 0c0 5.4-6 11-6 11z M12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/></svg><span class="nav-label">Daftar alamat</span></a>
+            <a href="#akun/keamanan" data-section="keamanan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 11h12v9H6z M8.5 11V8a3.5 3.5 0 0 1 7 0v3"/></svg><span class="nav-label">Keamanan</span></a>
+            <hr>
+            <button id="akun-logout" class="nav-logout" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H5v14h5 M14 8l4 4-4 4 M18 12H9"/></svg><span class="nav-label">Keluar</span></button>
+          </nav>
+
+          <div class="account-card account-stats">
+            <h2>Belanja kamu di Prastika</h2>
+            <dl class="stats-grid">
+              <div><dt>Pesanan</dt><dd id="akun-stat-orders">–</dd></div>
+              <div><dt>Ulasan</dt><dd id="akun-stat-reviews">–</dd></div>
+              <div><dt>Favorit</dt><dd id="akun-stat-favs">–</dd></div>
+            </dl>
+            <p id="akun-since" class="stats-since"></p>
+          </div>
+
+          <div id="akun-promo" class="account-promo" hidden>
+            <span id="akun-promo-art" class="promo-art" aria-hidden="true"></span>
+            <div class="promo-glass">
+              <p class="promo-eyebrow">Voucher untukmu</p>
+              <p id="akun-promo-title" class="promo-title"></p>
+              <p id="akun-promo-terms" class="promo-terms"></p>
+              <button id="akun-promo-copy" class="primary" type="button">Salin kode</button>
+            </div>
+          </div>
+        </aside>
+
+        <div class="account-main">
+          <a class="account-back" href="#akun">‹ Akun saya</a>
+
+          <section id="akun-pesanan" class="account-panel" aria-labelledby="akun-pesanan-title" hidden>
+            <div class="panel-head">
+              <h2 id="akun-pesanan-title" class="panel-title">Pesanan saya</h2>
+              <label class="panel-search"><span class="visually-hidden">Cari pesanan</span><input id="akun-order-search" type="search" maxlength="100" placeholder="Cari nama produk atau no. pesanan" autocomplete="off"></label>
+            </div>
+            <div id="akun-order-tabs" class="chips account-tabs" role="group" aria-label="Status pesanan"></div>
+            <p id="akun-order-status" class="status" role="status" aria-live="polite"></p>
+            <div id="akun-order-list" class="account-orders"></div>
+            <nav id="akun-order-pager" class="pager" aria-label="Halaman pesanan" hidden>
+              <div id="akun-order-pages" class="pager-pages"></div>
+              <p id="akun-order-range" class="pager-range"></p>
+            </nav>
+          </section>
+
+          <section id="akun-favorit" class="account-panel" aria-labelledby="akun-favorit-title" hidden>
+            <h2 id="akun-favorit-title" class="panel-title">Favorit</h2>
+            <p id="akun-fav-status" class="panel-sub" role="status" aria-live="polite"></p>
+            <div id="akun-fav-list" class="account-favs"></div>
+          </section>
+
+          <section id="akun-ulasan" class="account-panel" aria-labelledby="akun-ulasan-title" hidden>
+            <h2 id="akun-ulasan-title" class="panel-title">Ulasan</h2>
+            <div class="chips account-tabs" role="group" aria-label="Jenis ulasan">
+              <button id="akun-review-wait" class="chip" type="button" aria-pressed="true">Menunggu diulas</button>
+              <button id="akun-review-done" class="chip" type="button" aria-pressed="false">Riwayat ulasan</button>
+            </div>
+            <p id="akun-review-status" class="status" role="status" aria-live="polite"></p>
+            <div id="akun-review-list" class="account-reviews"></div>
+          </section>
+
+          <section id="akun-voucher" class="account-panel" aria-labelledby="akun-voucher-title" hidden>
+            <h2 id="akun-voucher-title" class="panel-title">Voucher saya</h2>
+            <p class="panel-sub">Voucher yang bisa kamu pakai saat checkout.</p>
+            <p id="akun-voucher-status" class="status" role="status" aria-live="polite"></p>
+            <div id="akun-voucher-list" class="account-vouchers"></div>
+          </section>
+
+          <section id="akun-biodata" class="account-panel" aria-labelledby="akun-biodata-title" hidden>
+            <h2 id="akun-biodata-title" class="panel-title">Biodata diri</h2>
+            <div class="bio-layout">
+              <span id="akun-bio-avatar" class="avatar huge" aria-hidden="true"></span>
+              <dl class="bio-rows">
+                <div><dt>Nama</dt><dd id="akun-bio-name"></dd></div>
+                <div><dt>Email</dt><dd id="akun-bio-email"></dd></div>
+                <div><dt>Bergabung</dt><dd id="akun-bio-since"></dd></div>
+              </dl>
+            </div>
+          </section>
+
+          <section id="akun-alamat" class="account-panel" aria-labelledby="akun-alamat-title" hidden>
+            <div class="panel-head">
+              <h2 id="akun-alamat-title" class="panel-title">Daftar alamat</h2>
+              <button id="akun-address-add" class="primary" type="button" hidden>+ Tambah alamat</button>
+            </div>
+            <p id="akun-address-status" class="status" role="status" aria-live="polite"></p>
+            <article id="akun-address-card" class="address-card" hidden>
+              <p class="address-card-head"><span>Alamat utama</span><span class="badge-main">Utama</span></p>
+              <p id="akun-address-text" class="address-text"></p>
+              <button id="akun-address-edit" class="link" type="button">Ubah alamat</button>
+            </article>
+            <form id="akun-address-form" class="address-form account-address-form" hidden>
+              <label class="wide">Nama penerima <input id="akun-address-recipient" type="text" maxlength="100" required autocomplete="name"></label>
+              <label class="wide">Nomor HP <input id="akun-address-phone" type="tel" maxlength="20" required autocomplete="tel" inputmode="tel" placeholder="0812 3456 7890" pattern="(\+62|62|0)[ .\-]?8[0-9 .\-]{7,17}" title="Nomor ponsel Indonesia, misalnya 0812 3456 7890"></label>
+              <label class="wide">Alamat lengkap <textarea id="akun-address-street" rows="3" maxlength="300" required autocomplete="street-address" placeholder="Nama jalan, nomor rumah, RT/RW, patokan"></textarea></label>
+              <label>Kecamatan <input id="akun-address-district" type="text" maxlength="100" required></label>
+              <label>Kota/Kabupaten <input id="akun-address-city" type="text" maxlength="100" required autocomplete="address-level2"></label>
+              <label>Provinsi <select id="akun-address-province" required autocomplete="address-level1"><option value="">Pilih provinsi</option></select></label>
+              <label>Kode pos <input id="akun-address-postal_code" type="text" maxlength="5" required autocomplete="postal-code" inputmode="numeric" pattern="[0-9]{5}" title="5 angka"></label>
+              <p id="akun-address-error" class="error wide" role="alert" hidden></p>
+              <div class="address-actions wide">
+                <button id="akun-address-save" class="secondary" type="submit">Simpan alamat</button>
+                <button id="akun-address-cancel" class="link" type="button">Batal</button>
+              </div>
+            </form>
+          </section>
+
+          <section id="akun-keamanan" class="account-panel" aria-labelledby="akun-keamanan-title" hidden>
+            <h2 id="akun-keamanan-title" class="panel-title">Keamanan</h2>
+            <p class="panel-sub">Ganti password secara berkala agar akunmu tetap aman.</p>
+            <div class="security-box">
+              <h3>Ganti password</h3>
+              <p id="akun-security-text"></p>
+              <button id="akun-security-send" class="primary" type="button">Kirim link ganti password</button>
+              <p id="akun-security-status" class="status" role="status" aria-live="polite"></p>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <section id="acc-picks" class="picks account-picks" aria-labelledby="acc-picks-title" hidden>
+        <div class="section-head picks-head">
+          <h2 id="acc-picks-title" class="panel-title">Mungkin kamu suka ini</h2>
+          <div class="picks-arrows">
+            <button id="acc-picks-prev" class="round-button" type="button" aria-label="Produk sebelumnya">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+            </button>
+            <button id="acc-picks-next" class="round-button filled" type="button" aria-label="Produk berikutnya">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+            </button>
+          </div>
+        </div>
+        <div id="acc-picks-tabs" class="chips picks-tabs" role="group" aria-label="Jenis rekomendasi"></div>
+        <p id="acc-picks-note" class="picks-note"></p>
+        <div id="acc-picks-track" class="picks-track"></div>
+        <div id="acc-picks-dots" class="picks-dots"></div>
+      </section>
     </section>
   </main>
 

@@ -427,7 +427,7 @@ func versionedPage(files fs.FS) ([]byte, map[string]string) {
 		panic(err)
 	}
 	assets := make(map[string]string)
-	for _, name := range []string{"style.css", "app.js"} {
+	for _, name := range []string{"style.css", "app.js", "account.js"} {
 		content, err := fs.ReadFile(files, name)
 		if err != nil {
 			panic(err)

@@ -4,7 +4,7 @@ const pageSize = 24;
 const $ = (id) => document.getElementById(id);
 const rupiah = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 });
 
-const state = { q: "", categoryId: "", size: "", color: "", inStock: false, offset: 0, total: 0, categories: new Map(), categoryPhotos: {}, productPhotos: {} };
+const state = { q: "", categoryId: "", size: "", color: "", inStock: false, offset: 0, total: 0, categories: new Map(), categoryPhotos: {}, productPhotos: {}, ratings: null };
 let latestRequest = 0;
 
 class ApiError extends Error {
@@ -170,6 +170,10 @@ function productCard(product) {
   card.append(el("span", "card-name", product.name));
   const sizes = [...new Set((product.variants || []).map((variant) => variant.size))];
   if (sizes.length > 0) card.append(el("span", "card-meta", `Ukuran ${sizes.join(", ")}`));
+  const rating = el("span", "card-rating");
+  rating.dataset.product = product.id;
+  fillCardRating(rating);
+  card.append(rating);
   const price = el("span", "card-price");
   price.append(...priceParts(product));
   card.append(price);
@@ -187,6 +191,60 @@ function productCard(product) {
   const wrap = el("div", "card-wrap");
   wrap.append(card, favButton(product));
   return wrap;
+}
+
+// Stars for a rating, rounded to the nearest whole star. Purely visual: the number is
+// always written next to them.
+const starPath = "M12 2.8l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17.2l-5.7 3.1 1.2-6.4-4.7-4.4 6.4-.8z";
+
+function starIcon(on, size = 14) {
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNS, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("width", size);
+  svg.setAttribute("height", size);
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("class", on ? "star on" : "star");
+  const path = document.createElementNS(svgNS, "path");
+  path.setAttribute("d", starPath);
+  svg.append(path);
+  return svg;
+}
+
+function starRow(rating, size) {
+  const row = el("span", "stars");
+  const whole = Math.round(rating);
+  for (let i = 1; i <= 5; i++) row.append(starIcon(i <= whole, size));
+  return row;
+}
+
+const decimal = new Intl.NumberFormat("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const counted = new Intl.NumberFormat("id-ID");
+
+// "★ 4,8 (23) · 61 terjual" under a card's name, filled in once the ratings arrive.
+function fillCardRating(node) {
+  if (state.ratings === null) return;
+  const rating = state.ratings[node.dataset.product];
+  const parts = [];
+  if (rating && rating.count > 0) {
+    const score = el("span", "");
+    score.append(starIcon(true), " ", el("strong", "", decimal.format(rating.average)), ` (${counted.format(rating.count)})`);
+    parts.push(score);
+  } else {
+    parts.push(el("span", "muted", "Belum ada ulasan"));
+  }
+  if (rating && rating.sold > 0) parts.push(el("span", "", ` · ${counted.format(rating.sold)} terjual`));
+  node.replaceChildren(...parts);
+}
+
+async function loadRatings() {
+  try {
+    ({ ratings: state.ratings } = await api("/ratings"));
+  } catch {
+    return;
+  }
+  for (const node of document.querySelectorAll(".card-rating")) fillCardRating(node);
+  if (shownProductId !== null) showProductRating(shownProductId);
 }
 
 function showSkeletons() {
@@ -514,6 +572,8 @@ async function openProduct(id) {
     $("order-error").hidden = true;
     $("cart-note").hidden = true;
     shownProductId = product.id;
+    showProductRating(product.id);
+    loadReviews(product.id, 0);
     markFavorites();
     const first = document.querySelector('input[name="variant"]:not(:disabled)');
     if (first) first.checked = true;
@@ -523,6 +583,101 @@ async function openProduct(id) {
   } catch (error) {
     setStatus(error.status === 404 ? "Produk ini sudah tidak tersedia." : "Produk belum bisa dibuka. Coba lagi sebentar lagi.", true);
   }
+}
+
+// The rating under the product's name, which jumps to its reviews.
+function showProductRating(id) {
+  const rating = state.ratings && state.ratings[id];
+  const link = $("product-rating");
+  link.hidden = !rating || rating.count === 0;
+  if (link.hidden) return;
+  const parts = [starRow(rating.average, 16), el("strong", "", decimal.format(rating.average)), el("span", "rating-count", `${counted.format(rating.count)} ulasan`)];
+  if (rating.sold > 0) parts.push(el("span", "", `· ${counted.format(rating.sold)} terjual`));
+  link.replaceChildren(...parts);
+}
+
+// The product's reviews: a summary with a bar per number of stars, which filter the list like
+// the chips above it, and the newest reviews a page at a time.
+const reviewPage = 5;
+const reviews = { productId: null, stars: 0, offset: 0, request: 0 };
+const reviewDate = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric" });
+
+async function loadReviews(productId, stars, more = false) {
+  const request = ++reviews.request;
+  if (!more) {
+    Object.assign(reviews, { productId, stars, offset: 0 });
+    $("review-list").replaceChildren();
+  }
+  $("review-more").hidden = true;
+  $("review-status").textContent = "Memuat ulasan…";
+  const params = new URLSearchParams({ limit: reviewPage, offset: reviews.offset });
+  if (stars) params.set("rating", stars);
+  let page;
+  try {
+    page = await api(`/products/${productId}/reviews?${params}`);
+  } catch {
+    if (request === reviews.request) $("review-status").textContent = "Ulasan belum bisa dimuat. Coba lagi sebentar lagi.";
+    return;
+  }
+  if (request !== reviews.request) return;
+  showReviewSummary(page);
+  $("review-list").append(...page.reviews.map(reviewItem));
+  reviews.offset += page.reviews.length;
+  $("review-more").hidden = reviews.offset >= page.matching;
+  $("review-status").textContent = page.count === 0
+    ? "Belum ada ulasan. Ulasan muncul dari pembeli yang pesanannya sudah selesai."
+    : page.matching === 0 ? "Belum ada ulasan dengan bintang ini." : "";
+}
+
+function showReviewSummary(page) {
+  $("review-summary").hidden = page.count === 0;
+  $("review-chips").hidden = page.count === 0;
+  if (page.count === 0) return;
+  $("review-average").textContent = decimal.format(page.average);
+  $("review-stars").replaceChildren(starRow(page.average, 20));
+  $("review-total").textContent = `${counted.format(page.count)} ulasan dari pembeli yang pesanannya sudah selesai`;
+  const most = Math.max(...page.counts);
+  $("review-bars").replaceChildren(...[5, 4, 3, 2, 1].map((stars) => {
+    const bar = el("button", "review-bar");
+    bar.type = "button";
+    bar.setAttribute("aria-pressed", String(reviews.stars === stars));
+    bar.setAttribute("aria-label", `${stars} bintang: ${page.counts[stars - 1]} ulasan`);
+    const track = el("span", "review-track");
+    const fill = el("span");
+    fill.style.width = most > 0 ? `${(page.counts[stars - 1] / most) * 100}%` : "0";
+    track.append(fill);
+    bar.append(el("span", "", `${stars}★`), track, el("span", "review-bar-count", counted.format(page.counts[stars - 1])));
+    bar.addEventListener("click", () => loadReviews(reviews.productId, reviews.stars === stars ? 0 : stars));
+    return bar;
+  }));
+  $("review-chips").replaceChildren(...[0, 5, 4, 3, 2, 1].map((stars) => {
+    const chip = el("button", "chip", stars === 0 ? "Semua" : `${stars}★`);
+    chip.type = "button";
+    chip.setAttribute("aria-pressed", String(reviews.stars === stars));
+    if (stars) chip.setAttribute("aria-label", `${stars} bintang`);
+    chip.addEventListener("click", () => loadReviews(reviews.productId, stars));
+    return chip;
+  }));
+}
+
+function reviewItem(review) {
+  const item = el("article", "review");
+  const head = el("div", "review-head");
+  const who = el("div", "review-who");
+  who.append(el("span", "review-initial", Array.from(review.author)[0] || "P"));
+  const name = el("div", "");
+  const meta = el("div", "review-meta");
+  if (review.variant) meta.append(`${review.variant} · `);
+  meta.append(el("span", "review-verified", "✓ Pembeli terverifikasi"));
+  name.append(el("div", "review-name", review.author), meta);
+  who.append(name);
+  head.append(who, el("span", "review-date", reviewDate.format(new Date(review.created_at))));
+  const stars = starRow(review.rating, 16);
+  stars.setAttribute("role", "img");
+  stars.setAttribute("aria-label", `${review.rating} dari 5 bintang`);
+  item.append(head, stars);
+  if (review.body) item.append(el("p", "review-body", review.body));
+  return item;
 }
 
 // The photo viewer. A click or tap zooms in on that spot and zooms out again, dragging moves the
@@ -941,6 +1096,7 @@ const orderStates = {
   paid: ["Dibayar", "good"],
   packed: ["Dikemas", "good"],
   shipped: ["Dikirim", "good"],
+  arrived: ["Sudah sampai", "arrived"],
   completed: ["Selesai", "good"],
   rejected: ["Ditolak: stok tidak cukup", "bad"],
 };
@@ -951,7 +1107,7 @@ const liveRetryMax = 30000;
 const unsettled = new Set(["pending", "paying"]);
 // Orders that can still change, so the list listens for their signals. The shop moves a paid
 // order on from the admin pages.
-const openStatuses = new Set(["pending", "awaiting_payment", "paying", "paid", "packed", "shipped"]);
+const openStatuses = new Set(["pending", "awaiting_payment", "paying", "paid", "packed", "shipped", "arrived"]);
 let pollTimer = null;
 let shownOrders = [];
 let liveSocket = null;
@@ -1067,6 +1223,8 @@ function orderActions(order, target) {
     });
     target.append(again);
   }
+  if (order.status === "arrived") target.append(receiveControls(order));
+  if (order.status === "completed") target.append(reviewControls(order));
   if (order.status === "awaiting_payment") {
     if (order.expires_at) {
       const time = new Date(order.expires_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
@@ -1076,6 +1234,193 @@ function orderActions(order, target) {
     actions.append(payButton(order, "Bayar (simulasi)", "primary", "success"), payButton(order, "Simulasikan gagal bayar", "secondary", "failure"));
     target.append(actions, cancelControls(order));
   }
+}
+
+const longDate = new Intl.DateTimeFormat("id-ID", { weekday: "long", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+
+// An arrived order waits for the customer to say it reached them, or completes by itself.
+function receiveControls(order) {
+  const box = el("div", "order-receive");
+  const note = el("p", "receive-note");
+  note.append("Barang sudah sampai pada ", el("strong", "", longDate.format(new Date(order.arrived_at))),
+    ". Cek barangnya, lalu tekan ", el("strong", "", "Pesanan diterima"), ".");
+  if (order.auto_complete_at) note.append(" Jika tidak, pesanan otomatis selesai pada ", el("strong", "", longDate.format(new Date(order.auto_complete_at))), ".");
+  const receive = el("button", "primary", "Pesanan diterima");
+  receive.type = "button";
+  receive.dataset.key = `receive-${order.id}`;
+  receive.addEventListener("click", async () => {
+    receive.disabled = true;
+    try {
+      await post(`/orders/${order.id}/receive`, {});
+      $("orders-status").textContent = "Terima kasih! Pesanan selesai. Beri ulasan untuk produknya di bawah.";
+    } catch (error) {
+      if (error.status === 401) renderAccount(null);
+      $("orders-status").textContent = error.status === 409 ? "Pesanan ini sudah selesai." : "Pesanan belum bisa dikonfirmasi. Coba lagi sebentar lagi.";
+    }
+    await refreshOrders();
+  });
+  box.append(note, receive);
+  return box;
+}
+
+// A review form stays open, with what was typed, while the list is drawn again.
+const reviewWords = ["", "Sangat kecewa", "Kurang", "Cukup", "Bagus", "Sangat bagus"];
+const reviewDrafts = new Map();
+let openReview = null;
+
+// One row per product in a completed order, to review it or change the review.
+function reviewControls(order) {
+  const box = el("div", "order-reviews");
+  const seen = new Set();
+  for (const item of order.items) {
+    if (seen.has(item.product_id)) continue;
+    seen.add(item.product_id);
+    const variants = order.items.filter((other) => other.product_id === item.product_id).map((other) => `${other.size} · ${other.color} × ${other.quantity}`);
+    box.append(reviewRow(order, item, variants.join(", ")));
+  }
+  return box;
+}
+
+function reviewRow(order, item, variants) {
+  const key = `${order.id}:${item.product_id}`;
+  const mine = order.reviews && order.reviews[item.product_id];
+  const row = el("div", "review-row");
+  const line = el("div", "review-product");
+  const thumb = el("span", "review-thumb");
+  thumb.setAttribute("aria-hidden", "true");
+  const photo = (state.productPhotos[item.product_id] || [])[0];
+  if (photo) addPhoto(thumb, photo, "");
+  const text = el("div", "review-product-text");
+  text.append(el("span", "review-product-name", item.product_name), el("span", "review-product-meta", variants));
+  line.append(thumb, text);
+  row.append(line);
+  const open = () => {
+    openReview = key;
+    if (!reviewDrafts.has(key)) reviewDrafts.set(key, { stars: mine ? mine.rating : 0, body: mine ? mine.body : "" });
+    renderOrders(shownOrders);
+    const form = $("orders-list").querySelector(`[data-key="stars-${key}"]`);
+    if (form) form.focus();
+  };
+  if (openReview === key) {
+    row.append(reviewForm(order, item, key));
+  } else if (mine) {
+    const done = el("div", "review-done");
+    const sent = el("span", "review-sent");
+    const stars = starRow(mine.rating, 14);
+    stars.setAttribute("role", "img");
+    stars.setAttribute("aria-label", `Ulasanmu: ${mine.rating} bintang`);
+    sent.append(stars, "Ulasan terkirim");
+    done.append(sent, linkButton("Ubah", `review-${key}`, open));
+    done.lastChild.setAttribute("aria-label", `Ubah ulasan ${item.product_name}`);
+    row.append(done);
+  } else {
+    const give = el("button", "primary review-give", "Beri ulasan");
+    give.type = "button";
+    give.dataset.key = `review-${key}`;
+    give.setAttribute("aria-label", `Beri ulasan ${item.product_name}`);
+    give.addEventListener("click", open);
+    line.append(give);
+  }
+  return row;
+}
+
+function reviewForm(order, item, key) {
+  const draft = reviewDrafts.get(key) || { stars: 0, body: "" };
+  reviewDrafts.set(key, draft);
+  const form = el("form", "review-form");
+  form.noValidate = true;
+  form.append(el("p", "review-ask", "Seberapa puas kamu?"));
+  const group = el("div", "review-pick");
+  group.setAttribute("role", "radiogroup");
+  group.setAttribute("aria-label", `Bintang untuk ${item.product_name}`);
+  const word = el("p", "review-word", draft.stars ? reviewWords[draft.stars] : "Pilih 1 sampai 5 bintang");
+  const submit = el("button", "primary", "Kirim ulasan");
+  submit.type = "submit";
+  const buttons = [1, 2, 3, 4, 5].map((n) => {
+    const star = el("button", "review-star");
+    star.type = "button";
+    star.setAttribute("role", "radio");
+    star.setAttribute("aria-label", `${n} bintang, ${reviewWords[n]}`);
+    star.append(starIcon(n <= draft.stars, 32));
+    star.addEventListener("click", () => pick(n));
+    return star;
+  });
+  const pick = (n) => {
+    draft.stars = n;
+    buttons.forEach((star, i) => {
+      star.setAttribute("aria-checked", String(i + 1 === n));
+      star.tabIndex = i + 1 === (n || 1) ? 0 : -1;
+      star.firstChild.setAttribute("class", i < n ? "star on" : "star");
+    });
+    word.textContent = n ? reviewWords[n] : "Pilih 1 sampai 5 bintang";
+    submit.setAttribute("aria-disabled", String(!n));
+  };
+  // Arrow keys move between the stars, as in any radio group.
+  group.addEventListener("keydown", (event) => {
+    const step = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[event.key];
+    if (!step) return;
+    event.preventDefault();
+    const next = Math.min(5, Math.max(1, (draft.stars || 0) + step));
+    pick(next);
+    buttons[next - 1].focus();
+  });
+  buttons[0].dataset.key = `stars-${key}`;
+  group.append(...buttons);
+  pick(draft.stars);
+  const id = `review-text-${order.id}-${item.product_id}`;
+  const label = el("label", "review-label", "Ceritakan pengalamanmu (opsional)");
+  label.htmlFor = id;
+  const textarea = el("textarea");
+  textarea.id = id;
+  textarea.rows = 4;
+  textarea.maxLength = 1000;
+  textarea.placeholder = "Bahan, ukuran, warna, dan pengirimannya…";
+  textarea.value = draft.body;
+  textarea.dataset.key = `text-${key}`;
+  textarea.addEventListener("input", () => { draft.body = textarea.value; });
+  const error = el("p", "error", "");
+  error.setAttribute("role", "alert");
+  error.hidden = true;
+  const actions = el("div", "review-actions");
+  actions.append(submit, linkButton("Batal", `cancel-review-${key}`, () => {
+    openReview = null;
+    reviewDrafts.delete(key);
+    renderOrders(shownOrders);
+  }));
+  form.append(group, word, label, textarea, el("p", "review-hint", "Namamu tampil disamarkan, seperti S***i."), error, actions);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!draft.stars) {
+      error.textContent = "Pilih bintangnya dulu.";
+      error.hidden = false;
+      buttons[0].focus();
+      return;
+    }
+    error.hidden = true;
+    for (const control of form.querySelectorAll("button, textarea")) control.disabled = true;
+    try {
+      const saved = await send("PUT", `/orders/${order.id}/reviews/${item.product_id}`, { rating: draft.stars, body: draft.body.trim() });
+      openReview = null;
+      reviewDrafts.delete(key);
+      shownOrders = shownOrders.map((shown) => (shown.id === order.id
+        ? { ...shown, reviews: { ...(shown.reviews || {}), [item.product_id]: saved } }
+        : shown));
+      $("orders-status").textContent = "Ulasan terkirim. Terima kasih!";
+      renderOrders(shownOrders);
+      const again = $("orders-list").querySelector(`[data-key="review-${key}"]`);
+      if (again) again.focus();
+    } catch (failure) {
+      if (failure.status === 401) {
+        renderAccount(null);
+        return;
+      }
+      error.textContent = failure.status === 409 ? "Pesanan ini belum selesai, jadi belum bisa diulas."
+        : failure.status === 400 ? "Ulasan paling panjang 1000 huruf." : "Ulasan belum bisa dikirim. Coba lagi sebentar lagi.";
+      error.hidden = false;
+      for (const control of form.querySelectorAll("button, textarea")) control.disabled = false;
+    }
+  });
+  return form;
 }
 
 function showOrderDetail(id) {
@@ -1144,7 +1489,11 @@ function orderDetail(order) {
   if (order.paid_at) fact("Dibayar", when(order.paid_at));
   if (order.packed_at) fact("Dikemas", when(order.packed_at));
   if (order.shipped_at) fact("Dikirim", when(order.shipped_at));
-  if (order.completed_at) fact("Selesai", when(order.completed_at));
+  if (order.arrived_at) fact("Sampai", when(order.arrived_at));
+  if (order.completed_at) {
+    const by = { customer: " · dikonfirmasi olehmu", system: " · otomatis oleh sistem" }[order.completed_by] || "";
+    fact("Selesai", when(order.completed_at) + by);
+  }
   if (order.status === "cancelled" || order.status === "rejected") fact("Berakhir", when(order.updated_at));
   if (paid) fact("Metode", "Simulasi pembayaran");
   box.append(facts);
@@ -2249,4 +2598,9 @@ loadCategories().then(() => {
   loadProducts();
   loadFlash();
   loadLook();
+  loadRatings();
 });
+$("product-rating").addEventListener("click", () => {
+  $("product-reviews").scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+});
+$("review-more").addEventListener("click", () => loadReviews(reviews.productId, reviews.stars, true));

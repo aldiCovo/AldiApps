@@ -90,15 +90,21 @@ func TestPaidOrderIsPackedShippedAndCompleted(t *testing.T) {
 	if status != http.StatusOK || got.Status != statusShipped || got.ShippedAt == nil || got.TrackingNumber != "JP-1234567890" {
 		t.Fatalf("status %d, order %+v", status, got)
 	}
+	status, got = h.advance(t, order.ID, `{"status":"arrived"}`)
+	if status != http.StatusOK || got.Status != statusArrived || got.ArrivedAt == nil || got.ArrivedBy != "admin" || got.AutoCompleteAt == nil ||
+		got.AutoCompleteAt.Sub(*got.ArrivedAt) != receiveWindow {
+		t.Fatalf("status %d, order %+v", status, got)
+	}
 	status, got = h.advance(t, order.ID, `{"status":"completed"}`)
-	if status != http.StatusOK || got.Status != statusCompleted || got.CompletedAt == nil || got.PackedAt == nil || got.TrackingNumber != "JP-1234567890" {
+	if status != http.StatusOK || got.Status != statusCompleted || got.CompletedAt == nil || got.CompletedBy != "admin" || got.AutoCompleteAt != nil ||
+		got.PackedAt == nil || got.TrackingNumber != "JP-1234567890" {
 		t.Fatalf("status %d, order %+v", status, got)
 	}
 	// The customer sees it too.
 	if mine := h.status(t, 1, order.ID); mine.Status != statusCompleted || mine.TrackingNumber != "JP-1234567890" || mine.ShippedAt == nil {
 		t.Fatalf("order %+v", mine)
 	}
-	want := []string{eventOrderCreated, eventPaymentRequested, eventOrderPaid, eventOrderShipped, eventOrderCompleted}
+	want := []string{eventOrderCreated, eventPaymentRequested, eventOrderPaid, eventOrderShipped, eventOrderArrived, eventOrderCompleted}
 	if got := h.outbox(t); fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("events %v", got)
 	}
@@ -122,6 +128,7 @@ func TestStepsCannotBeSkippedRepeatedOrBadlyFormed(t *testing.T) {
 	}{
 		"ship before packing":     {order.ID, `{"status":"shipped","tracking_number":"JP1234567"}`, http.StatusConflict},
 		"complete before packing": {order.ID, `{"status":"completed"}`, http.StatusConflict},
+		"arrive before packing":   {order.ID, `{"status":"arrived"}`, http.StatusConflict},
 		"pack an unpaid order":    {unpaid.ID, `{"status":"packed"}`, http.StatusConflict},
 		"back to paid":            {order.ID, `{"status":"paid"}`, http.StatusBadRequest},
 		"cancel":                  {order.ID, `{"status":"cancelled"}`, http.StatusBadRequest},

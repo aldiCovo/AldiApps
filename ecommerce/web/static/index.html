@@ -198,6 +198,7 @@
       <div class="product-info">
         <span id="product-category" class="eyebrow" hidden></span>
         <h2 id="product-title"></h2>
+        <button id="product-rating" class="product-rating" type="button" hidden></button>
         <p id="product-price" class="price"></p>
         <button id="product-fav" class="fav-inline" type="button" aria-pressed="false">
           <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7.5-4.6-9.2-9.4C1.6 7.2 3.8 4 7.2 4c2 0 3.6 1.1 4.8 2.8C13.2 5.1 14.8 4 16.8 4c3.4 0 5.6 3.2 4.4 6.6C19.5 15.4 12 20 12 20z"/></svg>
@@ -224,6 +225,23 @@
         </form>
       </div>
     </div>
+    <section id="product-reviews" class="product-reviews" aria-labelledby="reviews-title">
+      <h3 id="reviews-title">Ulasan pembeli</h3>
+      <div class="reviews-layout">
+        <div id="review-summary" class="review-summary" hidden>
+          <p class="review-score"><span id="review-average"></span><span class="review-of">dari 5</span></p>
+          <div id="review-stars"></div>
+          <p id="review-total" class="review-total"></p>
+          <div id="review-bars" class="review-bars" role="group" aria-label="Saring menurut bintang"></div>
+        </div>
+        <div class="review-feed">
+          <div id="review-chips" class="review-chips" role="group" aria-label="Saring ulasan" hidden></div>
+          <div id="review-list"></div>
+          <p id="review-status" class="status" role="status"></p>
+          <button id="review-more" class="secondary review-more" type="button" hidden>Lihat ulasan lainnya</button>
+        </div>
+      </div>
+    </section>
   </dialog>
 
   <dialog id="photo-dialog" class="photo-viewer" aria-label="Foto produk">

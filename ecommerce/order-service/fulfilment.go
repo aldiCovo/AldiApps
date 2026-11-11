@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -18,29 +19,39 @@ import (
 const (
 	statusPacked    = "packed"
 	statusShipped   = "shipped"
+	statusArrived   = "arrived"
 	statusCompleted = "completed"
 
 	eventOrderShipped   = "order.shipped"
+	eventOrderArrived   = "order.arrived"
 	eventOrderCompleted = "order.completed"
+
+	completedByAdmin    = "admin"
+	completedByCustomer = "customer"
+	completedBySystem   = "system"
+
+	// How long the customer has to confirm an arrived order before it completes by itself.
+	receiveWindow = 72 * time.Hour
 
 	minInternalTokenLength = 32
 )
 
 var (
 	errCannotAdvance = errors.New("the order isn't in the step before this one")
-	errBadStep       = errors.New("status must be packed, shipped or completed")
+	errBadStep       = errors.New("status must be packed, shipped, arrived or completed")
+	errCannotReceive = errors.New("this order hasn't arrived yet")
 	errBadTracking   = errors.New("tracking_number must be 6 to 40 letters, digits or dashes, and only given when shipping")
 
 	// Each step can only follow the one before it, so two admins can't skip or repeat one.
-	previousStep = map[string]string{statusPacked: statusPaid, statusShipped: statusPacked, statusCompleted: statusShipped}
+	previousStep = map[string]string{statusPacked: statusPaid, statusShipped: statusPacked, statusArrived: statusShipped, statusCompleted: statusArrived}
 	// Steps that send the customer an email.
-	stepEvents = map[string]string{statusShipped: eventOrderShipped, statusCompleted: eventOrderCompleted}
+	stepEvents = map[string]string{statusShipped: eventOrderShipped, statusArrived: eventOrderArrived, statusCompleted: eventOrderCompleted}
 
 	trackingNumber = regexp.MustCompile(`^[A-Z0-9-]{6,40}$`)
 
 	allStatuses = map[string]bool{
 		statusPending: true, statusAwaitingPayment: true, statusPaying: true, statusPaid: true,
-		statusPacked: true, statusShipped: true, statusCompleted: true, statusRejected: true, statusCancelled: true,
+		statusPacked: true, statusShipped: true, statusArrived: true, statusCompleted: true, statusRejected: true, statusCancelled: true,
 	}
 )
 
@@ -54,12 +65,11 @@ const adminColumns = "user_id, " + orderColumns
 
 func scanAdminOrder(row pgx.Row) (AdminOrder, error) {
 	var a AdminOrder
-	o := &a.Order
-	err := row.Scan(&a.UserID, &o.ID, &o.Status, &o.Reason, &o.Total, &o.Discount, &o.VoucherCode, &o.ExpiresAt, &o.ShippingAddress, &o.Shipping,
-		&o.CreatedAt, &o.UpdatedAt, &o.PaidAt, &o.PackedAt, &o.ShippedAt, &o.CompletedAt, &o.TrackingNumber)
+	err := row.Scan(append([]any{&a.UserID}, a.targets()...)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return AdminOrder{}, errNotFound
 	}
+	a.scanned()
 	return a, err
 }
 
@@ -123,7 +133,10 @@ func (s *Store) Advance(ctx context.Context, id int64, to, tracking string) (a A
 			`UPDATE orders SET status = $2, updated_at = now(),
 				packed_at = CASE WHEN $2 = 'packed' THEN now() ELSE packed_at END,
 				shipped_at = CASE WHEN $2 = 'shipped' THEN now() ELSE shipped_at END,
+				arrived_at = CASE WHEN $2 = 'arrived' THEN now() ELSE arrived_at END,
+				arrived_by = CASE WHEN $2 = 'arrived' THEN 'admin' ELSE arrived_by END,
 				completed_at = CASE WHEN $2 = 'completed' THEN now() ELSE completed_at END,
+				completed_by = CASE WHEN $2 = 'completed' THEN 'admin' ELSE completed_by END,
 				tracking_number = CASE WHEN $2 = 'shipped' THEN $4 ELSE tracking_number END
 			 WHERE id = $1 AND status = $3
 			 RETURNING `+adminColumns, id, to, from, tracking))
@@ -145,20 +158,92 @@ func (s *Store) Advance(ctx context.Context, id int64, to, tracking string) (a A
 			return err
 		}
 		a = list[0]
-		if eventType, found := stepEvents[to]; found {
-			event := orderFinishedEvent{OrderID: a.ID, UserID: a.UserID, Total: a.Total, Items: a.Items, Discount: a.Discount, VoucherCode: a.VoucherCode}
-			if to == statusShipped {
-				event.Shipping, event.TrackingNumber = a.Shipping, a.TrackingNumber
-			}
-			return addEvent(ctx, tx, eventType, event)
-		}
-		return nil
+		return addStepEvent(ctx, tx, a)
 	})
 	if err != nil {
 		return AdminOrder{}, err
 	}
 	s.changed(a.UserID, a.ID, to)
 	return a, nil
+}
+
+// addStepEvent saves the email for the step the order has just reached, if it has one. The
+// order needs its items.
+func addStepEvent(ctx context.Context, tx pgx.Tx, a AdminOrder) error {
+	eventType, found := stepEvents[a.Status]
+	if !found {
+		return nil
+	}
+	event := orderFinishedEvent{OrderID: a.ID, UserID: a.UserID, Total: a.Total, Items: a.Items, Discount: a.Discount, VoucherCode: a.VoucherCode}
+	if a.Status == statusShipped {
+		event.Shipping, event.TrackingNumber = a.Shipping, a.TrackingNumber
+	}
+	return addEvent(ctx, tx, eventType, event)
+}
+
+// Receive is the customer confirming that an arrived order reached them.
+func (s *Store) Receive(ctx context.Context, userID, id int64) (Order, error) {
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		a, err := scanAdminOrder(tx.QueryRow(ctx,
+			`UPDATE orders SET status = 'completed', completed_at = now(), completed_by = $3, updated_at = now()
+			 WHERE id = $1 AND user_id = $2 AND status = 'arrived'
+			 RETURNING `+adminColumns, id, userID, completedByCustomer))
+		if errors.Is(err, errNotFound) {
+			if _, err := s.Get(ctx, userID, id); err != nil {
+				return err
+			}
+			return errCannotReceive
+		}
+		if err != nil {
+			return err
+		}
+		list := []AdminOrder{a}
+		if err := withItems(ctx, tx, list); err != nil {
+			return err
+		}
+		return addStepEvent(ctx, tx, list[0])
+	})
+	if err != nil {
+		return Order{}, err
+	}
+	s.changed(userID, id, statusCompleted)
+	return s.Get(ctx, userID, id)
+}
+
+// CompleteArrived completes the orders whose customer hasn't confirmed them in time.
+func (s *Store) CompleteArrived(ctx context.Context) (int, error) {
+	var done []AdminOrder
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`UPDATE orders SET status = 'completed', completed_at = now(), completed_by = $1, updated_at = now()
+			 WHERE id IN (
+			     SELECT id FROM orders WHERE status = 'arrived' AND arrived_at <= now() - $2::interval
+			     ORDER BY arrived_at LIMIT $3 FOR UPDATE SKIP LOCKED
+			 ) RETURNING `+adminColumns, completedBySystem, receiveWindow.String(), expireBatch)
+		if err != nil {
+			return err
+		}
+		done, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (AdminOrder, error) { return scanAdminOrder(row) })
+		if err != nil {
+			return err
+		}
+		if err := withItems(ctx, tx, done); err != nil {
+			return err
+		}
+		for _, a := range done {
+			if err := addStepEvent(ctx, tx, a); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	for _, a := range done {
+		s.changed(a.UserID, a.ID, statusCompleted)
+	}
+	return len(done), nil
 }
 
 // addInternalRoutes adds what admin-service calls. Browsers can't reach them: web never

@@ -19,6 +19,7 @@ const (
 	eventOrderRejected  = "order.rejected"
 	eventOrderCancelled = "order.cancelled"
 	eventOrderShipped   = "order.shipped"
+	eventOrderArrived   = "order.arrived"
 	eventOrderCompleted = "order.completed"
 
 	reasonExpired     = "expired"
@@ -77,7 +78,7 @@ func (n *Notifier) handle(ctx context.Context, body []byte) error {
 		return nil
 	}
 	switch event.Type {
-	case eventOrderPaid, eventOrderRejected, eventOrderCancelled, eventOrderShipped, eventOrderCompleted:
+	case eventOrderPaid, eventOrderRejected, eventOrderCancelled, eventOrderShipped, eventOrderArrived, eventOrderCompleted:
 	default:
 		slog.Warn("ignoring unknown event type", "event_id", event.ID, "type", event.Type)
 		return nil
@@ -138,9 +139,12 @@ func compose(kind string, order FinishedOrder, user User) Email {
 		if order.TrackingNumber != "" {
 			opening += " Nomor resi: " + order.TrackingNumber + "."
 		}
+	case kind == eventOrderArrived:
+		subject = "Pesanan #%d sudah sampai"
+		opening = "Pesanan kamu sudah sampai. Cek barangnya, lalu tekan Pesanan diterima di menu Pesanan saya. Jika tidak, pesanan otomatis selesai dalam 3 hari."
 	case kind == eventOrderCompleted:
 		subject = "Pesanan #%d selesai"
-		opening = "Pesanan kamu sudah sampai dan kami tandai selesai. Terima kasih sudah berbelanja di Prastika."
+		opening = "Pesanan kamu sudah selesai. Terima kasih sudah berbelanja di Prastika. Beri ulasan untuk produk yang kamu beli di menu Pesanan saya."
 	case kind == eventOrderRejected && order.Reason == reasonSaleSoldOut:
 		subject = "Pesanan #%d tidak bisa diproses"
 		opening = "Maaf, kuota Flash Sale untuk barang yang kamu pesan sudah habis lebih dulu. Tidak ada pembayaran yang ditagih. Barangnya masih bisa dipesan dengan harga normal."

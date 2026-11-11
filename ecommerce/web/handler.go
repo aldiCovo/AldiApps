@@ -163,6 +163,47 @@ func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, 
 			g.withSession(w, r, g.orderURL+"/orders/"+id+"/cancel", body)
 		}
 	})
+	mux.HandleFunc("POST /api/orders/{id}/receive", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := orderPath(w, r)
+		if !ok {
+			return
+		}
+		if body, ok := readBody(w, r); ok {
+			g.withSession(w, r, g.orderURL+"/orders/"+id+"/receive", body)
+		}
+	})
+	mux.HandleFunc("PUT /api/orders/{id}/reviews/{product_id}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := orderPath(w, r)
+		if !ok {
+			return
+		}
+		productID := r.PathValue("product_id")
+		if !numericID.MatchString(productID) {
+			writeError(w, http.StatusNotFound, "this product isn't in the order")
+			return
+		}
+		if body, ok := readBody(w, r); ok {
+			g.withSession(w, r, g.orderURL+"/orders/"+id+"/reviews/"+productID, body)
+		}
+	})
+	// Reviews and ratings are the same for everyone, so no session is needed.
+	mux.HandleFunc("GET /api/products/{id}/reviews", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if !numericID.MatchString(id) {
+			writeError(w, http.StatusNotFound, "product not found")
+			return
+		}
+		query := url.Values{}
+		for _, name := range []string{"rating", "limit", "offset"} {
+			if value := r.URL.Query().Get(name); value != "" {
+				query.Set(name, value)
+			}
+		}
+		g.pass(w, r, g.orderURL+"/products/"+id+"/reviews?"+query.Encode(), nil, "")
+	})
+	mux.HandleFunc("GET /api/ratings", func(w http.ResponseWriter, r *http.Request) {
+		g.pass(w, r, g.orderURL+"/ratings", nil, "")
+	})
 	mux.HandleFunc("GET /api/cart", func(w http.ResponseWriter, r *http.Request) {
 		g.withSession(w, r, g.cartURL+"/cart", nil)
 	})

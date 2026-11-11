@@ -71,6 +71,7 @@ function voucherRow(voucher) {
   const who = el("div", "voucher-who");
   who.append(el("strong", "voucher-code", voucher.code), el("span", "", voucherTerms(voucher)));
   if (voucher.description) who.append(el("span", "muted small", voucher.description));
+  if (voucher.banner) who.append(el("span", "small banner-flag", "Tampil di banner toko"));
   const facts = el("div", "voucher-facts");
   const [label, tone] = voucherState(voucher);
   facts.append(
@@ -158,8 +159,8 @@ function failVoucher(row, voucher, error, fallback) {
 }
 
 function voucherBody(voucher) {
-  const { code, description, kind, value, max_discount, min_subtotal, quota, per_user_limit, starts_at, ends_at, active } = voucher;
-  return { code, description, kind, value, max_discount, min_subtotal, quota, per_user_limit, starts_at, ends_at, active };
+  const { code, description, kind, value, max_discount, min_subtotal, quota, per_user_limit, starts_at, ends_at, active, banner } = voucher;
+  return { code, description, kind, value, max_discount, min_subtotal, quota, per_user_limit, starts_at, ends_at, active, banner };
 }
 
 // The same form makes a voucher and changes one.
@@ -183,6 +184,9 @@ function voucherForm(voucher, onSaved, onCancel) {
   const active = el("input");
   active.type = "checkbox";
   active.checked = voucher ? voucher.active : true;
+  const banner = el("input");
+  banner.type = "checkbox";
+  banner.checked = voucher ? voucher.banner : false;
 
   // The label's own text node changes with the kind, so it must exist from the start.
   const valueField = field("Diskon (%)", value);
@@ -198,6 +202,9 @@ function voucherForm(voucher, onSaved, onCancel) {
 
   const activeField = el("label", "check");
   activeField.append(active, document.createTextNode(" Aktif"));
+  const bannerField = el("label", "check");
+  bannerField.append(banner, document.createTextNode(" Tampilkan di banner toko"));
+  const bannerHint = el("p", "muted small", "Kodenya muncul di bar atas toko selama voucher aktif, sudah mulai, dan kuotanya masih ada. Jika ada beberapa, yang terakhir diubah yang tampil.");
   const error = el("p", "error", "");
   error.setAttribute("role", "alert");
   error.hidden = true;
@@ -222,6 +229,8 @@ function voucherForm(voucher, onSaved, onCancel) {
     grid,
     field("Keterangan untuk pembeli (opsional)", description),
     activeField,
+    bannerField,
+    bannerHint,
     error,
     actions,
   );
@@ -263,6 +272,7 @@ function voucherForm(voucher, onSaved, onCancel) {
       starts_at: startsAt.toISOString(),
       ends_at: endsAt.toISOString(),
       active: active.checked,
+      banner: banner.checked,
     };
     error.hidden = true;
     setBusy(form, true);

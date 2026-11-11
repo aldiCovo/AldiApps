@@ -119,6 +119,10 @@ func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, 
 	mux.HandleFunc("GET /api/shipping", func(w http.ResponseWriter, r *http.Request) {
 		g.pass(w, r, g.orderURL+"/shipping", nil, "")
 	})
+	// The voucher shown above the header, the same for everyone.
+	mux.HandleFunc("GET /api/vouchers/banner", func(w http.ResponseWriter, r *http.Request) {
+		g.pass(w, r, g.orderURL+"/vouchers/banner", nil, "")
+	})
 	mux.HandleFunc("POST /api/orders", func(w http.ResponseWriter, r *http.Request) {
 		if body, ok := readBody(w, r); ok {
 			g.withSession(w, r, g.orderURL+"/orders", body)

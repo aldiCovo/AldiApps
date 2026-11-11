@@ -300,3 +300,69 @@ func TestCheckVoucherShowsTheDiscountWithoutHoldingIt(t *testing.T) {
 	// Checking held nothing: the only use is still there for an order.
 	h.create(t, 1, withVoucher(oneDress, "ONGKIR"))
 }
+
+func TestBannerVoucher(t *testing.T) {
+	h := newHarness(t)
+	banner := func() string {
+		t.Helper()
+		status, data := h.do(t, http.MethodGet, "/vouchers/banner", "", "")
+		if status != http.StatusOK {
+			t.Fatalf("status %d: %s", status, data)
+		}
+		var body struct {
+			Voucher *struct {
+				Code  string `json:"code"`
+				Quota *int   `json:"quota"`
+			} `json:"voucher"`
+		}
+		if err := json.Unmarshal(data, &body); err != nil {
+			t.Fatal(err)
+		}
+		if body.Voucher == nil {
+			return ""
+		}
+		if body.Voucher.Quota != nil {
+			t.Fatalf("the banner shows the quota: %s", data)
+		}
+		return body.Voucher.Code
+	}
+	if got := banner(); got != "" {
+		t.Fatalf("no vouchers, banner %q", got)
+	}
+	// None of these may be shown: not for the banner, turned off, not started, over.
+	h.makeVoucher(t, map[string]any{"code": "BIASA"})
+	h.makeVoucher(t, map[string]any{"code": "OFF", "banner": true, "active": false})
+	h.makeVoucher(t, map[string]any{"code": "LATER", "banner": true, "starts_at": time.Now().Add(time.Hour), "ends_at": time.Now().Add(2 * time.Hour)})
+	h.makeVoucher(t, map[string]any{"code": "OVER", "banner": true, "starts_at": time.Now().Add(-2 * time.Hour), "ends_at": time.Now().Add(-time.Hour)})
+	if got := banner(); got != "" {
+		t.Fatalf("banner %q, want none", got)
+	}
+
+	first := h.makeVoucher(t, map[string]any{"code": "PERTAMA", "banner": true, "quota": 1})
+	if !first.Banner {
+		t.Fatalf("voucher %+v", first)
+	}
+	if got := banner(); got != "PERTAMA" {
+		t.Fatalf("banner %q, want PERTAMA", got)
+	}
+	// The most recently changed wins.
+	h.makeVoucher(t, map[string]any{"code": "KEDUA", "banner": true})
+	if got := banner(); got != "KEDUA" {
+		t.Fatalf("banner %q, want KEDUA", got)
+	}
+	data, _ := json.Marshal(map[string]any{
+		"code": "PERTAMA", "kind": "percent", "value": 10, "per_user_limit": 1, "active": true, "banner": true, "quota": 1,
+		"starts_at": first.StartsAt, "ends_at": first.EndsAt,
+	})
+	if status, answer := h.do(t, http.MethodPut, fmt.Sprintf("/internal/vouchers/%d", first.ID), string(data), testInternalToken); status != http.StatusOK {
+		t.Fatalf("status %d: %s", status, answer)
+	}
+	if got := banner(); got != "PERTAMA" {
+		t.Fatalf("banner %q, want PERTAMA after it changed", got)
+	}
+	// Used up, it gives the banner back to the other.
+	h.create(t, 1, withVoucher(oneDress, "PERTAMA"))
+	if got := banner(); got != "KEDUA" {
+		t.Fatalf("banner %q, want KEDUA once PERTAMA is used up", got)
+	}
+}

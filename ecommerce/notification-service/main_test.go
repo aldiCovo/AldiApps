@@ -159,7 +159,8 @@ func TestEachOutcomeHasItsOwnWords(t *testing.T) {
 		{eventOrderCancelled, "expired", "dibatalkan", "waktu pembayaran habis"},
 		{eventOrderCancelled, "cancelled_by_customer", "dibatalkan", "sesuai permintaanmu"},
 		{eventOrderShipped, "", "sudah dikirim", "sudah kami kirim"},
-		{eventOrderCompleted, "", "selesai", "kami tandai selesai"},
+		{eventOrderArrived, "", "sudah sampai", "Pesanan diterima"},
+		{eventOrderCompleted, "", "selesai", "Beri ulasan"},
 	} {
 		order.Reason = test.reason
 		got := compose(test.kind, order, user)

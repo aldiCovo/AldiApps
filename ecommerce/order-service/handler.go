@@ -280,6 +280,91 @@ func newHandler(store *Store, verifier *Verifier, catalog *Catalog, internalToke
 		writeJSON(w, http.StatusOK, order)
 	}))
 
+	// The customer confirms the parcel reached them.
+	mux.HandleFunc("POST /orders/{id}/receive", authenticated(func(w http.ResponseWriter, r *http.Request, userID int64) {
+		id, ok := orderID(w, r)
+		if !ok {
+			return
+		}
+		order, err := store.Receive(r.Context(), userID, id)
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, order)
+	}))
+
+	mux.HandleFunc("PUT /orders/{id}/reviews/{product_id}", authenticated(func(w http.ResponseWriter, r *http.Request, userID int64) {
+		id, ok := orderID(w, r)
+		if !ok {
+			return
+		}
+		productID, err := strconv.ParseInt(r.PathValue("product_id"), 10, 64)
+		if err != nil || productID <= 0 {
+			writeError(w, http.StatusNotFound, errNotInOrder.Error())
+			return
+		}
+		var in struct {
+			Rating int16  `json:"rating"`
+			Body   string `json:"body"`
+		}
+		if !readJSON(w, r, &in) {
+			return
+		}
+		review, err := store.SaveReview(r.Context(), userID, id, productID, in.Rating, in.Body)
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, review)
+	}))
+
+	// Reviews are public, and a short cache keeps a busy product page cheap.
+	mux.HandleFunc("GET /products/{id}/reviews", func(w http.ResponseWriter, r *http.Request) {
+		productID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+		if err != nil || productID <= 0 {
+			writeError(w, http.StatusNotFound, "product not found")
+			return
+		}
+		query := r.URL.Query()
+		stars, limit, offset := 0, defaultReviewPage, 0
+		if value := query.Get("rating"); value != "" {
+			if stars, err = strconv.Atoi(value); err != nil || stars < 1 || stars > 5 {
+				writeError(w, http.StatusBadRequest, errBadRating.Error())
+				return
+			}
+		}
+		if value := query.Get("limit"); value != "" {
+			if limit, err = strconv.Atoi(value); err != nil || limit < 1 || limit > maxReviewPage {
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("limit must be between 1 and %d", maxReviewPage))
+				return
+			}
+		}
+		if value := query.Get("offset"); value != "" {
+			if offset, err = strconv.Atoi(value); err != nil || offset < 0 || offset > 10000 {
+				writeError(w, http.StatusBadRequest, "offset must be between 0 and 10000")
+				return
+			}
+		}
+		page, err := store.ProductReviews(r.Context(), productID, stars, limit, offset)
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		w.Header().Set("Cache-Control", "public, max-age=30")
+		writeJSON(w, http.StatusOK, page)
+	})
+
+	mux.HandleFunc("GET /ratings", func(w http.ResponseWriter, r *http.Request) {
+		ratings, err := store.Ratings(r.Context())
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		w.Header().Set("Cache-Control", "public, max-age=60")
+		writeJSON(w, http.StatusOK, map[string]any{"ratings": ratings})
+	})
+
 	return mux
 }
 
@@ -322,12 +407,12 @@ func writeStoreError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.As(err, &refusal):
 		writeVoucherRefusal(w, refusal)
-	case errors.Is(err, errNotFound), errors.Is(err, errVoucherNotFound):
+	case errors.Is(err, errNotFound), errors.Is(err, errVoucherNotFound), errors.Is(err, errNotInOrder):
 		writeError(w, http.StatusNotFound, err.Error())
-	case errors.Is(err, errBadStep), errors.Is(err, errBadTracking):
+	case errors.Is(err, errBadStep), errors.Is(err, errBadTracking), errors.Is(err, errBadRating), errors.Is(err, errLongReview):
 		writeError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, errCannotPay), errors.Is(err, errCannotCancel), errors.Is(err, errTooManyOrders), errors.Is(err, errCannotAdvance),
-		errors.Is(err, errVoucherCodeTaken), errors.Is(err, errVoucherInUse):
+		errors.Is(err, errVoucherCodeTaken), errors.Is(err, errVoucherInUse), errors.Is(err, errCannotReceive), errors.Is(err, errNotReviewable):
 		writeError(w, http.StatusConflict, err.Error())
 	default:
 		slog.Error("database request failed", "error", err)

@@ -13,11 +13,12 @@ const statusNames = {
   paid: ["Dibayar · perlu dikemas", "todo"],
   packed: ["Dikemas", "todo"],
   shipped: ["Dikirim", "good"],
+  arrived: ["Sampai · menunggu pembeli", "good"],
   completed: ["Selesai", "good"],
   rejected: ["Ditolak: stok habis", "bad"],
   cancelled: ["Dibatalkan", "bad"],
 };
-const tabNames = { paid: "Perlu dikemas", packed: "Dikemas", shipped: "Dikirim", completed: "Selesai" };
+const tabNames = { paid: "Perlu dikemas", packed: "Dikemas", shipped: "Dikirim", arrived: "Sampai", completed: "Selesai" };
 
 let filter = "paid";
 let currentAdmin = null;
@@ -221,9 +222,12 @@ async function loadOrders(reset, note = "") {
   }
 }
 
-function fact(list, name, iso) {
-  if (iso) list.append(el("dt", "", name), el("dd", "", when(iso)));
+function fact(list, name, iso, note = "") {
+  if (iso) list.append(el("dt", "", name), el("dd", "", when(iso) + note));
 }
+
+const arrivedBy = { admin: " · ditandai admin", courier: " · dari kurir" };
+const completedBy = { admin: " · ditandai admin", customer: " · dikonfirmasi pembeli", system: " · otomatis oleh sistem" };
 
 function orderCard(order) {
   const card = el("article", "order");
@@ -278,7 +282,8 @@ function orderCard(order) {
   fact(facts, "Dibayar", order.paid_at);
   fact(facts, "Dikemas", order.packed_at);
   fact(facts, "Dikirim", order.shipped_at);
-  fact(facts, "Selesai", order.completed_at);
+  fact(facts, "Sampai", order.arrived_at, arrivedBy[order.arrived_by] || "");
+  fact(facts, "Selesai", order.completed_at, completedBy[order.completed_by] || "");
   side.append(facts);
   body.append(items, side);
   card.append(body);
@@ -326,8 +331,18 @@ function stepControls(order, card) {
     box.append(form);
     return box;
   }
+  // Later this comes from the courier's tracking; until then an admin checks it.
   if (order.status === "shipped") {
-    box.append(button("Tandai selesai", "primary", () => advance(order, card, { status: "completed" })));
+    box.append(button("Tandai sudah sampai", "primary", () => advance(order, card, { status: "arrived" })),
+      el("p", "hint", "Cek resi di situs kurir dulu. Nanti langkah ini diisi otomatis dari API kurir."));
+    return box;
+  }
+  // The customer confirms it, or it completes by itself after three days.
+  if (order.status === "arrived") {
+    const note = el("p", "hint");
+    note.append("Menunggu pembeli menekan ", el("strong", "", "Pesanan diterima"), ".");
+    if (order.auto_complete_at) note.append(" Selesai otomatis ", el("strong", "", when(order.auto_complete_at)), ".");
+    box.append(note);
     return box;
   }
   return null;

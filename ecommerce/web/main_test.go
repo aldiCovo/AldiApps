@@ -73,7 +73,7 @@ func newTestGateway(t *testing.T) (*httptest.Server, *fakeServices) {
 			io.WriteString(w, `{"provinces":[],"options":[]}`)
 			return
 		}
-		if r.URL.Path == "/vouchers/banner" {
+		if r.URL.Path == "/vouchers/banner" || r.URL.Path == "/ratings" || strings.HasPrefix(r.URL.Path, "/products/") {
 			io.WriteString(w, `{"voucher":null}`)
 			return
 		}
@@ -126,6 +126,8 @@ func TestAllowedRequestsReachTheRightService(t *testing.T) {
 		{"POST", "/api/password/reset", `{"token":"t","password":"p"}`, "user POST /password/reset"},
 		{"GET", "/api/shipping?x=1", "", "order GET /shipping"},
 		{"GET", "/api/vouchers/banner", "", "order GET /vouchers/banner"},
+		{"GET", "/api/ratings", "", "order GET /ratings"},
+		{"GET", "/api/products/12/reviews?rating=5&limit=5&offset=10&other=x", "", "order GET /products/12/reviews?limit=5&offset=10&rating=5"},
 	}
 	for _, c := range cases {
 		resp, body := do(t, c.method, server.URL+c.path, "application/json", c.body)
@@ -157,6 +159,8 @@ func TestWriteAndUnlistedRequestsNeverReachAService(t *testing.T) {
 		{"GET", "/api/.well-known/jwks.json"},
 		{"GET", "/api/healthz"},
 		{"GET", "/api/search/../../secret"},
+		{"GET", "/api/products/abc/reviews"},
+		{"PUT", "/api/orders/1/reviews/abc"},
 	}
 	for _, c := range cases {
 		before := len(f.seen())
@@ -499,7 +503,7 @@ func TestOrdersUseTheSessionCookie(t *testing.T) {
 
 func TestOrdersWithoutValidSession(t *testing.T) {
 	server, f := newTestGateway(t)
-	for _, c := range []struct{ method, path string }{{"POST", "/api/orders"}, {"GET", "/api/orders"}, {"GET", "/api/orders/1"}, {"POST", "/api/orders/1/pay"}, {"POST", "/api/orders/1/cancel"}} {
+	for _, c := range []struct{ method, path string }{{"POST", "/api/orders"}, {"GET", "/api/orders"}, {"GET", "/api/orders/1"}, {"POST", "/api/orders/1/pay"}, {"POST", "/api/orders/1/cancel"}, {"POST", "/api/orders/1/receive"}, {"PUT", "/api/orders/1/reviews/10"}} {
 		before := len(f.seen())
 		resp, _ := do(t, c.method, server.URL+c.path, "application/json", "{}")
 		if resp.StatusCode != http.StatusUnauthorized || len(f.seen()) != before {

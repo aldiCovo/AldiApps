@@ -67,6 +67,15 @@ type Order struct {
 	ShippedAt      *time.Time `json:"shipped_at"`
 	CompletedAt    *time.Time `json:"completed_at"`
 	TrackingNumber string     `json:"tracking_number,omitempty"`
+	// Set when the parcel reaches the customer. ArrivedBy is admin, or later courier.
+	ArrivedAt *time.Time `json:"arrived_at"`
+	ArrivedBy string     `json:"arrived_by,omitempty"`
+	// When an arrived order completes by itself if the customer doesn't confirm it first.
+	AutoCompleteAt *time.Time `json:"auto_complete_at,omitempty"`
+	// customer, system or admin. Empty on orders completed before this was kept.
+	CompletedBy string `json:"completed_by,omitempty"`
+	// The customer's own reviews by product id, only on their completed orders.
+	Reviews map[int64]MyReview `json:"reviews,omitempty"`
 }
 
 type reservationItem struct {
@@ -103,14 +112,29 @@ type paymentRequestedEvent struct {
 	Outcome string `json:"outcome"`
 }
 
-const orderColumns = "id, status, reason, total, discount, voucher_code, expires_at, shipping_address, shipping, created_at, updated_at, paid_at, packed_at, shipped_at, completed_at, tracking_number"
+const orderColumns = "id, status, reason, total, discount, voucher_code, expires_at, shipping_address, shipping, created_at, updated_at, paid_at, packed_at, shipped_at, completed_at, tracking_number, arrived_at, arrived_by, completed_by"
+
+// targets are where a row of orderColumns is scanned to.
+func (o *Order) targets() []any {
+	return []any{&o.ID, &o.Status, &o.Reason, &o.Total, &o.Discount, &o.VoucherCode, &o.ExpiresAt, &o.ShippingAddress, &o.Shipping, &o.CreatedAt, &o.UpdatedAt,
+		&o.PaidAt, &o.PackedAt, &o.ShippedAt, &o.CompletedAt, &o.TrackingNumber, &o.ArrivedAt, &o.ArrivedBy, &o.CompletedBy}
+}
+
+// scanned fills in what follows from the columns.
+func (o *Order) scanned() {
+	if o.Status == statusArrived && o.ArrivedAt != nil {
+		at := o.ArrivedAt.Add(receiveWindow)
+		o.AutoCompleteAt = &at
+	}
+}
 
 func scanOrder(row pgx.Row) (Order, error) {
 	var o Order
-	err := row.Scan(&o.ID, &o.Status, &o.Reason, &o.Total, &o.Discount, &o.VoucherCode, &o.ExpiresAt, &o.ShippingAddress, &o.Shipping, &o.CreatedAt, &o.UpdatedAt, &o.PaidAt, &o.PackedAt, &o.ShippedAt, &o.CompletedAt, &o.TrackingNumber)
+	err := row.Scan(o.targets()...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Order{}, errNotFound
 	}
+	o.scanned()
 	return o, err
 }
 
@@ -248,6 +272,9 @@ func (s *Store) Get(ctx context.Context, userID, id int64) (Order, error) {
 	if err := attachItems(ctx, s.pool, orders); err != nil {
 		return Order{}, err
 	}
+	if err := attachMyReviews(ctx, s.pool, orders); err != nil {
+		return Order{}, err
+	}
 	return orders[0], nil
 }
 
@@ -263,6 +290,9 @@ func (s *Store) List(ctx context.Context, userID int64, limit, offset int) ([]Or
 		return nil, err
 	}
 	if err := attachItems(ctx, s.pool, orders); err != nil {
+		return nil, err
+	}
+	if err := attachMyReviews(ctx, s.pool, orders); err != nil {
 		return nil, err
 	}
 	return orders, nil
@@ -439,6 +469,27 @@ func (s *Store) RunExpiry(ctx context.Context, interval time.Duration) {
 			}
 			if expired > 0 {
 				slog.Info("expired unpaid orders", "orders", expired)
+			}
+		}
+	}
+}
+
+// RunAutoComplete completes arrived orders the customer hasn't confirmed in time, until ctx
+// is cancelled.
+func (s *Store) RunAutoComplete(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			done, err := s.CompleteArrived(ctx)
+			if err != nil && ctx.Err() == nil {
+				slog.Error("completing arrived orders failed", "error", err)
+			}
+			if done > 0 {
+				slog.Info("completed arrived orders", "orders", done)
 			}
 		}
 	}

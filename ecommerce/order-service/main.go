@@ -19,6 +19,7 @@ import (
 const (
 	defaultPaymentWindow = 15 * time.Minute
 	expiryCheckInterval  = 5 * time.Second
+	autoCompleteInterval = time.Minute
 )
 
 func main() {
@@ -91,6 +92,7 @@ func run() error {
 		(&Publisher{pool: pool, url: values["RABBITMQ_URL"]}).Run,
 		(&Consumer{store: store, url: values["RABBITMQ_URL"]}).Run,
 		func(ctx context.Context) { store.RunExpiry(ctx, expiryCheckInterval) },
+		func(ctx context.Context) { store.RunAutoComplete(ctx, autoCompleteInterval) },
 	} {
 		background.Go(func() { task(ctx) })
 	}

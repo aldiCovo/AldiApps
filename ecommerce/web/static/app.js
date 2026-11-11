@@ -1,10 +1,10 @@
 "use strict";
 
-const pageSize = 24;
+const pageSize = 12;
 const $ = (id) => document.getElementById(id);
 const rupiah = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 });
 
-const state = { q: "", categoryId: "", size: "", color: "", inStock: false, offset: 0, total: 0, categories: new Map(), categoryPhotos: {}, productPhotos: {}, ratings: null };
+const state = { q: "", categoryId: "", size: "", color: "", inStock: false, page: 1, offset: 0, total: 0, categories: new Map(), categoryPhotos: {}, productPhotos: {}, ratings: null };
 let latestRequest = 0;
 
 class ApiError extends Error {
@@ -247,9 +247,82 @@ async function loadRatings() {
   if (shownProductId !== null) showProductRating(shownProductId);
 }
 
+// Grey boxes while the first products load. A page that already shows products keeps them
+// until the next ones arrive.
 function showSkeletons() {
-  if ($("products").children.length > 0) return;
-  $("products").append(...Array.from({ length: 8 }, () => el("div", "skeleton")));
+  if ($("products").querySelector(".card-wrap, .skeleton")) return;
+  $("products").replaceChildren(...Array.from({ length: 8 }, () => el("div", "skeleton")));
+}
+
+function emptyProducts() {
+  const box = el("div", "empty-products");
+  box.setAttribute("role", "status");
+  box.append(el("strong", "", "Produk yang Anda cari belum tersedia"), el("span", "", "Coba kata atau saringan lain."));
+  return box;
+}
+
+const svgNS = "http://www.w3.org/2000/svg";
+
+function chevron(path) {
+  const svg = document.createElementNS(svgNS, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "1.8");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  svg.setAttribute("aria-hidden", "true");
+  const line = document.createElementNS(svgNS, "path");
+  line.setAttribute("d", path);
+  svg.append(line);
+  return svg;
+}
+
+// The search service reads at most this far into the results.
+const maxOffset = 9900;
+
+// Page numbers: the first, the last, and the current one with its neighbours. A gap of one
+// page shows that page rather than "…".
+function renderPager() {
+  const pages = Math.min(Math.ceil(state.total / pageSize), Math.floor(maxOffset / pageSize) + 1);
+  $("pager").hidden = pages <= 1;
+  if (pages <= 1) return;
+  const page = state.page;
+  const go = (n) => () => loadProducts(n, true);
+  const step = (label, path, target) => {
+    const button = el("button", "pager-step");
+    button.type = "button";
+    button.disabled = target < 1 || target > pages;
+    const text = el("span", "pager-step-label", label);
+    if (path.startsWith("M15")) button.append(chevron(path), text);
+    else button.append(text, chevron(path));
+    button.addEventListener("click", go(target));
+    return button;
+  };
+  const number = (n) => {
+    const button = el("button", "pager-page", String(n));
+    button.type = "button";
+    button.setAttribute("aria-label", `Halaman ${n}`);
+    if (n === page) button.setAttribute("aria-current", "page");
+    button.addEventListener("click", go(n));
+    return button;
+  };
+  const shown = [...new Set([1, page - 1, page, page + 1, pages])].filter((n) => n >= 1 && n <= pages).sort((a, b) => a - b);
+  const items = [step("Sebelumnya", "M15 6l-6 6 6 6", page - 1)];
+  shown.forEach((n, i) => {
+    const before = shown[i - 1];
+    if (before !== undefined && n - before === 2) items.push(number(n - 1));
+    else if (before !== undefined && n - before > 2) {
+      const gap = el("span", "pager-gap", "…");
+      gap.setAttribute("aria-hidden", "true");
+      items.push(gap);
+    }
+    items.push(number(n));
+  });
+  items.push(step("Berikutnya", "M9 6l6 6-6 6", page + 1));
+  $("pager-pages").replaceChildren(...items);
+  const last = Math.min(state.offset + pageSize, state.total);
+  $("pager-range").textContent = `Menampilkan ${state.offset + 1}–${last} dari ${counted.format(state.total)} produk`;
 }
 
 function searchParams() {
@@ -262,27 +335,182 @@ function searchParams() {
   return params;
 }
 
-async function loadProducts(append = false) {
+// Loads one page of the catalog. A new search or filter starts again at page 1; a page number
+// brings the catalog's top back into view.
+async function loadProducts(page = 1, scroll = false) {
   const request = ++latestRequest;
-  state.offset = append ? state.offset + pageSize : 0;
-  if (!append) {
-    setStatus("Memuat produk…");
-    showSkeletons();
-  }
+  state.offset = (page - 1) * pageSize;
+  setStatus("Memuat produk…");
+  showSkeletons();
   try {
     const result = await api(`/search?${searchParams()}`);
     if (request !== latestRequest) return;
+    // Products may have gone since the page numbers were drawn.
+    if (result.products.length === 0 && result.total > 0 && page > 1) {
+      loadProducts(1, scroll);
+      return;
+    }
+    state.page = page;
     state.total = result.total;
-    if (!append) $("products").replaceChildren();
-    $("products").append(...result.products.map(productCard));
-    setStatus(result.total === 0 ? "Produk tidak ditemukan. Coba kata atau saringan lain." : `${result.total} produk`);
-    $("more").hidden = state.offset + pageSize >= result.total || state.offset + pageSize > 9900;
+    if (result.total === 0) {
+      $("products").replaceChildren(emptyProducts());
+      setStatus("");
+    } else {
+      $("products").replaceChildren(...result.products.map(productCard));
+      setStatus(`${counted.format(result.total)} produk`);
+    }
+    renderPager();
+    if (scroll) $("katalog").scrollIntoView();
   } catch {
     if (request !== latestRequest) return;
-    if (append) state.offset -= pageSize;
-    if (!append) $("products").replaceChildren();
+    $("products").replaceChildren();
+    $("pager").hidden = true;
     setStatus("Produk belum bisa dimuat. Coba lagi sebentar lagi.", true);
   }
+}
+
+// Highlights: four short lists made from the catalog and its ratings. A list with nothing in
+// it, such as "Sedang diskon" without a sale, has no tab, and with all four empty the section
+// stays hidden. They come from the first 100 products, which is the whole catalog for now.
+const pickKinds = [
+  { id: "new", label: "Terbaru", note: "Koleksi yang paling baru masuk." },
+  { id: "best", label: "Terlaris", note: "Paling banyak dibeli pembeli." },
+  { id: "rated", label: "Ulasan teratas", note: "Rating tertinggi dari pembeli." },
+  { id: "sale", label: "Sedang diskon", note: "Harga coret, selama promo masih berlaku." },
+];
+const pickMax = 10;
+const pickEvery = 5000;
+const picks = { lists: {}, kind: "", timer: null, hovered: false, focused: false, touchedAt: 0 };
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+let catalogSampleRequest = null;
+
+function catalogSample() {
+  catalogSampleRequest ??= api("/search?limit=100").then((result) => result.products);
+  return catalogSampleRequest;
+}
+
+function pickLists(products, ratings) {
+  const inStock = products.filter((product) => totalStock(product) > 0);
+  const rating = (product) => ratings[product.id] || { average: 0, count: 0, sold: 0 };
+  const off = (product) => 1 - product.price / product.original_price;
+  const lists = {
+    new: [...inStock].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)),
+    best: inStock.filter((p) => rating(p).sold > 0).sort((a, b) => rating(b).sold - rating(a).sold),
+    rated: inStock.filter((p) => rating(p).count > 0).sort((a, b) => rating(b).average - rating(a).average || rating(b).count - rating(a).count),
+    sale: inStock.filter((p) => p.original_price > p.price).sort((a, b) => off(b) - off(a)),
+  };
+  for (const id of Object.keys(lists)) lists[id] = lists[id].slice(0, pickMax);
+  return lists;
+}
+
+async function loadPicks() {
+  let products;
+  try {
+    products = await catalogSample();
+  } catch {
+    return;
+  }
+  picks.lists = pickLists(products, state.ratings || {});
+  const kinds = pickKinds.filter((kind) => picks.lists[kind.id].length > 0);
+  $("picks").hidden = kinds.length === 0;
+  if (kinds.length === 0) return;
+  $("picks-tabs").replaceChildren(...kinds.map((kind) => {
+    const chip = el("button", "chip pick-chip", kind.label);
+    chip.type = "button";
+    chip.dataset.kind = kind.id;
+    chip.addEventListener("click", () => showPicks(kind.id));
+    return chip;
+  }));
+  showPicks(kinds[0].id);
+  clearInterval(picks.timer);
+  if (!reducedMotion.matches) picks.timer = setInterval(advancePicks, pickEvery);
+}
+
+function showPicks(id) {
+  picks.kind = id;
+  for (const chip of $("picks-tabs").children) chip.setAttribute("aria-pressed", String(chip.dataset.kind === id));
+  $("picks-note").textContent = pickKinds.find((kind) => kind.id === id).note;
+  $("picks-track").replaceChildren(...picks.lists[id].map((product, index) => pickCard(product, id, index)));
+  $("picks-track").scrollLeft = 0;
+  renderPickDots();
+}
+
+// A product card with a label saying why it's here. Discounts already show "Hemat x%".
+function pickCard(product, kind, index) {
+  const wrap = productCard(product);
+  const art = wrap.querySelector(".card-art");
+  let badges = art.querySelector(".card-badges");
+  if (!badges) {
+    badges = el("span", "card-badges");
+    art.insertBefore(badges, art.querySelector(".card-view"));
+  }
+  if (kind === "new") badges.prepend(el("span", "badge", "Baru"));
+  if (kind === "best") badges.prepend(el("span", "badge dark", `Terlaris #${index + 1}`));
+  if (kind === "rated") badges.prepend(el("span", "badge", `★ ${decimal.format(state.ratings[product.id].average)}`));
+  return wrap;
+}
+
+// The row moves by as many cards as fit, and always stops at a card's edge. Each dot is one
+// such step.
+function pickLayout() {
+  const track = $("picks-track");
+  const cards = [...track.children];
+  if (cards.length === 0) return { cards, perView: 1, pages: 1, step: 1 };
+  const width = cards[0].getBoundingClientRect().width;
+  const gap = parseFloat(getComputedStyle(track).columnGap) || 0;
+  const view = track.clientWidth - parseFloat(getComputedStyle(track).paddingLeft) - parseFloat(getComputedStyle(track).paddingRight);
+  const perView = Math.max(1, Math.floor((view + gap + 1) / (width + gap)));
+  return { cards, perView, pages: Math.ceil(cards.length / perView), step: (width + gap) * perView };
+}
+
+const pickPages = () => pickLayout().pages;
+
+function pickPage() {
+  const track = $("picks-track");
+  const { pages, step } = pickLayout();
+  if (track.scrollLeft >= track.scrollWidth - track.clientWidth - 2) return pages - 1;
+  return Math.min(pages - 1, Math.round(track.scrollLeft / step));
+}
+
+function scrollPicks(page) {
+  const track = $("picks-track");
+  const { cards, perView, pages } = pickLayout();
+  if (cards.length === 0) return;
+  const target = ((page % pages) + pages) % pages;
+  const card = cards[target * perView];
+  const left = card.getBoundingClientRect().left - track.getBoundingClientRect().left + track.scrollLeft - parseFloat(getComputedStyle(track).paddingLeft);
+  track.scrollTo({ left: Math.min(left, track.scrollWidth - track.clientWidth), behavior: reducedMotion.matches ? "auto" : "smooth" });
+}
+
+function renderPickDots() {
+  const pages = pickPages();
+  const current = pickPage();
+  const dots = [];
+  for (let i = 0; i < pages && pages > 1; i++) {
+    const dot = el("button", "picks-dot");
+    dot.type = "button";
+    dot.setAttribute("aria-label", `Bagian ${i + 1} dari ${pages}`);
+    if (i === current) dot.setAttribute("aria-current", "true");
+    dot.addEventListener("click", () => scrollPicks(i));
+    dots.push(dot);
+  }
+  $("picks-dots").replaceChildren(...dots);
+}
+
+function markPickDot() {
+  const current = pickPage();
+  [...$("picks-dots").children].forEach((dot, i) => {
+    if (i === current) dot.setAttribute("aria-current", "true");
+    else dot.removeAttribute("aria-current");
+  });
+}
+
+// Slides on by itself, but waits while someone points at it, works in it, or just swiped it.
+function advancePicks() {
+  if ($("picks").hidden || document.hidden || picks.hovered || picks.focused) return;
+  if (Date.now() - picks.touchedAt < 2 * pickEvery) return;
+  scrollPicks(pickPage() + 1);
 }
 
 async function loadCategories() {
@@ -524,7 +752,7 @@ function addOptions(select, values) {
 // The filter choices come from the products themselves, up to the API's page limit.
 async function loadFilterChoices() {
   try {
-    const { products } = await api("/search?limit=100");
+    const products = await catalogSample();
     const variants = products.flatMap((product) => product.variants || []);
     const unique = (key) => [...new Set(variants.map((variant) => variant[key]))].sort((a, b) => a.localeCompare(b, "id"));
     addOptions($("size-filter"), unique("size"));
@@ -2566,7 +2794,19 @@ $("search-form").addEventListener("submit", (event) => {
 $("size-filter").addEventListener("change", (event) => { state.size = event.target.value; loadProducts(); });
 $("color-filter").addEventListener("change", (event) => { state.color = event.target.value; loadProducts(); });
 $("stock-filter").addEventListener("change", (event) => { state.inStock = event.target.checked; loadProducts(); });
-$("more").addEventListener("click", () => loadProducts(true));
+$("picks-prev").addEventListener("click", () => scrollPicks(pickPage() - 1));
+$("picks-next").addEventListener("click", () => scrollPicks(pickPage() + 1));
+let pickScrollFrame = 0;
+$("picks-track").addEventListener("scroll", () => {
+  cancelAnimationFrame(pickScrollFrame);
+  pickScrollFrame = requestAnimationFrame(markPickDot);
+}, { passive: true });
+$("picks-track").addEventListener("touchstart", () => { picks.touchedAt = Date.now(); }, { passive: true });
+$("picks").addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") picks.hovered = true; });
+$("picks").addEventListener("pointerleave", () => { picks.hovered = false; });
+$("picks").addEventListener("focusin", () => { picks.focused = true; });
+$("picks").addEventListener("focusout", (event) => { picks.focused = $("picks").contains(event.relatedTarget); });
+window.addEventListener("resize", () => { if (!$("picks").hidden) renderPickDots(); });
 $("auth-form").addEventListener("submit", submitAuth);
 $("auth-switch").addEventListener("click", () => setAuthMode(authMode === "login" ? "register" : "login"));
 $("forgot-open").addEventListener("click", openForgot);
@@ -2598,7 +2838,8 @@ loadCategories().then(() => {
   loadProducts();
   loadFlash();
   loadLook();
-  loadRatings();
+  // The highlights sort by ratings, so they wait for them.
+  loadRatings().then(loadPicks);
 });
 $("product-rating").addEventListener("click", () => {
   $("product-reviews").scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });

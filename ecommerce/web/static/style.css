@@ -204,8 +204,46 @@ main { max-width: 1320px; margin: 0 auto; padding: 0 var(--gutter); }
 .sold-out { color: var(--accent-dark); }
 .skeleton { aspect-ratio: 4 / 5.6; border-radius: var(--radius); background: var(--sand); animation: pulse 1.4s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: .55; } }
-.more { display: flex; justify-content: center; padding: 40px 0; }
-.more:has(> [hidden]) { padding: 20px 0; }
+.catalog > .products { margin-bottom: 20px; }
+/* When nothing matches, one calm line takes the grid's place. */
+.empty-products { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: clamp(40px, 8vw, 72px) 16px; border-radius: var(--radius); background: var(--card); text-align: center; }
+.empty-products strong { font: 500 clamp(1.5rem, 3vw, 2rem)/1.2 var(--serif); }
+.empty-products span { color: var(--muted); }
+
+/* Page numbers under the catalog: the first, the last and the ones around the current page. */
+.pager { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 20px 0 40px; }
+.pager-pages { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; }
+.pager-page, .pager-step { height: 44px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); font-size: .95rem; transition: border-color .18s, background-color .18s, color .18s; }
+.pager-page { min-width: 44px; padding: 0 8px; }
+.pager-step { display: inline-flex; align-items: center; gap: 6px; padding: 0 16px; }
+.pager-page:hover, .pager-step:hover:not(:disabled) { border-color: var(--accent); }
+.pager-page[aria-current="page"] { border-color: var(--accent); background: var(--accent); color: #fff; font-weight: 600; }
+.pager-step:disabled { opacity: .45; cursor: not-allowed; }
+.pager-step svg { width: 16px; height: 16px; }
+.pager-gap { min-width: 20px; color: var(--muted); text-align: center; }
+.pager-range { color: var(--muted); font-size: .9rem; }
+
+/* Highlights: newest, best-selling, best-rated and discounted products, in a row that slides. */
+.picks { scroll-margin-top: 84px; padding: clamp(40px, 6vw, 72px) 0; border-top: 1px solid var(--line); }
+.picks-head { align-items: flex-end; }
+.picks .section-title em { font-style: italic; }
+.picks-arrows { display: flex; gap: 10px; }
+.round-button { display: grid; place-items: center; width: 48px; height: 48px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: var(--card); color: var(--ink); transition: border-color .18s, background-color .18s; }
+.round-button:hover { border-color: var(--accent); }
+.round-button.filled { border-color: var(--accent); background: var(--accent); color: #fff; }
+.round-button.filled:hover { border-color: var(--accent-dark); background: var(--accent-dark); }
+.round-button svg { width: 20px; height: 20px; }
+.picks-tabs { margin-top: 20px; }
+.chip[aria-pressed="true"].pick-chip { border-color: var(--accent); background: var(--soft); color: var(--accent-dark); font-weight: 600; }
+.picks-note { margin-top: 12px; color: var(--muted); font-size: .95rem; }
+.picks-track { --pick-gap: clamp(14px, 2vw, 26px); display: grid; grid-auto-flow: column; grid-auto-columns: calc((100% - 4 * var(--pick-gap)) / 5); gap: var(--pick-gap); margin-top: 20px; padding: 6px 0 14px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scrollbar-width: none; }
+.picks-track::-webkit-scrollbar { display: none; }
+.picks-track > .card-wrap { scroll-snap-align: start; }
+.badge.dark { background: var(--ink); color: #fff; }
+.picks-dots { display: flex; justify-content: center; gap: 2px; margin-top: 8px; }
+.picks-dot { display: grid; place-items: center; min-width: 24px; height: 24px; padding: 0 2px; border: 0; background: none; }
+.picks-dot::before { content: ""; width: 8px; height: 8px; border-radius: 999px; background: #e0d3ca; transition: width .3s, background-color .3s; }
+.picks-dot[aria-current="true"]::before { width: 24px; background: var(--accent); }
 
 /* What the shop does for you, in three short lines. */
 /* Shop the look: a photo with a point on each product worn, and the products beside it. */
@@ -562,6 +600,7 @@ legend { margin-bottom: 10px; padding: 0; font-size: .92rem; font-weight: 600; }
   .product-info { padding: 22px 20px 24px; }
   .product-reviews { padding: 24px 20px; }
   .reviews-layout { grid-template-columns: minmax(0, 1fr); }
+  .picks-track { grid-auto-columns: calc((100% - 2 * var(--pick-gap)) / 3); }
 }
 @media (max-width: 560px) {
   .site-header { position: static; padding-block: 10px; }
@@ -576,6 +615,11 @@ legend { margin-bottom: 10px; padding: 0; font-size: .92rem; font-weight: 600; }
   .tiles { display: flex; gap: 12px; margin-inline: calc(var(--gutter) * -1); padding: 12px var(--gutter) 20px; overflow-x: auto; scrollbar-width: none; }
   .tile { flex: none; width: 104px; }
   .products { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 12px; }
+  /* On a phone the highlights are swiped, with the next card peeking in. */
+  .picks-arrows { display: none; }
+  .picks-track { --pick-gap: 12px; grid-auto-columns: 44%; margin-inline: calc(var(--gutter) * -1); padding-inline: var(--gutter); scroll-padding-inline: var(--gutter); }
+  .pager-step { width: 44px; padding: 0; justify-content: center; }
+  .pager-step-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .fav-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .look-card { margin-inline: calc(var(--gutter) * -1); border-radius: 0; }
   .look-add { padding: 0 12px; }

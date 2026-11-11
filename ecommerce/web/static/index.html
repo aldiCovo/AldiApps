@@ -109,6 +109,27 @@
       <div id="category-tiles" class="tiles"></div>
     </section>
 
+    <section id="picks" class="picks" aria-labelledby="picks-title" hidden>
+      <div class="section-head picks-head">
+        <div>
+          <p class="eyebrow">Pilihan</p>
+          <h2 id="picks-title" class="section-title">Sorotan <em>minggu ini</em></h2>
+        </div>
+        <div class="picks-arrows">
+          <button id="picks-prev" class="round-button" type="button" aria-label="Produk sebelumnya">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+          </button>
+          <button id="picks-next" class="round-button filled" type="button" aria-label="Produk berikutnya">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+          </button>
+        </div>
+      </div>
+      <div id="picks-tabs" class="chips picks-tabs" role="group" aria-label="Jenis sorotan"></div>
+      <p id="picks-note" class="picks-note"></p>
+      <div id="picks-track" class="picks-track"></div>
+      <div id="picks-dots" class="picks-dots"></div>
+    </section>
+
     <section id="katalog" class="catalog" aria-labelledby="catalog-title">
       <div class="section-head">
         <div>
@@ -126,7 +147,10 @@
         </div>
       </div>
       <div id="products" class="products"></div>
-      <div class="more"><button id="more" class="secondary" type="button" hidden>Muat lebih banyak</button></div>
+      <nav id="pager" class="pager" aria-label="Halaman produk" hidden>
+        <div id="pager-pages" class="pager-pages"></div>
+        <p id="pager-range" class="pager-range"></p>
+      </nav>
     </section>
 
     <section id="look" class="look" aria-labelledby="look-title" hidden>

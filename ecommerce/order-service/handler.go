@@ -111,6 +111,25 @@ func newHandler(store *Store, verifier *Verifier, catalog *Catalog, internalToke
 		writeJSON(w, http.StatusOK, shippingTable())
 	})
 
+	// The voucher the shop shows above its header, the same for everyone. Only what a
+	// customer needs to use it: how many are left stays with the admins.
+	mux.HandleFunc("GET /vouchers/banner", func(w http.ResponseWriter, r *http.Request) {
+		v, err := store.BannerVoucher(r.Context())
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		w.Header().Set("Cache-Control", "public, max-age=60")
+		if v == nil {
+			writeJSON(w, http.StatusOK, map[string]any{"voucher": nil})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"voucher": map[string]any{
+			"code": v.Code, "description": v.Description, "kind": v.Kind, "value": v.Value,
+			"max_discount": v.MaxDiscount, "min_subtotal": v.MinSubtotal, "ends_at": v.EndsAt,
+		}})
+	})
+
 	mux.HandleFunc("POST /orders", authenticated(func(w http.ResponseWriter, r *http.Request, userID int64) {
 		var in orderInput
 		if !readJSON(w, r, &in) {

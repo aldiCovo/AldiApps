@@ -222,6 +222,34 @@ async function loadCategories() {
 }
 
 // The hero shows the dress, hijab and blouse photos. Without all three, the drawings stay.
+// The voucher the admins put in the bar above the header, if one can be used now.
+async function loadPromo() {
+  let voucher;
+  try {
+    ({ voucher } = await api("/vouchers/banner"));
+  } catch {
+    return;
+  }
+  if (!voucher) return;
+  let terms = voucher.description || voucherSummary(voucher);
+  if (!voucher.description && voucher.min_subtotal > 0) terms += ` · min. belanja ${rupiah.format(voucher.min_subtotal)}`;
+  $("promo-text").replaceChildren("Pakai kode ", el("strong", "", voucher.code), ` · ${terms}`);
+  const copy = $("promo-copy");
+  let reset;
+  copy.setAttribute("aria-label", `Salin kode ${voucher.code}`);
+  copy.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(voucher.code);
+      copy.textContent = "Tersalin ✓";
+    } catch {
+      copy.textContent = `Kode: ${voucher.code}`;
+    }
+    clearTimeout(reset);
+    reset = setTimeout(() => { copy.textContent = "Salin kode"; }, 2000);
+  });
+  $("promo-bar").hidden = false;
+}
+
 function renderHero() {
   const urls = ["Dress", "Hijab", "Blouse"].map(categoryPhotoURL);
   if (urls.some((url) => !url)) return;
@@ -1905,5 +1933,6 @@ renderCategories();
 loadAccount();
 openResetFromLink();
 loadFilterChoices();
+loadPromo();
 // Category names appear on the cards, so the list loads after them.
 loadCategories().then(() => loadProducts());

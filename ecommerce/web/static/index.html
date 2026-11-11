@@ -50,6 +50,10 @@
       <button type="submit">Cari</button>
     </form>
     <div class="header-actions">
+      <button id="fav-open" class="cart-button" type="button" title="Favorit" aria-label="Favorit, 0 produk">
+        <svg class="cart-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7.5-4.6-9.2-9.4C1.6 7.2 3.8 4 7.2 4c2 0 3.6 1.1 4.8 2.8C13.2 5.1 14.8 4 16.8 4c3.4 0 5.6 3.2 4.4 6.6C19.5 15.4 12 20 12 20z"/></svg>
+        <span id="fav-count" class="cart-count" hidden>0</span>
+      </button>
       <button id="cart-open" class="cart-button" type="button" title="Keranjang" aria-label="Keranjang, 0 barang">
         <svg class="cart-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M5 8h14l-1.2 12H6.2z"/>
@@ -164,6 +168,10 @@
         <span id="product-category" class="eyebrow" hidden></span>
         <h2 id="product-title"></h2>
         <p id="product-price" class="price"></p>
+        <button id="product-fav" class="fav-inline" type="button" aria-pressed="false">
+          <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7.5-4.6-9.2-9.4C1.6 7.2 3.8 4 7.2 4c2 0 3.6 1.1 4.8 2.8C13.2 5.1 14.8 4 16.8 4c3.4 0 5.6 3.2 4.4 6.6C19.5 15.4 12 20 12 20z"/></svg>
+          <span>Simpan ke favorit</span>
+        </button>
         <p id="product-description"></p>
         <form id="order-form">
           <fieldset>
@@ -215,6 +223,13 @@
       <p id="cart-error" class="error" role="alert" hidden></p>
       <button id="cart-checkout" class="primary" type="button">Pesan sekarang</button>
     </div>
+  </dialog>
+
+  <dialog id="fav-dialog" class="sheet fav-sheet" aria-labelledby="fav-title">
+    <button class="close" type="button" data-close aria-label="Tutup">×</button>
+    <h2 id="fav-title" tabindex="-1">Favorit</h2>
+    <p id="fav-status" class="status" role="status" aria-live="polite"></p>
+    <div id="fav-list" class="fav-list"></div>
   </dialog>
 
   <dialog id="checkout-dialog" class="sheet checkout-sheet" aria-labelledby="checkout-title">

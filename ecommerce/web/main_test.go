@@ -296,6 +296,10 @@ func TestCartRequestsCarryTheSession(t *testing.T) {
 		{"POST", "/api/cart/merge", `{"items":[]}`, "cart POST /cart/merge"},
 		{"PUT", "/api/cart/items/7", `{"quantity":1}`, "cart PUT /cart/items/7"},
 		{"DELETE", "/api/cart/items/7", "", "cart DELETE /cart/items/7"},
+		{"GET", "/api/favorites", "", "cart GET /favorites"},
+		{"POST", "/api/favorites/merge", `{"product_ids":[1]}`, "cart POST /favorites/merge"},
+		{"PUT", "/api/favorites/7", `{}`, "cart PUT /favorites/7"},
+		{"DELETE", "/api/favorites/7", "", "cart DELETE /favorites/7"},
 	}
 	for _, c := range cases {
 		resp, _ := do(t, c.method, server.URL+c.path, "application/json", c.body, session)
@@ -320,6 +324,9 @@ func TestCartRequestsCarryTheSession(t *testing.T) {
 	}{
 		{"PUT", "/api/cart/items/abc", "application/json", http.StatusNotFound},
 		{"DELETE", "/api/cart/items/abc", "", http.StatusNotFound},
+		{"PUT", "/api/favorites/abc", "application/json", http.StatusNotFound},
+		{"DELETE", "/api/favorites/abc", "", http.StatusNotFound},
+		{"POST", "/api/favorites/merge", "text/plain", http.StatusUnsupportedMediaType},
 		{"PUT", "/api/cart/items/7", "text/plain", http.StatusUnsupportedMediaType},
 		{"POST", "/api/cart/merge", "text/plain", http.StatusUnsupportedMediaType},
 		{"PUT", "/api/cart", "application/json", http.StatusNotFound},

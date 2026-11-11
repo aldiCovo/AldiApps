@@ -145,6 +145,7 @@ func newHandler(store *Store, verifier *Verifier) http.Handler {
 		writeCart(w, []Item{}, 0, store.Clear(r.Context(), userID))
 	}))
 
+	addFavoriteRoutes(mux, store, authenticated)
 	return mux
 }
 

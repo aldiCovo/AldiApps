@@ -189,6 +189,32 @@ func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, 
 		}
 		g.withSession(w, r, g.cartURL+"/cart/items/"+id, nil)
 	})
+	mux.HandleFunc("GET /api/favorites", func(w http.ResponseWriter, r *http.Request) {
+		g.withSession(w, r, g.cartURL+"/favorites", nil)
+	})
+	mux.HandleFunc("POST /api/favorites/merge", func(w http.ResponseWriter, r *http.Request) {
+		if body, ok := readBody(w, r); ok {
+			g.withSession(w, r, g.cartURL+"/favorites/merge", body)
+		}
+	})
+	mux.HandleFunc("PUT /api/favorites/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if !numericID.MatchString(id) {
+			writeError(w, http.StatusNotFound, "product not found")
+			return
+		}
+		if body, ok := readBody(w, r); ok {
+			g.withSession(w, r, g.cartURL+"/favorites/"+id, body)
+		}
+	})
+	mux.HandleFunc("DELETE /api/favorites/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if !numericID.MatchString(id) {
+			writeError(w, http.StatusNotFound, "product not found")
+			return
+		}
+		g.withSession(w, r, g.cartURL+"/favorites/"+id, nil)
+	})
 	mux.HandleFunc("GET /api/events", g.openEvents)
 	categoryPhotosDir := filepath.Join(photosDir, "categories")
 	mux.HandleFunc("GET /api/category-photos", func(w http.ResponseWriter, r *http.Request) {

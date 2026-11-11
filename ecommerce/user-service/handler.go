@@ -81,10 +81,10 @@ type loginInput struct {
 }
 
 type loginResponse struct {
-	Token     string `json:"token"`
-	TokenType string `json:"token_type"`
-	ExpiresIn int    `json:"expires_in"`
-	User      User   `json:"user"`
+	Token     string  `json:"token"`
+	TokenType string  `json:"token_type"`
+	ExpiresIn int     `json:"expires_in"`
+	User      Profile `json:"user"`
 }
 
 func newHandler(store *Store, tokens *Tokens, passwords *Passwords, resets *Resets, internalToken, adminToken string) http.Handler {
@@ -157,12 +157,18 @@ func newHandler(store *Store, tokens *Tokens, passwords *Passwords, resets *Rese
 			writeFailure(w, err)
 			return
 		}
+		// The shop shows the photo and profile right away, without asking again.
+		profile, err := store.Profile(r.Context(), user.ID)
+		if err != nil {
+			writeFailure(w, err)
+			return
+		}
 		w.Header().Set("Cache-Control", "no-store")
 		writeJSON(w, http.StatusOK, loginResponse{
 			Token:     token,
 			TokenType: "Bearer",
 			ExpiresIn: int(tokens.lifetime.Seconds()),
-			User:      user,
+			User:      profile,
 		})
 	})
 
@@ -214,7 +220,7 @@ func newHandler(store *Store, tokens *Tokens, passwords *Passwords, resets *Rese
 		if !ok {
 			return
 		}
-		user, err := store.ByID(r.Context(), id)
+		profile, err := store.Profile(r.Context(), id)
 		// The account was deleted after the token was issued.
 		if errors.Is(err, errNotFound) {
 			writeUnauthorized(w, "the token is not valid")
@@ -224,8 +230,10 @@ func newHandler(store *Store, tokens *Tokens, passwords *Passwords, resets *Rese
 			writeFailure(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, user)
+		w.Header().Set("Cache-Control", "no-store")
+		writeJSON(w, http.StatusOK, profile)
 	})
+	addProfileRoutes(mux, store, passwords, tokenUser)
 
 	mux.HandleFunc("GET /me/address", func(w http.ResponseWriter, r *http.Request) {
 		id, ok := tokenUser(w, r)

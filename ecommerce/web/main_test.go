@@ -63,6 +63,22 @@ func newTestGateway(t *testing.T) (*httptest.Server, *fakeServices) {
 				return
 			}
 			io.WriteString(w, `{"id":1,"name":"Sari"}`)
+		case "/me/password", "/me/photo":
+			if r.Header.Get("Authorization") != "Bearer "+testToken {
+				w.WriteHeader(http.StatusUnauthorized)
+				io.WriteString(w, `{"error":"the token is not valid"}`)
+				return
+			}
+			switch {
+			case r.Method == http.MethodGet:
+				w.Header().Set("Content-Type", "image/jpeg")
+				io.WriteString(w, "JPEGDATA")
+			case r.URL.Path == "/me/password":
+				w.WriteHeader(http.StatusForbidden)
+				io.WriteString(w, `{"error":"the current password is wrong"}`)
+			default:
+				w.WriteHeader(http.StatusNoContent)
+			}
 		default:
 			w.WriteHeader(http.StatusCreated)
 			io.WriteString(w, `{"id":1}`)
@@ -644,5 +660,44 @@ func TestAddressRequestsCarryTheSession(t *testing.T) {
 		if resp, _ := do(t, c.method, server.URL+"/api/me/address", c.contentType, "{}", session); resp.StatusCode != c.want || len(f.seen()) != before {
 			t.Fatalf("%s %s: status %d", c.method, c.contentType, resp.StatusCode)
 		}
+	}
+}
+
+func TestProfileRequestsCarryTheSession(t *testing.T) {
+	server, f := newTestGateway(t)
+	session := &http.Cookie{Name: sessionCookie, Value: testToken}
+	for _, c := range []struct {
+		method, path, body, want string
+		status                   int
+	}{
+		{"PUT", "/api/me", `{"name":"Sari"}`, "user PUT /me", http.StatusOK},
+		{"PUT", "/api/me/photo", `{"image":"x"}`, "user PUT /me/photo", http.StatusNoContent},
+		{"DELETE", "/api/me/photo", "", "user DELETE /me/photo", http.StatusNoContent},
+		{"PUT", "/api/me/password", `{"current_password":"a","new_password":"b"}`, "user PUT /me/password", http.StatusForbidden},
+	} {
+		resp, _ := do(t, c.method, server.URL+c.path, "application/json", c.body, session)
+		seen := f.seen()
+		if resp.StatusCode != c.status || seen[len(seen)-1] != c.want {
+			t.Fatalf("%s %s: status %d, seen %v", c.method, c.path, resp.StatusCode, seen)
+		}
+		// A wrong current password must not log the customer out.
+		for _, cookie := range resp.Cookies() {
+			if cookie.Name == sessionCookie {
+				t.Fatalf("%s %s cleared the session", c.method, c.path)
+			}
+		}
+		before := len(f.seen())
+		if resp, _ := do(t, c.method, server.URL+c.path, "application/json", c.body); resp.StatusCode != http.StatusUnauthorized || len(f.seen()) != before {
+			t.Fatalf("%s %s without a session: status %d", c.method, c.path, resp.StatusCode)
+		}
+	}
+
+	resp, body := do(t, "GET", server.URL+"/api/me/photo?v=1", "", "", session)
+	if resp.StatusCode != http.StatusOK || body != "JPEGDATA" || resp.Header.Get("Content-Type") != "image/jpeg" || !strings.Contains(resp.Header.Get("Cache-Control"), "private") {
+		t.Fatalf("photo: status %d, body %q, headers %v", resp.StatusCode, body, resp.Header)
+	}
+	resp, _ = do(t, "GET", server.URL+"/api/me/photo", "", "", &http.Cookie{Name: sessionCookie, Value: "bad"})
+	if resp.StatusCode != http.StatusUnauthorized || resp.Header.Get("Content-Type") != "application/json" {
+		t.Fatalf("photo with a bad session: status %d, headers %v", resp.StatusCode, resp.Header)
 	}
 }

@@ -388,6 +388,11 @@ function setChatCount(unread) {
   count.hidden = !(unread > 0) || chatOpen();
   count.textContent = unread > 9 ? "9+" : String(unread || "");
   $("chat-fab").setAttribute("aria-label", unread > 0 ? `Chat admin, ${unread} pesan baru` : "Chat admin");
+  // The envelope in the header shows the same count.
+  const badge = $("header-chat-count");
+  badge.hidden = count.hidden;
+  badge.textContent = count.textContent;
+  $("header-chat").setAttribute("aria-label", $("chat-fab").getAttribute("aria-label"));
 }
 
 // Called by renderAccount in app.js whenever the session is read or changes.
@@ -652,6 +657,7 @@ $("chat-panel").addEventListener("keydown", (event) => {
   $("chat-fab").focus();
 });
 $("akun-help-chat").addEventListener("click", () => openChat());
+$("header-chat").addEventListener("click", () => (chatOpen() ? closeChat() : openChat()));
 $("chat-attach").addEventListener("click", () => {
   closeMenuPick();
   if ($("chat-picker").hidden) openChatPicker();

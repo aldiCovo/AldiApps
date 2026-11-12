@@ -26,15 +26,20 @@ const (
 	testInternalToken = "internal-token-for-tests-0123456789abcdef"
 )
 
-// signals remembers what would have gone to NATS.
+// signals remembers what would have gone to NATS: new messages, and how many other changes.
 type signals struct {
-	mu   sync.Mutex
-	sent []string
+	mu      sync.Mutex
+	sent    []string
+	changes int
 }
 
 func (s *signals) Message(userID, messageID int64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if messageID == 0 {
+		s.changes++
+		return
+	}
 	s.sent = append(s.sent, fmt.Sprintf("%d:%d", userID, messageID))
 }
 
@@ -46,12 +51,20 @@ func (s *signals) count() int {
 
 type harness struct {
 	*httptest.Server
-	private ed25519.PrivateKey
-	signals *signals
-	pool    *pgxpool.Pool
+	private  ed25519.PrivateKey
+	signals  *signals
+	pool     *pgxpool.Pool
+	bot      *Assistant
+	claude   *fakeClaude
+	telegram *fakeTelegram
 }
 
+// newHarness runs chat-service without a bot, as before there was one.
 func newHarness(t *testing.T) *harness {
+	return newHarnessWith(t, false)
+}
+
+func newHarnessWith(t *testing.T, withBot bool) *harness {
 	t.Helper()
 	url := os.Getenv("TEST_DATABASE_URL")
 	if url == "" {
@@ -66,7 +79,10 @@ func newHarness(t *testing.T) *harness {
 	if err := migrate(ctx, pool); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, "TRUNCATE messages, conversations RESTART IDENTITY"); err != nil {
+	if _, err := pool.Exec(ctx, "TRUNCATE messages, conversations, handoffs RESTART IDENTITY"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, "UPDATE bot_settings SET mode = 'always', store_info = '', telegram = true, quiet_outside_hours = true"); err != nil {
 		t.Fatal(err)
 	}
 	public, private, err := ed25519.GenerateKey(rand.Reader)
@@ -74,6 +90,14 @@ func newHarness(t *testing.T) *harness {
 		t.Fatal(err)
 	}
 	users := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/me" {
+			if tokenSubject(r) == "" {
+				http.Error(w, "no", http.StatusUnauthorized)
+				return
+			}
+			fmt.Fprintf(w, `{"id":%s,"name":"Sari Maharani","email":"sari@contoh.id"}`, tokenSubject(r))
+			return
+		}
 		fmt.Fprintf(w, `{"keys":[{"kty":"OKP","crv":"Ed25519","kid":%q,"x":%q}]}`, testKeyID, base64.RawURLEncoding.EncodeToString(public))
 	}))
 	t.Cleanup(users.Close)
@@ -91,20 +115,50 @@ func newHarness(t *testing.T) *harness {
 	t.Cleanup(catalog.Close)
 	// Order 9 is customer 7's; anyone else gets 404, as order-service answers.
 	orders := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-		claims := jwt.RegisteredClaims{}
-		_, _, err := jwt.NewParser().ParseUnverified(token, &claims)
-		if err != nil || claims.Subject != "7" || r.URL.Path != "/orders/9" {
+		if tokenSubject(r) != "7" || r.URL.Path != "/orders/9" {
 			http.NotFound(w, r)
 			return
 		}
-		fmt.Fprint(w, `{"id":9,"status":"shipped","total":319000,"items":[{"product_name":"Dress Linen Midi"},{"product_name":"Hijab Voal"}]}`)
+		fmt.Fprint(w, `{"id":9,"status":"shipped","total":319000,"tracking_number":"JNE123","shipping_address":{"street":"Jl. Melati 5","city":"Bandung"},"items":[{"product_name":"Dress Linen Midi"},{"product_name":"Hijab Voal"}]}`)
 	}))
 	t.Cleanup(orders.Close)
+	search := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{"total":1,"products":[{"id":5,"name":"Dress Linen Midi %s","price":289000,"variants":[{"size":"M","color":"Hitam","stock":3}]}]}`, r.URL.Query().Get("q"))
+	}))
+	t.Cleanup(search.Close)
+	claude := &fakeClaude{}
+	claudeServer := httptest.NewServer(claude)
+	t.Cleanup(claudeServer.Close)
+	telegram := &fakeTelegram{}
+	telegramServer := httptest.NewServer(telegram)
+	t.Cleanup(telegramServer.Close)
+
 	sig := &signals{}
-	server := httptest.NewServer(newHandler(&Store{pool: pool}, newVerifier(users.URL), sig, newLookup(catalog.URL, orders.URL), testInternalToken))
+	store := &Store{pool: pool}
+	lookup := newLookup(catalog.URL, orders.URL)
+	config := assistantConfig{
+		searchURL: search.URL, catalogURL: catalog.URL, orderURL: orders.URL, userURL: users.URL,
+		telegramURL: telegramServer.URL, telegramToken: "bot-token", telegramChatID: "-100",
+		adminURL: "https://toko.test/admin", debounce: 0,
+	}
+	if withBot {
+		config.anthropicKey, config.anthropicURL, config.debounce = "test-key", claudeServer.URL, 150*time.Millisecond
+	}
+	bot := newAssistant(store, sig, lookup, config)
+	server := httptest.NewServer(newHandler(store, newVerifier(users.URL), sig, lookup, bot, testInternalToken))
 	t.Cleanup(server.Close)
-	return &harness{Server: server, private: private, signals: sig, pool: pool}
+	t.Cleanup(bot.Wait)
+	return &harness{Server: server, private: private, signals: sig, pool: pool, bot: bot, claude: claude, telegram: telegram}
+}
+
+// tokenSubject reads the user from a test token without checking it.
+func tokenSubject(r *http.Request) string {
+	token, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	claims := jwt.RegisteredClaims{}
+	if _, _, err := jwt.NewParser().ParseUnverified(token, &claims); err != nil {
+		return ""
+	}
+	return claims.Subject
 }
 
 func (h *harness) token(t *testing.T, userID int64) string {
@@ -217,6 +271,8 @@ func TestConversation(t *testing.T) {
 		t.Fatalf("send: status %d, body %s", status, body)
 	}
 	h.customer(t, budi, "POST", "/chat/messages", `{"body":"Pesanan saya?"}`)
+	// Without a bot, every message goes to the admins.
+	h.bot.Wait()
 	if h.signals.count() != 2 {
 		t.Fatalf("signals: %v", h.signals.sent)
 	}

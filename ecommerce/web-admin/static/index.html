@@ -115,11 +115,43 @@
     <section id="chat-view" hidden aria-labelledby="chat-title">
       <div class="view-head">
         <h1 id="chat-title">Chat</h1>
+        <div class="chat-head-tools">
+          <span id="chat-bot-pill" class="bot-pill" hidden></span>
+          <button id="chat-bot-settings-open" class="link" type="button" aria-controls="chat-bot-settings" aria-expanded="false">Pengaturan bot</button>
+        </div>
       </div>
-      <div class="chat-layout">
+      <form id="chat-bot-settings" class="bot-settings" hidden novalidate>
+        <p class="muted">Asisten Prastika menjawab chat pelanggan lebih dulu. Yang tidak bisa dijawab diteruskan ke admin.</p>
+        <p id="bot-not-configured" class="bot-warning" hidden>Bot belum aktif: kunci Claude belum dipasang di server, jadi semua chat langsung ke admin.</p>
+        <fieldset class="bot-box">
+          <legend>Kapan bot menjawab</legend>
+          <label class="bot-choice"><input type="radio" name="bot-mode" value="always"><span><strong>Selalu, langsung</strong><span class="muted small">Bot menjawab setiap pesan dulu, siang atau malam.</span></span></label>
+          <label class="bot-choice"><input type="radio" name="bot-mode" value="outside_hours"><span><strong>Hanya di luar jam kerja</strong><span class="muted small">Senin–Sabtu 08.00–20.00 WIB admin yang menjawab.</span></span></label>
+          <label class="bot-choice"><input type="radio" name="bot-mode" value="off"><span><strong>Mati</strong><span class="muted small">Semua chat langsung ke admin.</span></span></label>
+        </fieldset>
+        <div class="bot-box">
+          <label for="bot-store-info"><strong>Info toko untuk bot</strong></label>
+          <p class="muted small">Bot sudah tahu produk, harga, stok, pesanan, ongkir, dan voucher dari sistem. Tulis di sini yang tidak ada di sistem: retur, tabel ukuran, bahan, waktu kemas.</p>
+          <textarea id="bot-store-info" rows="7" maxlength="4000" placeholder="Contoh: Retur: barang bisa ditukar ukuran dalam 3 hari setelah sampai, belum dicuci, label masih ada."></textarea>
+        </div>
+        <fieldset class="bot-box">
+          <legend>Kabar Telegram saat chat perlu admin</legend>
+          <p id="bot-telegram-missing" class="muted small" hidden>Telegram belum dipasang di server, jadi belum ada kabar yang terkirim.</p>
+          <label class="bot-check"><input id="bot-telegram" type="checkbox"> Kirim kabar ke Telegram admin</label>
+          <label class="bot-check"><input id="bot-quiet" type="checkbox"> Tanpa bunyi di luar jam kerja</label>
+        </fieldset>
+        <div class="bot-actions">
+          <button class="primary" type="submit">Simpan</button>
+          <button id="chat-bot-settings-close" class="secondary" type="button">Kembali ke chat</button>
+          <span id="bot-settings-status" class="small" role="status" aria-live="polite"></span>
+        </div>
+        <p id="bot-month" class="muted small"></p>
+      </form>
+      <div id="chat-layout" class="chat-layout">
         <div class="chat-inbox">
           <div class="tabs" role="group" aria-label="Percakapan">
-            <button id="chat-tab-waiting" class="tab" type="button" aria-pressed="true">Belum dibalas</button>
+            <button id="chat-tab-waiting" class="tab" type="button" aria-pressed="true">Perlu admin</button>
+            <button id="chat-tab-bot" class="tab" type="button" aria-pressed="false">Dijawab bot</button>
             <button id="chat-tab-all" class="tab" type="button" aria-pressed="false">Semua</button>
           </div>
           <p id="chat-list-status" class="status" role="status" aria-live="polite"></p>
@@ -131,10 +163,12 @@
           <div id="chat-open" class="chat-open" hidden>
             <div class="chat-thread-head">
               <button id="chat-back" class="link chat-back" type="button">‹ Daftar chat</button>
-              <div>
+              <div class="chat-who">
                 <h2 id="chat-who"></h2>
                 <p id="chat-who-email" class="muted small"></p>
               </div>
+              <span id="chat-bot-state" class="bot-state" hidden></span>
+              <button id="chat-bot-toggle" class="secondary chat-bot-toggle" type="button" hidden></button>
             </div>
             <div id="chat-messages" class="chat-messages" aria-live="polite">
               <button id="chat-older" class="link chat-older" type="button" hidden>Muat pesan sebelumnya</button>
@@ -167,7 +201,7 @@
             <form id="chat-form" class="chat-form" novalidate>
               <button id="chat-attach" class="secondary chat-attach" type="button" aria-label="Lampirkan produk" aria-controls="chat-picker" aria-expanded="false">+</button>
               <label class="visually-hidden" for="chat-input">Balasan</label>
-              <textarea id="chat-input" rows="2" maxlength="1000" placeholder="Tulis balasan… (Enter kirim, Shift+Enter baris baru)"></textarea>
+              <textarea id="chat-input" rows="2" maxlength="1000" placeholder="Tulis balasan… (Enter kirim, Shift+Enter baris baru; bot diam di chat ini)"></textarea>
               <button id="chat-send" class="primary" type="submit">Kirim</button>
             </form>
             <p id="chat-error" class="error small" role="alert" hidden></p>

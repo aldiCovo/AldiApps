@@ -186,6 +186,43 @@ func (a *admin) addChatRoutes(mux *http.ServeMux) {
 		}
 	}))
 
+	// The assistant that answers customers first. chat-service checks the settings.
+	mux.HandleFunc("GET /chat/bot-settings", a.onlyAdmins(func(w http.ResponseWriter, r *http.Request, me User) {
+		pass(w, http.MethodGet, a.chatURL+"/internal/bot-settings", nil, r)
+	}))
+	mux.HandleFunc("PUT /chat/bot-settings", a.onlyAdmins(func(w http.ResponseWriter, r *http.Request, me User) {
+		var in struct {
+			Mode              string `json:"mode"`
+			StoreInfo         string `json:"store_info"`
+			Telegram          bool   `json:"telegram"`
+			QuietOutsideHours bool   `json:"quiet_outside_hours"`
+		}
+		if !readJSON(w, r, &in) {
+			return
+		}
+		body, _ := json.Marshal(in)
+		pass(w, http.MethodPut, a.chatURL+"/internal/bot-settings", body, r)
+	}))
+	// An admin takes a conversation over from the bot, or gives it back.
+	mux.HandleFunc("POST /chat/conversations/{id}/bot", a.onlyAdmins(func(w http.ResponseWriter, r *http.Request, me User) {
+		id, ok := customer(w, r)
+		if !ok {
+			return
+		}
+		var in struct {
+			On *bool `json:"on"`
+		}
+		if !readJSON(w, r, &in) {
+			return
+		}
+		if in.On == nil {
+			writeError(w, http.StatusBadRequest, "on is required")
+			return
+		}
+		body, _ := json.Marshal(in)
+		pass(w, http.MethodPost, a.chatURL+"/internal/conversations/"+id+"/bot", body, r)
+	}))
+
 	mux.HandleFunc("POST /chat/conversations/{id}/read", a.onlyAdmins(func(w http.ResponseWriter, r *http.Request, me User) {
 		if id, ok := customer(w, r); ok {
 			pass(w, http.MethodPost, a.chatURL+"/internal/conversations/"+id+"/read", nil, r)

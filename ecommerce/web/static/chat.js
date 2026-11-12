@@ -26,6 +26,8 @@ const chatState = {
   // The card that goes with the next message, and the products seen lately, newest first.
   pending: null,
   recentProducts: [],
+  // Who answers now: the bot, or a person the chat waits for, and whether the bot is writing.
+  status: { botOn: false, needsAdmin: false, working: false },
 };
 const chatRecentMax = 5;
 
@@ -185,11 +187,29 @@ function showChatHours() {
   const hours = $("chat-hours");
   hours.replaceChildren();
   const online = chatOnline();
-  const dot = el("span", online ? "chat-dot on" : "chat-dot");
+  const { botOn, needsAdmin } = chatState.status;
+  const dot = el("span", botOn || (online && !needsAdmin) ? "chat-dot on" : needsAdmin ? "chat-dot wait" : "chat-dot");
   dot.setAttribute("aria-hidden", "true");
-  hours.append(dot, document.createTextNode(online
-    ? "Online · biasanya membalas dalam beberapa menit"
+  hours.append(dot, document.createTextNode(botOn ? "Dijawab langsung oleh asisten · admin siap membantu"
+    : needsAdmin ? (online ? "Menunggu admin · biasanya beberapa menit" : "Menunggu admin · dibalas Senin–Sabtu, 08.00–20.00 WIB")
+    : online ? "Online · biasanya membalas dalam beberapa menit"
     : "Di luar jam kerja · dibalas Senin–Sabtu, 08.00–20.00 WIB"));
+}
+
+// "Bicara dengan admin": the bot steps aside and the admins are told.
+async function askForAdmin() {
+  $("chat-ask-admin").disabled = true;
+  try {
+    await post("/chat/handoff", {});
+    await loadChat(true);
+  } catch (error) {
+    if (error.status === 401) {
+      showChatNote("Sesi kamu sudah berakhir. Silakan masuk lagi.");
+      loadAccount();
+    } else showChatNote("Belum bisa diteruskan ke admin. Coba lagi sebentar lagi.");
+  } finally {
+    $("chat-ask-admin").disabled = false;
+  }
 }
 
 function setChatCount(unread) {
@@ -315,6 +335,10 @@ async function loadChat(scrollDown, older = false) {
   const oldHeight = box.scrollHeight;
   const shownBefore = chatState.messages.map((message) => message.id).join();
   const readBefore = chatState.readUpTo;
+  const statusBefore = JSON.stringify(chatState.status);
+  chatState.status = { botOn: page.bot_on, needsAdmin: page.needs_admin, working: page.bot_working };
+  const statusChanged = statusBefore !== JSON.stringify(chatState.status);
+  if (statusChanged) showChatHours();
   if (older) {
     chatState.messages = [...page.messages, ...chatState.messages];
     chatState.hasMore = page.has_more;
@@ -326,7 +350,7 @@ async function loadChat(scrollDown, older = false) {
   }
   chatState.readUpTo = page.read_up_to;
   chatState.loaded = true;
-  if (!older && !scrollDown && shownBefore === chatState.messages.map((message) => message.id).join() && readBefore === chatState.readUpTo) return;
+  if (!older && !scrollDown && !statusChanged && shownBefore === chatState.messages.map((message) => message.id).join() && readBefore === chatState.readUpTo) return;
   renderChat();
   if (older) box.scrollTop = box.scrollHeight - oldHeight;
   else if (scrollDown || atBottom) box.scrollTop = box.scrollHeight;
@@ -336,6 +360,9 @@ async function loadChat(scrollDown, older = false) {
 function renderChat() {
   $("chat-older").hidden = !chatState.hasMore;
   $("chat-welcome").hidden = chatState.messages.length > 0;
+  $("chat-welcome").textContent = chatState.status.botOn
+    ? "Halo! Saya Asisten Prastika. Tanya soal ukuran, stok, pesanan, ongkir, atau voucher, saya jawab langsung. Admin juga siap membantu."
+    : "Halo! Ada yang bisa kami bantu? Tanya soal ukuran, stok, pesanan, atau pembayaran.";
   const lines = [];
   let lastDay = "";
   const lastMine = chatState.messages.findLast((message) => message.from === "customer");
@@ -348,6 +375,12 @@ function renderChat() {
     }
     const mine = message.from === "customer";
     const line = el("div", mine ? "chat-msg mine" : "chat-msg theirs");
+    if (message.from === "bot") {
+      line.classList.add("bot");
+      const from = el("span", "chat-from");
+      from.append(el("span", "chat-bot-tag", "bot"), document.createTextNode("Asisten Prastika"));
+      line.append(from);
+    }
     if (message.attachment) {
       const card = message.attachment;
       line.classList.add("with-card");
@@ -359,7 +392,11 @@ function renderChat() {
     line.append(el("span", "chat-msg-meta", meta));
     lines.push(line);
   }
+  const { botOn, needsAdmin, working } = chatState.status;
+  if (working) lines.push(el("p", "chat-typing", "Asisten Prastika sedang mengetik…"));
+  else if (needsAdmin && chatState.messages.length > 0) lines.push(el("p", "chat-handed", "Diteruskan ke admin · Senin–Sabtu 08.00–20.00 WIB"));
   $("chat-lines").replaceChildren(...lines);
+  $("chat-ask-admin").hidden = !botOn || working || chatState.messages.length === 0;
 }
 
 function showChatNote(text) {
@@ -380,6 +417,8 @@ async function sendChat() {
     if (chatState.pending === card) setChatPending(null);
     fitChatText();
     if (!chatState.messages.some((shown) => shown.id === message.id)) chatState.messages.push(message);
+    // The bot answers in a moment; say so at once rather than after it starts.
+    if (chatState.status.botOn) chatState.status = { ...chatState.status, working: true };
     renderChat();
     $("chat-box").scrollTop = $("chat-box").scrollHeight;
   } catch (error) {
@@ -458,3 +497,4 @@ $("auth-dialog").addEventListener("close", () => {
 
 // Should /me have answered before this file ran, catch up now.
 if (accountKnown) chatUserChanged(currentUser);
+$("chat-ask-admin").addEventListener("click", askForAdmin);

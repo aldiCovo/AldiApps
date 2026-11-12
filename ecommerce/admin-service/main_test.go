@@ -207,6 +207,10 @@ func newTestServer(t *testing.T) (*httptest.Server, *fakes) {
 			io.WriteString(w, `{"id":2,"body":"Ubah"}`)
 		case r.URL.Path == "/internal/quick-replies/2" && r.Method == http.MethodDelete:
 			w.WriteHeader(http.StatusNoContent)
+		case r.URL.Path == "/internal/bot-settings" && r.Method == http.MethodGet:
+			io.WriteString(w, `{"mode":"always","store_info":"","telegram":true,"quiet_outside_hours":true,"configured":true}`)
+		case r.URL.Path == "/internal/bot-settings", r.URL.Path == "/internal/conversations/2/bot":
+			w.WriteHeader(http.StatusNoContent)
 		case r.URL.Path == "/internal/conversations/8/messages":
 			w.WriteHeader(http.StatusInternalServerError)
 			io.WriteString(w, `{"error":"secret detail"}`)

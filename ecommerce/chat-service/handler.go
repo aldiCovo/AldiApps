@@ -66,7 +66,7 @@ func pageArgs(r *http.Request) (before int64, limit int, err error) {
 	return before, limit, nil
 }
 
-func newHandler(store *Store, verifier *Verifier, signals signaler, cards attacher, internalToken string) http.Handler {
+func newHandler(store *Store, verifier *Verifier, signals signaler, cards attacher, bot *Assistant, internalToken string) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -142,6 +142,12 @@ func newHandler(store *Store, verifier *Verifier, signals signaler, cards attach
 			writeFailure(w, err)
 			return
 		}
+		settings, err := store.BotSettings(r.Context())
+		if err != nil {
+			writeFailure(w, err)
+			return
+		}
+		page.BotOn = bot.answersNow(settings) && !page.NeedsAdmin && !page.BotOff
 		writeJSON(w, http.StatusOK, page)
 	}
 
@@ -181,32 +187,33 @@ func newHandler(store *Store, verifier *Verifier, signals signaler, cards attach
 		return attachment, true
 	}
 
-	send := func(w http.ResponseWriter, r *http.Request, userID, adminID int64, body string, in *attachInput, bearer string) {
+	send := func(w http.ResponseWriter, r *http.Request, userID, adminID int64, body string, in *attachInput, bearer string) bool {
 		body, err := cleanBody(body, in != nil)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
-			return
+			return false
 		}
 		attachment, ok := card(w, r, in, bearer)
 		if !ok {
-			return
+			return false
 		}
 		message, err := store.Send(r.Context(), userID, adminID, body, attachment)
 		switch {
 		case errors.Is(err, errNotFound):
 			writeError(w, http.StatusNotFound, err.Error())
-			return
+			return false
 		case errors.Is(err, errTooFast):
 			w.Header().Set("Retry-After", "60")
 			writeError(w, http.StatusTooManyRequests, err.Error())
-			return
+			return false
 		case err != nil:
 			writeFailure(w, err)
-			return
+			return false
 		}
 		// Every tab of the customer hears of it, including the one that sent it.
 		signals.Message(userID, message.ID)
 		writeJSON(w, http.StatusCreated, map[string]Message{"message": message})
+		return true
 	}
 
 	// The customer's own conversation.
@@ -225,7 +232,9 @@ func newHandler(store *Store, verifier *Verifier, signals signaler, cards attach
 		var in messageInput
 		if readJSON(w, r, &in) {
 			bearer, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-			send(w, r, userID, 0, in.Body, in.Attach, bearer)
+			if send(w, r, userID, 0, in.Body, in.Attach, bearer) {
+				bot.CustomerWrote(userID, bearer)
+			}
 		}
 	}))
 	mux.HandleFunc("POST /chat/read", authenticated(func(w http.ResponseWriter, r *http.Request, userID int64) {
@@ -240,8 +249,8 @@ func newHandler(store *Store, verifier *Verifier, signals signaler, cards attach
 	mux.HandleFunc("GET /internal/conversations", internal(func(w http.ResponseWriter, r *http.Request) {
 		query := r.URL.Query()
 		filter := query.Get("filter")
-		if filter != "" && filter != "waiting" && filter != "all" {
-			writeError(w, http.StatusBadRequest, `filter must be "waiting" or "all"`)
+		if filter != "" && filter != filterWaiting && filter != filterAll && filter != filterBot {
+			writeError(w, http.StatusBadRequest, `filter must be "waiting", "bot" or "all"`)
 			return
 		}
 		limit, offset := 20, 0
@@ -258,7 +267,7 @@ func newHandler(store *Store, verifier *Verifier, signals signaler, cards attach
 				return
 			}
 		}
-		list, total, err := store.Conversations(r.Context(), filter == "waiting", limit, offset)
+		list, total, err := store.Conversations(r.Context(), filter, limit, offset)
 		if err != nil {
 			writeFailure(w, err)
 			return
@@ -316,6 +325,7 @@ func newHandler(store *Store, verifier *Verifier, signals signaler, cards attach
 	}))
 
 	addQuickRoutes(mux, store, internal)
+	addBotRoutes(mux, store, bot, authenticated, internal, customerID)
 
 	return mux
 }

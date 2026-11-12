@@ -885,6 +885,13 @@ fieldset.address-label input { flex: 1 1 160px; width: auto; }
 .chat-msg.theirs { align-self: flex-start; border: 1px solid var(--line); border-bottom-left-radius: 4px; background: var(--card); }
 .chat-msg.mine { align-self: flex-end; border-bottom-right-radius: 4px; background: var(--accent); color: #fff; }
 .chat-msg-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-from { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: .7rem; font-weight: 600; }
+.chat-bot-tag { padding: 0 7px; border-radius: 999px; background: var(--good-soft); color: var(--good); line-height: 1.6; }
+.chat-dot.wait { background: var(--wait); }
+.chat-typing { align-self: flex-start; padding: 6px 12px; border-radius: 14px; background: var(--good-soft); color: var(--good); font-size: .8rem; font-style: italic; }
+.chat-handed { align-self: center; max-width: 90%; margin: 4px 0; color: var(--muted); font-size: .76rem; text-align: center; }
+.chat-ask-admin { display: block; margin: 10px 0 2px auto; padding: 7px 14px; border: 1px solid var(--accent); border-radius: 999px; background: var(--card); color: var(--accent); font: 600 .82rem/1.2 var(--sans); cursor: pointer; }
+.chat-ask-admin:hover { background: var(--sand); }
 .chat-msg-meta { justify-self: end; font-size: .68rem; opacity: .75; }
 .chat-note { margin: 0; padding: 8px 14px; background: var(--bad-soft); color: var(--accent-dark); font-size: .84rem; }
 .chat-form { display: flex; align-items: flex-end; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); }

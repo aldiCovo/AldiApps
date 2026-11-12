@@ -151,7 +151,13 @@ function loggedIn(me) {
   currentAdmin = me;
   $("who-name").textContent = `${me.name} (${me.email})`;
   const views = { "#produk": "products", "#pengguna": "users", "#voucher": "vouchers", "#look": "looks", "#chat": "chat" };
-  openView(views[location.hash] || "orders");
+  // #chat-<id> opens that customer's conversation, as the Telegram note links it.
+  const linked = /^#chat-(\d+)$/.exec(location.hash);
+  if (linked) {
+    chat.openId = Number(linked[1]);
+    chat.filter = "all";
+  }
+  openView(linked ? "chat" : views[location.hash] || "orders");
   watchChatBadge();
 }
 

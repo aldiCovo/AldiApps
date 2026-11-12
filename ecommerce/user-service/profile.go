@@ -41,14 +41,23 @@ type Profile struct {
 	Gender string `json:"gender"`
 	// Changes whenever the photo does, so the browser can keep a copy until then. 0 means none.
 	PhotoVersion int64 `json:"photo_version"`
+	// Whether a code proved the email, and the phone's WhatsApp. A new phone isn't verified.
+	EmailVerified bool `json:"email_verified"`
+	PhoneVerified bool `json:"phone_verified"`
+	// False for an account made with Google, until a reset link sets a password.
+	HasPassword bool `json:"has_password"`
+	// Whether the account can log in with Google.
+	Google bool `json:"google"`
 }
 
 const profileColumns = userColumns + `, phone, COALESCE(to_char(birth_date, 'YYYY-MM-DD'), ''), gender,
-	COALESCE((SELECT (extract(epoch FROM p.updated_at) * 1000)::bigint FROM user_photos p WHERE p.user_id = users.id), 0)`
+	COALESCE((SELECT (extract(epoch FROM p.updated_at) * 1000)::bigint FROM user_photos p WHERE p.user_id = users.id), 0),
+	email_verified_at IS NOT NULL, phone_verified_at IS NOT NULL, password_hash <> '', google_sub IS NOT NULL`
 
 func scanProfile(row pgx.Row) (Profile, error) {
 	var p Profile
-	user, err := scanUser(row, &p.Phone, &p.BirthDate, &p.Gender, &p.PhotoVersion)
+	user, err := scanUser(row, &p.Phone, &p.BirthDate, &p.Gender, &p.PhotoVersion,
+		&p.EmailVerified, &p.PhoneVerified, &p.HasPassword, &p.Google)
 	p.User = user
 	return p, err
 }
@@ -63,7 +72,8 @@ func (s *Store) UpdateProfile(ctx context.Context, id int64, in profileInput) (P
 		birthDate = in.BirthDate
 	}
 	return scanProfile(s.pool.QueryRow(ctx,
-		`UPDATE users SET name = $2, phone = $3, birth_date = $4, gender = $5, updated_at = now()
+		`UPDATE users SET name = $2, phone = $3, birth_date = $4, gender = $5, updated_at = now(),
+		 phone_verified_at = CASE WHEN phone = $3 THEN phone_verified_at END
 		 WHERE id = $1 RETURNING `+profileColumns,
 		id, in.Name, in.Phone, birthDate, in.Gender))
 }
@@ -239,6 +249,11 @@ func addProfileRoutes(mux *http.ServeMux, store *Store, passwords *Passwords, to
 		}
 		hash, err := store.PasswordHash(r.Context(), id)
 		if gone(w, err) {
+			return
+		}
+		// An account made with Google sets its first password with a reset link.
+		if hash == "" {
+			writeError(w, http.StatusConflict, "the account has no password yet")
 			return
 		}
 		waitCtx, cancel := context.WithTimeout(r.Context(), passwordWait)

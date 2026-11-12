@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -59,6 +60,15 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	// Optional: without it the shop has no Google button.
+	var google googleConfig
+	if google.clientID = os.Getenv("GOOGLE_CLIENT_ID"); google.clientID != "" {
+		shopURL, err := requireEnv("SHOP_URL")
+		if err != nil {
+			return err
+		}
+		google.redirectURI = strings.TrimRight(shopURL, "/") + "/api/auth/google/callback"
+	}
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -69,7 +79,7 @@ func run() error {
 
 	server := &http.Server{
 		Addr:              ":" + port,
-		Handler:           newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, chatURL, os.Getenv("PHOTOS_DIR")),
+		Handler:           newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, chatURL, os.Getenv("PHOTOS_DIR"), google),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      20 * time.Second,

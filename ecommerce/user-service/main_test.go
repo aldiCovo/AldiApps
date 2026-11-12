@@ -50,7 +50,10 @@ type testServer struct {
 	pool   *pgxpool.Pool
 	tokens *Tokens
 	resets *Resets
+	codes  *Codes
 	mail   *fakeMailer
+	wa     *fakeWhatsApp
+	google *Google
 }
 
 // newTestServer needs a throwaway database, because it empties the table.
@@ -69,7 +72,7 @@ func newTestServer(t *testing.T, passwords *Passwords) *testServer {
 	if err := migrate(ctx, pool); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, "TRUNCATE users, user_addresses, password_resets, user_photos RESTART IDENTITY"); err != nil {
+	if _, err := pool.Exec(ctx, "TRUNCATE users, user_addresses, password_resets, user_photos, verification_codes RESTART IDENTITY"); err != nil {
 		t.Fatal(err)
 	}
 	if passwords == nil {
@@ -81,10 +84,14 @@ func newTestServer(t *testing.T, passwords *Passwords) *testServer {
 	store := &Store{pool: pool}
 	mail := &fakeMailer{}
 	resets := newResets(store, passwords, mail, "https://shop.test/")
-	server := httptest.NewServer(newHandler(store, tokens, passwords, resets, testInternalToken, testAdminToken))
+	wa := &fakeWhatsApp{}
+	codes := newCodes(store, mail, wa)
+	google := newGoogle(testGoogleClientID, "secret")
+	server := httptest.NewServer(newHandler(store, tokens, passwords, resets, codes, google, testInternalToken, testAdminToken))
 	t.Cleanup(server.Close)
 	t.Cleanup(resets.Wait)
-	return &testServer{Server: server, pool: pool, tokens: tokens, resets: resets, mail: mail}
+	t.Cleanup(codes.Wait)
+	return &testServer{Server: server, pool: pool, tokens: tokens, resets: resets, codes: codes, mail: mail, wa: wa, google: google}
 }
 
 func request(t *testing.T, method, url, body, bearer string) (int, []byte) {
@@ -117,6 +124,12 @@ func (s *testServer) register(t *testing.T, email, password string) User {
 	}
 	var user User
 	if err := json.Unmarshal(body, &user); err != nil {
+		t.Fatal(err)
+	}
+	// The code email is skipped here, so the tests about other things can log in at once.
+	s.codes.Wait()
+	s.mail.clear()
+	if _, err := s.pool.Exec(context.Background(), "UPDATE users SET email_verified_at = now() WHERE id = $1", user.ID); err != nil {
 		t.Fatal(err)
 	}
 	return user
@@ -183,6 +196,10 @@ func TestRegisterStoresOnlyAHash(t *testing.T) {
 	}
 	if !strings.HasPrefix(hash, "$argon2id$v=19$m=19456,t=2,p=1$") || strings.Contains(hash, "password") {
 		t.Fatalf("stored %q", hash)
+	}
+	s.codes.Wait()
+	if _, err := s.pool.Exec(context.Background(), "UPDATE users SET email_verified_at = now()"); err != nil {
+		t.Fatal(err)
 	}
 	// Spaces around the password count, unlike those around the email.
 	s.login(t, "SARI@example.com", "  password 123 ")

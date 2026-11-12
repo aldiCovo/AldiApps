@@ -68,6 +68,19 @@ func run() error {
 			return err
 		}
 	}
+	// Both are optional: without them the shop has no Google button, and phones stay unverified.
+	var google *Google
+	if clientID := os.Getenv("GOOGLE_CLIENT_ID"); clientID != "" {
+		secret := os.Getenv("GOOGLE_CLIENT_SECRET")
+		if secret == "" {
+			return errors.New("GOOGLE_CLIENT_SECRET is required with GOOGLE_CLIENT_ID")
+		}
+		google = newGoogle(clientID, secret)
+	}
+	var whatsApp whatsApp
+	if token := os.Getenv("FONNTE_TOKEN"); token != "" {
+		whatsApp = newFonnte(token)
+	}
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -99,10 +112,12 @@ func run() error {
 	resets := newResets(store, passwords, mailer, shopURL)
 	// Links still being sent need the pool, which closes after this.
 	defer resets.Wait()
+	codes := newCodes(store, mailer, whatsApp)
+	defer codes.Wait()
 
 	server := &http.Server{
 		Addr:              ":" + port,
-		Handler:           newHandler(store, tokens, passwords, resets, internalToken, adminToken),
+		Handler:           newHandler(store, tokens, passwords, resets, codes, google, internalToken, adminToken),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,

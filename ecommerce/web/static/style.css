@@ -514,6 +514,18 @@ legend { margin-bottom: 10px; padding: 0; font-size: .92rem; font-weight: 600; }
 .hint-text { margin: 0; color: var(--muted); font-size: .94rem; }
 .error { color: var(--accent-dark); }
 .switch { margin-top: 18px; color: var(--muted); font-size: .94rem; text-align: center; }
+.google-login { margin-top: 18px; }
+.google-button { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 46px; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: #1f1f1f; font-weight: 600; font-size: .95rem; text-decoration: none; transition: border-color .18s, background-color .18s; }
+.google-button:hover { border-color: var(--accent); background: #fdfafa; }
+.or { display: flex; align-items: center; gap: 12px; margin: 18px 0 0; color: var(--muted); font-size: .86rem; }
+.or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.code-form { display: grid; gap: 14px; margin-top: 18px; }
+.code-form label { display: grid; gap: 5px; font-size: .92rem; font-weight: 600; }
+.code-input { width: 100%; height: 52px; padding: 0 14px; border: 1px solid var(--line); border-radius: 8px; background: #fff; font-size: 1.4rem; font-weight: 600; letter-spacing: .4em; text-align: center; font-variant-numeric: tabular-nums; }
+.code-input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px rgb(164 90 102 / .18); }
+.code-form .primary { width: 100%; }
+.phone-check { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
+.phone-check .verified { color: var(--good); font-weight: 600; }
 
 /* Ratings and reviews. Stars are gold; the number beside them carries the meaning. */
 .star { flex: none; fill: rgb(43 36 32 / .16); }
@@ -947,3 +959,16 @@ button.chat-card:hover { border-color: var(--accent); }
   .chat-panel { inset: 0; width: auto; height: auto; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); border: 0; border-radius: 0; }
   .chat-is-open { overflow: hidden; }
 }
+
+/* Kebijakan Privasi and Syarat & Ketentuan */
+.legal-header { padding: 24px var(--edge); border-bottom: 1px solid var(--line); }
+.legal { max-width: 72ch; margin: 0 auto; padding: 40px var(--gutter, 16px) 64px; }
+.legal h1 { margin: 0; font-size: clamp(2.2rem, 5vw, 3rem); line-height: 1.1; }
+.legal h2 { margin: 36px 0 8px; font-size: 1.6rem; }
+.legal-date { margin: 8px 0 24px; color: var(--muted); font-size: .9rem; }
+.legal ul { padding-left: 1.2em; }
+.legal li { margin: 6px 0; }
+.legal a { color: var(--accent); }
+.legal code { font-size: .9em; }
+.legal-links { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--line); font-size: .92rem; }
+.footer-copy a { color: inherit; }

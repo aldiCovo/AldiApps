@@ -206,7 +206,9 @@ func (s *Store) UseReset(ctx context.Context, tokenHash []byte, passwordHash str
 			return err
 		}
 		if _, err := tx.Exec(ctx,
-			"UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1", userID, passwordHash); err != nil {
+			// The link came by email, so it proves the email too.
+			`UPDATE users SET password_hash = $2, email_verified_at = COALESCE(email_verified_at, now()), updated_at = now()
+			 WHERE id = $1`, userID, passwordHash); err != nil {
 			return err
 		}
 		_, err = tx.Exec(ctx,

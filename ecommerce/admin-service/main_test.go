@@ -198,6 +198,15 @@ func newTestServer(t *testing.T) (*httptest.Server, *fakes) {
 			io.WriteString(w, `{"message":{"id":6,"from":"admin","body":"Siap"}}`)
 		case r.URL.Path == "/internal/conversations/2/read":
 			w.WriteHeader(http.StatusNoContent)
+		case r.URL.Path == "/internal/quick-replies" && r.Method == http.MethodGet:
+			io.WriteString(w, `{"quick_replies":[{"id":1,"body":"Halo Kak {nama}"}]}`)
+		case r.URL.Path == "/internal/quick-replies":
+			w.WriteHeader(http.StatusCreated)
+			io.WriteString(w, `{"id":2,"body":"Baru"}`)
+		case r.URL.Path == "/internal/quick-replies/2" && r.Method == http.MethodPut:
+			io.WriteString(w, `{"id":2,"body":"Ubah"}`)
+		case r.URL.Path == "/internal/quick-replies/2" && r.Method == http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
 		case r.URL.Path == "/internal/conversations/8/messages":
 			w.WriteHeader(http.StatusInternalServerError)
 			io.WriteString(w, `{"error":"secret detail"}`)

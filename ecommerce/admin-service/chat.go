@@ -144,6 +144,48 @@ func (a *admin) addChatRoutes(mux *http.ServeMux) {
 		pass(w, http.MethodPost, a.chatURL+"/internal/conversations/"+id+"/messages", body, r)
 	}))
 
+	// The answers every admin shares. chat-service checks the text and the limit.
+	quick := func(w http.ResponseWriter, r *http.Request) (string, bool) {
+		id := r.PathValue("id")
+		if !numericID.MatchString(id) {
+			writeError(w, http.StatusNotFound, "quick reply not found")
+			return "", false
+		}
+		return id, true
+	}
+	quickBody := func(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
+		var in struct {
+			Body string `json:"body"`
+		}
+		if !readJSON(w, r, &in) {
+			return nil, false
+		}
+		body, _ := json.Marshal(in)
+		return body, true
+	}
+	mux.HandleFunc("GET /chat/quick-replies", a.onlyAdmins(func(w http.ResponseWriter, r *http.Request, me User) {
+		pass(w, http.MethodGet, a.chatURL+"/internal/quick-replies", nil, r)
+	}))
+	mux.HandleFunc("POST /chat/quick-replies", a.onlyAdmins(func(w http.ResponseWriter, r *http.Request, me User) {
+		if body, ok := quickBody(w, r); ok {
+			pass(w, http.MethodPost, a.chatURL+"/internal/quick-replies", body, r)
+		}
+	}))
+	mux.HandleFunc("PUT /chat/quick-replies/{id}", a.onlyAdmins(func(w http.ResponseWriter, r *http.Request, me User) {
+		id, ok := quick(w, r)
+		if !ok {
+			return
+		}
+		if body, ok := quickBody(w, r); ok {
+			pass(w, http.MethodPut, a.chatURL+"/internal/quick-replies/"+id, body, r)
+		}
+	}))
+	mux.HandleFunc("DELETE /chat/quick-replies/{id}", a.onlyAdmins(func(w http.ResponseWriter, r *http.Request, me User) {
+		if id, ok := quick(w, r); ok {
+			pass(w, http.MethodDelete, a.chatURL+"/internal/quick-replies/"+id, nil, r)
+		}
+	}))
+
 	mux.HandleFunc("POST /chat/conversations/{id}/read", a.onlyAdmins(func(w http.ResponseWriter, r *http.Request, me User) {
 		if id, ok := customer(w, r); ok {
 			pass(w, http.MethodPost, a.chatURL+"/internal/conversations/"+id+"/read", nil, r)

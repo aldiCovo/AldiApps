@@ -127,6 +127,36 @@ func TestGeminiAnswers(t *testing.T) {
 	}
 }
 
+func TestNamedProductGetsCard(t *testing.T) {
+	h := newHarnessWith(t, true)
+	setAI(t, h, aiGemini)
+
+	// The AI looks a product up and names it without attaching it: the card comes anyway.
+	h.gemini.script(
+		geminiAnswer(`[{"functionCall":{"id":"c1","name":"get_product","args":{"product_id":5}}}]`),
+		geminiAnswer(`[{"text":"Ada Kak, dress linen midi Rp 289.000, stok M 3. Silakan dicek ya."}]`),
+	)
+	h.customer(t, 7, "POST", "/chat/messages", `{"body":"Ada dress linen?"}`)
+	h.bot.Wait()
+	page := readPage(t)(h.customer(t, 7, "GET", "/chat", ""))
+	last := page.Messages[len(page.Messages)-1]
+	if last.From != "bot" || last.Attachment == nil || last.Attachment.ID != 5 || !strings.HasPrefix(last.Body, "Ada Kak") {
+		t.Fatalf("answer: %+v", last)
+	}
+
+	// A product it read but didn't name gets no card.
+	h.gemini.script(
+		geminiAnswer(`[{"functionCall":{"id":"c2","name":"get_product","args":{"product_id":5}}}]`),
+		geminiAnswer(`[{"text":"Maaf Kak, yang warna sage belum ada."}]`),
+	)
+	h.customer(t, 7, "POST", "/chat/messages", `{"body":"Yang sage ada?"}`)
+	h.bot.Wait()
+	page = readPage(t)(h.customer(t, 7, "GET", "/chat", ""))
+	if last := page.Messages[len(page.Messages)-1]; last.Attachment != nil {
+		t.Fatalf("card without a name: %+v", last)
+	}
+}
+
 func TestAIFallsBackToAdmins(t *testing.T) {
 	h := newHarnessWith(t, true)
 	setAI(t, h, aiGemini)

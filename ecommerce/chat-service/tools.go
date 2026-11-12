@@ -169,6 +169,20 @@ const maxCardsPerAnswer = 3
 type turn struct {
 	cards   []*Attachment
 	handoff string
+	// Products the tools read, in order, once each, for cardsForNamed.
+	seen []productInfo
+}
+
+func (t *turn) saw(products ...productInfo) {
+	for _, p := range products {
+		known := false
+		for _, s := range t.seen {
+			known = known || s.ID == p.ID
+		}
+		if !known && p.ID > 0 {
+			t.seen = append(t.seen, p)
+		}
+	}
 }
 
 // run does one tool call and returns what the AI reads back, and whether it failed.
@@ -194,11 +208,15 @@ func (s *Shop) run(ctx context.Context, cards attacher, bearer, name string, raw
 		for i := range found.Products {
 			found.Products[i].Description = shorten(found.Products[i].Description, 200)
 		}
+		t.saw(found.Products...)
 		result = found
 	case "get_product":
 		var product productInfo
 		err = s.get(ctx, s.catalogURL+"/products/"+strconv.FormatInt(in.ProductID, 10), "", &product)
 		product.Description = shorten(product.Description, maxDescription)
+		if err == nil {
+			t.saw(product)
+		}
 		result = product
 	case "my_orders":
 		var list struct {

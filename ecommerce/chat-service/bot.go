@@ -216,6 +216,9 @@ func (a *Assistant) answer(ctx context.Context, userID int64, bearer string) {
 		return a.shop.run(ctx, a.cards, bearer, name, input, t)
 	})
 	text = cleanBotText(text)
+	if err == nil {
+		a.cardsForNamed(ctx, text, t)
+	}
 	if errors.Is(err, errQuota) {
 		slog.Warn("the AI's quota is used up", "user", userID, "ai", settings.AI)
 		a.say(ctx, userID, botForwarded, nil)
@@ -250,6 +253,28 @@ func (a *Assistant) answer(ctx context.Context, userID int64, bearer string) {
 	}
 	if t.handoff != "" {
 		a.handoff(ctx, userID, bearer, t.handoff)
+	}
+}
+
+// cardsForNamed shows cards for the products the answer names, when the AI looked them up but
+// didn't attach any, so a customer told about a product can open it.
+func (a *Assistant) cardsForNamed(ctx context.Context, text string, t *turn) {
+	if len(t.cards) > 0 {
+		return
+	}
+	lower := strings.ToLower(text)
+	for _, p := range t.seen {
+		if len(t.cards) == maxCardsPerAnswer {
+			return
+		}
+		if p.Name == "" || !strings.Contains(lower, strings.ToLower(p.Name)) {
+			continue
+		}
+		card, err := a.cards.Product(ctx, p.ID)
+		if err != nil {
+			continue
+		}
+		t.cards = append(t.cards, card)
 	}
 }
 
@@ -409,7 +434,7 @@ Cara menjawab:
 - Tulis harga seperti "Rp 289.000".
 - Jawab hanya dari hasil alat dan info toko di bawah. Jangan mengarang stok, harga, ukuran, ongkir, nomor resi, atau kebijakan. Kalau tidak ada datanya, katakan jujur dan teruskan ke admin.
 - Cek dulu dengan alat sebelum menjawab soal produk, stok, pesanan, ongkir, atau voucher.
-- Saat menyarankan produk tertentu, tampilkan kartunya dengan attach_product.
+- Setiap kali menyebut produk tertentu, panggil attach_product untuk produk itu (paling banyak 3) supaya kartunya tampil di chat. Jangan menulis "di bawah ini" atau "berikut kartunya" tanpa memanggil attach_product.
 
 Yang tidak bisa kamu lakukan (teruskan ke admin dengan handoff_to_admin, lalu bilang ke pelanggan bahwa chat sudah diteruskan):
 - Membuat, membatalkan, atau mengubah pesanan, mengganti alamat, retur, tukar barang, refund, masalah pembayaran, komplain barang rusak/salah/kurang, pesanan khusus atau grosir.

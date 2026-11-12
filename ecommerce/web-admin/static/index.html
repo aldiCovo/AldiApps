@@ -148,7 +148,22 @@
               <input id="chat-pick-search" type="search" placeholder="Cari nama produk…" autocomplete="off">
               <div id="chat-pick-list" class="chat-pick-list"></div>
             </div>
+            <div id="chat-quick-editor" class="chat-picker chat-quick-editor" hidden>
+              <div class="chat-picker-head">
+                <span>Balasan cepat</span>
+                <button id="chat-quick-done" class="link" type="button">Selesai</button>
+              </div>
+              <p class="muted small">Dipakai semua admin. Tulis {nama} untuk nama depan pelanggan.</p>
+              <div id="chat-quick-rows" class="chat-quick-rows"></div>
+              <form id="chat-quick-new" class="chat-quick-row" novalidate>
+                <label class="visually-hidden" for="chat-quick-new-text">Balasan cepat baru</label>
+                <textarea id="chat-quick-new-text" rows="2" maxlength="500" placeholder="Tulis balasan cepat baru…"></textarea>
+                <div class="chat-quick-actions"><button class="secondary" type="submit">Tambah</button></div>
+              </form>
+              <p id="chat-quick-status" class="small" role="status" aria-live="polite"></p>
+            </div>
             <div id="chat-pending" class="chat-pending" hidden></div>
+            <div id="chat-quick" class="chat-quick" role="group" aria-label="Balasan cepat"></div>
             <form id="chat-form" class="chat-form" novalidate>
               <button id="chat-attach" class="secondary chat-attach" type="button" aria-label="Lampirkan produk" aria-controls="chat-picker" aria-expanded="false">+</button>
               <label class="visually-hidden" for="chat-input">Balasan</label>

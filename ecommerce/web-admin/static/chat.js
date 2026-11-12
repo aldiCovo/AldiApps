@@ -34,7 +34,99 @@ const chat = {
   catalog: null,
   // Product id -> promise of its live stock line, kept while the page is open.
   stock: new Map(),
+  // The shared quick replies, and the open customer's first name for {nama}.
+  quick: null,
+  firstName: "",
 };
+const quickMessages = {
+  "there can be at most 30 quick replies": "Sudah ada 30 balasan cepat. Hapus satu dulu.",
+  "body is required": "Isi balasannya dulu.",
+  "body must be at most 500 characters": "Balasan cepat maksimal 500 huruf.",
+  "quick reply not found": "Balasan itu sudah dihapus admin lain.",
+};
+
+async function loadQuickReplies() {
+  try {
+    const { quick_replies: list } = await api("/chat/quick-replies");
+    chat.quick = list;
+  } catch (error) {
+    if (handleAuth(error)) return;
+    chat.quick = chat.quick || [];
+  }
+  renderQuickChips();
+  if (!$("chat-quick-editor").hidden) renderQuickEditor();
+}
+
+function quickText(body) {
+  return body.replaceAll("{nama}", chat.firstName || "Kakak");
+}
+
+// The chips above the reply box. A chip fills the box so the reply can still be changed.
+function renderQuickChips() {
+  const chips = (chat.quick || []).map((reply) => {
+    const chip = button(quickText(reply.body), "chat-chip", () => {
+      const input = $("chat-input");
+      const text = quickText(reply.body);
+      input.value = input.value.trim() ? `${input.value.trimEnd()} ${text}` : text;
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    });
+    chip.title = quickText(reply.body);
+    return chip;
+  });
+  const manage = button(chips.length > 0 ? "Atur" : "Buat balasan cepat", "link chat-chip-manage", openQuickEditor);
+  $("chat-quick").replaceChildren(...chips, manage);
+}
+
+function openQuickEditor() {
+  closeChatPicker();
+  $("chat-quick-editor").hidden = false;
+  $("chat-quick-status").textContent = "";
+  renderQuickEditor();
+  $("chat-quick-new-text").focus();
+}
+
+function closeQuickEditor() {
+  $("chat-quick-editor").hidden = true;
+}
+
+function renderQuickEditor() {
+  $("chat-quick-rows").replaceChildren(...(chat.quick || []).map((reply) => {
+    const row = el("div", "chat-quick-row");
+    const text = el("textarea");
+    text.rows = 2;
+    text.maxLength = 500;
+    text.value = reply.body;
+    text.setAttribute("aria-label", "Balasan cepat");
+    const save = button("Simpan", "secondary", () => changeQuick(() => send("PUT", `/chat/quick-replies/${reply.id}`, { body: text.value }), "Disimpan."));
+    const remove = button("Hapus", "link danger", () => {
+      if (remove.dataset.sure !== "1") {
+        remove.dataset.sure = "1";
+        remove.textContent = "Yakin hapus?";
+        return;
+      }
+      changeQuick(() => send("DELETE", `/chat/quick-replies/${reply.id}`), "Dihapus.");
+    });
+    const actions = el("div", "chat-quick-actions");
+    actions.append(save, remove);
+    row.append(text, actions);
+    return row;
+  }));
+}
+
+async function changeQuick(request, done) {
+  $("chat-quick-status").textContent = "Menyimpan…";
+  try {
+    await request();
+    $("chat-quick-status").textContent = done;
+    await loadQuickReplies();
+    return true;
+  } catch (error) {
+    if (handleAuth(error)) return false;
+    $("chat-quick-status").textContent = quickMessages[error.message] || "Belum tersimpan. Coba lagi.";
+    return false;
+  }
+}
 const chatOrderStatus = {
   pending: "Diproses", awaiting_payment: "Menunggu bayar", paying: "Dibayar", paid: "Dibayar", packed: "Dikemas",
   shipped: "Dikirim", arrived: "Sampai", completed: "Selesai", rejected: "Ditolak", cancelled: "Dibatalkan",
@@ -111,6 +203,7 @@ function setChatPending(card) {
 }
 
 async function openChatPicker() {
+  closeQuickEditor();
   $("chat-picker").hidden = false;
   $("chat-attach").setAttribute("aria-expanded", "true");
   $("chat-pick-search").value = "";
@@ -177,6 +270,7 @@ function openChat() {
   $("chat-tab-waiting").setAttribute("aria-pressed", String(chat.filter === "waiting"));
   $("chat-tab-all").setAttribute("aria-pressed", String(chat.filter === "all"));
   refreshChat(true);
+  if (!chat.quick) loadQuickReplies();
   clearInterval(chat.timer);
   chat.timer = setInterval(() => { if (!document.hidden) refreshChat(false); }, chatPollOpen);
 }
@@ -246,6 +340,9 @@ async function openConversation(conversation) {
   $("chat-empty").hidden = true;
   $("chat-open").hidden = false;
   $("chat-who").textContent = customerName(conversation);
+  chat.firstName = conversation.customer ? conversation.customer.name.trim().split(/\s+/)[0] : "";
+  closeQuickEditor();
+  renderQuickChips();
   $("chat-who-email").textContent = conversation.customer ? conversation.customer.email : "";
   $("chat-lines").replaceChildren();
   $("chat-error").hidden = true;
@@ -411,6 +508,16 @@ $("chat-attach").addEventListener("click", () => ($("chat-picker").hidden ? open
 $("chat-picker-close").addEventListener("click", () => {
   closeChatPicker();
   $("chat-attach").focus();
+});
+$("chat-quick-done").addEventListener("click", () => {
+  closeQuickEditor();
+  $("chat-input").focus();
+});
+$("chat-quick-new").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (await changeQuick(() => post("/chat/quick-replies", { body: $("chat-quick-new-text").value }), "Ditambahkan.")) {
+    $("chat-quick-new-text").value = "";
+  }
 });
 $("chat-pick-search").addEventListener("input", () => { if (chat.catalog) showChatPicks(); });
 $("chat-pick-search").addEventListener("keydown", (event) => {

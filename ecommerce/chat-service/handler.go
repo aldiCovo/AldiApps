@@ -315,6 +315,8 @@ func newHandler(store *Store, verifier *Verifier, signals signaler, cards attach
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
+	addQuickRoutes(mux, store, internal)
+
 	return mux
 }
 

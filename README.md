@@ -344,6 +344,7 @@ The admin pages, under `/admin` on the shop's domain, separate from `web`. Its l
 | `GET /admin/api/me`, `GET /admin/api/orders`, `GET /admin/api/orders/{id}` | admin-service, with the token from the cookie |
 | `POST /admin/api/orders/{id}/status` | admin-service, with the token from the cookie |
 | The category, product, variant and stock routes above, under `/admin/api` | admin-service, with the token from the cookie. Every change, including `DELETE`, must be sent as JSON |
+| `GET`, `POST /admin/api/chat/quick-replies`, `PUT`, `DELETE /admin/api/chat/quick-replies/{id}` | admin-service, then chat-service. Changes must be sent as JSON |
 | `GET /admin/api/users`, `PUT /admin/api/users/{id}/role` | admin-service, with the token from the cookie. A role change must be sent as JSON |
 | `GET`, `POST /admin/api/vouchers`, `PUT`, `DELETE /admin/api/vouchers/{id}` | admin-service, with the token from the cookie. Every change must be sent as JSON |
 | The photo routes above, under `/admin/api` | admin-service, with the token from the cookie. An upload must be sent as `image/jpeg`, `image/png` or `image/webp`, which a form on another site can't send, and other changes as JSON |
@@ -373,6 +374,7 @@ Keeps one conversation per customer with the shop's admins. Customers reach it t
 | `GET /internal/conversations/{user_id}/messages?before=&limit=` | One conversation, as the shop sees it |
 | `POST /internal/conversations/{user_id}/messages` | Answers with `{"body", "admin_id", "attach"}`; admins attach only products. Admins can't start a conversation |
 | `POST /internal/conversations/{user_id}/read` | Marks the customer's messages as seen by the shop |
+| `GET`, `POST /internal/quick-replies`, `PUT`, `DELETE /internal/quick-replies/{id}` | The quick replies every admin shares, oldest first: `{"body"}` of 1 to 500 characters, at most 30 (409 above). `{nama}` in a reply stands for the customer's first name, filled in by the admin page |
 
 A card (`attachment`) is kept as it was when sent: a product's `name`, `price` and `category_id` from catalog-service, or an order's `status`, `total`, first item `name` and how many `more` items from order-service. Orders are looked up with the customer's own token, so order-service itself refuses another customer's order.
 

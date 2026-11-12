@@ -419,3 +419,57 @@ func TestAttachments(t *testing.T) {
 		t.Errorf("customer 8 = %+v", page)
 	}
 }
+
+func TestQuickReplies(t *testing.T) {
+	h := newHarness(t)
+	// Start from the four the migration adds, whatever earlier tests left.
+	if _, err := h.pool.Exec(context.Background(), "DELETE FROM quick_replies WHERE id > 4"); err != nil {
+		t.Fatal(err)
+	}
+	status, body := h.admin(t, "GET", "/internal/quick-replies", "")
+	if status != http.StatusOK || strings.Count(string(body), `"id"`) != 4 || !strings.Contains(string(body), "{nama}") {
+		t.Fatalf("seeded: %d %s", status, body)
+	}
+	status, body = h.admin(t, "POST", "/internal/quick-replies", `{"body":"  Sudah kami kirim ya Kak\r\nResi menyusul  "}`)
+	var added QuickReply
+	if status != http.StatusCreated || json.Unmarshal(body, &added) != nil || added.Body != "Sudah kami kirim ya Kak\nResi menyusul" {
+		t.Fatalf("add: %d %s", status, body)
+	}
+	path := "/internal/quick-replies/" + strconv.FormatInt(added.ID, 10)
+	if status, body := h.admin(t, "PUT", path, `{"body":"Sudah dikirim"}`); status != http.StatusOK || !strings.Contains(string(body), `"body":"Sudah dikirim"`) {
+		t.Fatalf("update: %d %s", status, body)
+	}
+	for _, c := range []struct {
+		method, path, body string
+		status             int
+	}{
+		{"POST", "/internal/quick-replies", `{"body":"  "}`, http.StatusBadRequest},
+		{"POST", "/internal/quick-replies", `{"body":"` + strings.Repeat("x", 501) + `"}`, http.StatusBadRequest},
+		{"PUT", "/internal/quick-replies/9999", `{"body":"x"}`, http.StatusNotFound},
+		{"PUT", "/internal/quick-replies/abc", `{"body":"x"}`, http.StatusNotFound},
+		{"DELETE", "/internal/quick-replies/9999", "", http.StatusNotFound},
+	} {
+		if status, body := h.admin(t, c.method, c.path, c.body); status != c.status {
+			t.Errorf("%s %s: %d %s, want %d", c.method, c.path, status, body, c.status)
+		}
+	}
+	// Customers can't reach them.
+	if status, _ := h.customer(t, 7, "GET", "/internal/quick-replies", ""); status != http.StatusUnauthorized {
+		t.Errorf("customer: %d", status)
+	}
+	if status, _ := h.admin(t, "DELETE", path, ""); status != http.StatusNoContent {
+		t.Errorf("delete: %d", status)
+	}
+	// The limit.
+	for i := 4; i < maxQuickReplies; i++ {
+		if status, body := h.admin(t, "POST", "/internal/quick-replies", `{"body":"isi"}`); status != http.StatusCreated {
+			t.Fatalf("fill %d: %d %s", i, status, body)
+		}
+	}
+	if status, _ := h.admin(t, "POST", "/internal/quick-replies", `{"body":"satu lagi"}`); status != http.StatusConflict {
+		t.Errorf("over the limit: %d", status)
+	}
+	if _, err := h.pool.Exec(context.Background(), "DELETE FROM quick_replies WHERE id > 4"); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -77,3 +77,36 @@ func TestChat(t *testing.T) {
 		t.Fatalf("failure: status %d, body %s", status, body)
 	}
 }
+
+func TestQuickReplies(t *testing.T) {
+	server, f := newTestServer(t)
+	for _, token := range []string{"", "customer-token"} {
+		if status, _ := do(t, server, "GET", "/chat/quick-replies", token, ""); status != http.StatusUnauthorized && status != http.StatusForbidden {
+			t.Fatalf("token %q: status %d", token, status)
+		}
+	}
+	if status, body := do(t, server, "GET", "/chat/quick-replies", "admin-token", ""); status != http.StatusOK || !strings.Contains(body, "{nama}") {
+		t.Fatalf("list: %d %s", status, body)
+	}
+	if status, _ := do(t, server, "POST", "/chat/quick-replies", "admin-token", `{"body":"Baru"}`); status != http.StatusCreated {
+		t.Fatalf("add: %d", status)
+	}
+	if got := f.chatHits[len(f.chatHits)-1]; got != `POST /internal/quick-replies {"body":"Baru"}` {
+		t.Fatalf("add forwarded: %q", got)
+	}
+	if status, _ := do(t, server, "POST", "/chat/quick-replies", "admin-token", `{"body":"x","id":9}`); status != http.StatusBadRequest {
+		t.Fatalf("unknown field: %d", status)
+	}
+	if status, _ := do(t, server, "PUT", "/chat/quick-replies/2", "admin-token", `{"body":"Ubah"}`); status != http.StatusOK {
+		t.Fatalf("update: %d", status)
+	}
+	if status, _ := do(t, server, "DELETE", "/chat/quick-replies/2", "admin-token", ""); status != http.StatusNoContent {
+		t.Fatalf("delete: %d", status)
+	}
+	if status, _ := do(t, server, "DELETE", "/chat/quick-replies/abc", "admin-token", ""); status != http.StatusNotFound {
+		t.Fatalf("bad id: %d", status)
+	}
+	if status, _ := do(t, server, "DELETE", "/chat/quick-replies/7", "admin-token", ""); status != http.StatusNotFound {
+		t.Fatalf("missing: %d", status)
+	}
+}

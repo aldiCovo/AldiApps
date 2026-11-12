@@ -23,7 +23,154 @@ const chatState = {
   retryTimer: 0,
   pollTimer: 0,
   unreadTimer: 0,
+  // The card that goes with the next message, and the products seen lately, newest first.
+  pending: null,
+  recentProducts: [],
 };
+const chatRecentMax = 5;
+
+try {
+  const saved = JSON.parse(sessionStorage.getItem("chat-recent") || "[]");
+  if (Array.isArray(saved)) chatState.recentProducts = saved.slice(0, chatRecentMax);
+} catch {
+  // Without storage the list starts empty.
+}
+
+// The status words on order cards: what the order was when the card was sent.
+const chatOrderStatus = {
+  pending: "Diproses", awaiting_payment: "Menunggu pembayaran", paying: "Memproses pembayaran", paid: "Dibayar",
+  packed: "Dikemas", shipped: "Dikirim", arrived: "Sudah sampai", completed: "Selesai", rejected: "Ditolak", cancelled: "Dibatalkan",
+};
+
+function chatIcon() {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", "M4 5h16v11H9l-5 4z");
+  svg.append(path);
+  return svg;
+}
+
+// Called by openProduct in app.js, so the picker can offer what the customer just looked at.
+function chatSawProduct(product) {
+  const card = productAttachment(product);
+  chatState.recentProducts = [card, ...chatState.recentProducts.filter((seen) => seen.id !== product.id)].slice(0, chatRecentMax);
+  try {
+    sessionStorage.setItem("chat-recent", JSON.stringify(chatState.recentProducts));
+  } catch {
+    // The list just isn't kept across reloads.
+  }
+}
+
+function productAttachment(product) {
+  return { kind: "product", id: product.id, name: product.name, price: product.price, category_id: product.category_id };
+}
+
+function orderAttachment(order) {
+  const items = order.items || [];
+  return {
+    kind: "order", id: order.id, status: order.status, total: order.total,
+    name: items.length > 0 ? items[0].product_name : "", more: Math.max(items.length - 1, 0),
+  };
+}
+
+// Opens the chat with a product or order ready to send. The sheets it is asked from are modal,
+// so they close first or they would cover the chat.
+function askAbout(card) {
+  for (const id of ["product-dialog", "orders-dialog"]) if ($(id).open) $(id).close();
+  setChatPending(card);
+  openChat();
+}
+
+// A product or order card, in a message, in the picker, or waiting to be sent.
+function chatCard(card, onClick) {
+  const box = el(onClick ? "button" : "div", `chat-card ${card.kind}`);
+  if (onClick) {
+    box.type = "button";
+    box.addEventListener("click", onClick);
+  }
+  const thumb = el("span", "chat-card-thumb");
+  thumb.setAttribute("aria-hidden", "true");
+  if (card.kind === "product") {
+    const url = photosOf({ id: card.id, category_id: card.category_id })[0];
+    if (url) {
+      const image = el("img");
+      image.src = url;
+      image.alt = "";
+      image.loading = "lazy";
+      image.decoding = "async";
+      image.addEventListener("error", () => image.remove());
+      thumb.append(image);
+    }
+  } else {
+    thumb.textContent = "#";
+  }
+  const text = el("span", "chat-card-text");
+  if (card.kind === "product") {
+    text.append(el("strong", "", card.name), el("span", "", rupiah.format(card.price)));
+  } else {
+    text.append(el("strong", "", `Pesanan #${card.id}`),
+      el("span", "", `${chatOrderStatus[card.status] || card.status} · ${rupiah.format(card.total)}`));
+    if (card.name) text.append(el("span", "", card.more > 0 ? `${card.name} dan ${card.more} lainnya` : card.name));
+  }
+  box.append(thumb, text);
+  return box;
+}
+
+// What a card in the conversation opens.
+function openChatCard(card) {
+  if (card.kind === "product") openProduct(card.id);
+  else openOrderDetail(card.id);
+}
+
+function setChatPending(card) {
+  chatState.pending = card;
+  const box = $("chat-pending");
+  if (!card) {
+    box.hidden = true;
+    box.replaceChildren();
+    return;
+  }
+  const remove = el("button", "chat-pending-remove", "×");
+  remove.type = "button";
+  remove.setAttribute("aria-label", "Hapus lampiran");
+  remove.addEventListener("click", () => {
+    setChatPending(null);
+    $("chat-text").focus();
+  });
+  box.replaceChildren(chatCard(card), remove);
+  box.hidden = false;
+  $("chat-note").hidden = true;
+  closeChatPicker();
+}
+
+async function openChatPicker() {
+  $("chat-picker").hidden = false;
+  $("chat-attach").setAttribute("aria-expanded", "true");
+  const products = chatState.recentProducts.map((card) => chatCard(card, () => {
+    setChatPending(card);
+    $("chat-text").focus();
+  }));
+  $("chat-pick-products").replaceChildren(...(products.length > 0 ? products
+    : [el("p", "chat-pick-empty", "Buka sebuah produk, lalu tekan Tanya soal produk ini.")]));
+  $("chat-pick-orders").replaceChildren(el("p", "chat-pick-empty", "Memuat…"));
+  try {
+    const { orders } = await api("/orders?limit=5");
+    if ($("chat-picker").hidden) return;
+    $("chat-pick-orders").replaceChildren(...(orders.length > 0 ? orders.map((order) => chatCard(orderAttachment(order), () => {
+      setChatPending(orderAttachment(order));
+      $("chat-text").focus();
+    })) : [el("p", "chat-pick-empty", "Belum ada pesanan.")]));
+  } catch {
+    $("chat-pick-orders").replaceChildren(el("p", "chat-pick-empty", "Pesanan belum bisa dimuat."));
+  }
+}
+
+function closeChatPicker() {
+  $("chat-picker").hidden = true;
+  $("chat-attach").setAttribute("aria-expanded", "false");
+}
 
 const chatOpen = () => !$("chat-panel").hidden;
 
@@ -65,6 +212,7 @@ function chatUserChanged(user) {
   }
   clearInterval(chatState.unreadTimer);
   if (!user) {
+    setChatPending(null);
     if (chatOpen()) closeChat();
     return;
   }
@@ -101,6 +249,7 @@ function openChat() {
 }
 
 function closeChat() {
+  closeChatPicker();
   $("chat-panel").hidden = true;
   $("chat-fab").setAttribute("aria-expanded", "false");
   document.body.classList.remove("chat-is-open");
@@ -199,7 +348,12 @@ function renderChat() {
     }
     const mine = message.from === "customer";
     const line = el("div", mine ? "chat-msg mine" : "chat-msg theirs");
-    line.append(el("p", "chat-msg-body", message.body));
+    if (message.attachment) {
+      const card = message.attachment;
+      line.classList.add("with-card");
+      line.append(chatCard(card, () => openChatCard(card)));
+    }
+    if (message.body) line.append(el("p", "chat-msg-body", message.body));
     let meta = chatTime.format(date);
     if (message === lastMine) meta += message.id <= chatState.readUpTo ? " · Dibaca" : " · Terkirim";
     line.append(el("span", "chat-msg-meta", meta));
@@ -215,13 +369,15 @@ function showChatNote(text) {
 
 async function sendChat() {
   const text = $("chat-text").value.trim();
-  if (!text || chatState.sending || !chatState.user) return;
+  const card = chatState.pending;
+  if ((!text && !card) || chatState.sending || !chatState.user) return;
   chatState.sending = true;
   $("chat-send").disabled = true;
   $("chat-note").hidden = true;
   try {
-    const { message } = await post("/chat/messages", { body: text });
+    const { message } = await post("/chat/messages", card ? { body: text, attach: { kind: card.kind, id: card.id } } : { body: text });
     $("chat-text").value = "";
+    if (chatState.pending === card) setChatPending(null);
     fitChatText();
     if (!chatState.messages.some((shown) => shown.id === message.id)) chatState.messages.push(message);
     renderChat();
@@ -231,7 +387,11 @@ async function sendChat() {
     else if (error.status === 401) {
       showChatNote("Sesi kamu sudah berakhir. Silakan masuk lagi.");
       loadAccount();
-    } else if (error.status === 400) showChatNote("Pesan maksimal 1.000 huruf.");
+    } else if (error.status === 422) {
+      setChatPending(null);
+      showChatNote(card && card.kind === "order" ? "Pesanan itu tidak bisa dilampirkan." : "Produk itu sudah tidak dijual, jadi tidak bisa dilampirkan.");
+    } else if (error.status === 502) showChatNote("Lampiran belum bisa diperiksa. Coba lagi sebentar lagi.");
+    else if (error.status === 400) showChatNote("Pesan maksimal 1.000 huruf.");
     else showChatNote("Pesan belum terkirim. Periksa koneksi, lalu coba lagi.");
   } finally {
     chatState.sending = false;
@@ -266,12 +426,25 @@ $("chat-text").addEventListener("keydown", (event) => {
   }
 });
 $("chat-panel").addEventListener("keydown", (event) => {
-  if (event.key === "Escape") {
-    closeChat();
-    $("chat-fab").focus();
+  if (event.key !== "Escape") return;
+  if (!$("chat-picker").hidden) {
+    closeChatPicker();
+    $("chat-attach").focus();
+    return;
   }
+  closeChat();
+  $("chat-fab").focus();
 });
 $("akun-help-chat").addEventListener("click", () => openChat());
+$("chat-attach").addEventListener("click", () => ($("chat-picker").hidden ? openChatPicker() : closeChatPicker()));
+$("chat-picker-close").addEventListener("click", () => {
+  closeChatPicker();
+  $("chat-attach").focus();
+});
+$("product-ask").addEventListener("click", () => {
+  const product = chatState.recentProducts.find((seen) => seen.id === shownProductId);
+  if (product) askAbout(product);
+});
 if ($("footer-chat")) $("footer-chat").addEventListener("click", () => openChat());
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) return;

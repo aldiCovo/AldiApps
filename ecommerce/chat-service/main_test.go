@@ -77,8 +77,32 @@ func newHarness(t *testing.T) *harness {
 		fmt.Fprintf(w, `{"keys":[{"kty":"OKP","crv":"Ed25519","kid":%q,"x":%q}]}`, testKeyID, base64.RawURLEncoding.EncodeToString(public))
 	}))
 	t.Cleanup(users.Close)
+	// The catalog has product 5; product 500 breaks it.
+	catalog := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/products/5":
+			fmt.Fprint(w, `{"id":5,"name":"Dress Linen Midi","price":289000,"category_id":3,"variants":[]}`)
+		case "/products/500":
+			http.Error(w, "broken", http.StatusInternalServerError)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(catalog.Close)
+	// Order 9 is customer 7's; anyone else gets 404, as order-service answers.
+	orders := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		claims := jwt.RegisteredClaims{}
+		_, _, err := jwt.NewParser().ParseUnverified(token, &claims)
+		if err != nil || claims.Subject != "7" || r.URL.Path != "/orders/9" {
+			http.NotFound(w, r)
+			return
+		}
+		fmt.Fprint(w, `{"id":9,"status":"shipped","total":319000,"items":[{"product_name":"Dress Linen Midi"},{"product_name":"Hijab Voal"}]}`)
+	}))
+	t.Cleanup(orders.Close)
 	sig := &signals{}
-	server := httptest.NewServer(newHandler(&Store{pool: pool}, newVerifier(users.URL), sig, testInternalToken))
+	server := httptest.NewServer(newHandler(&Store{pool: pool}, newVerifier(users.URL), sig, newLookup(catalog.URL, orders.URL), testInternalToken))
 	t.Cleanup(server.Close)
 	return &harness{Server: server, private: private, signals: sig, pool: pool}
 }
@@ -328,5 +352,70 @@ func TestRateLimit(t *testing.T) {
 	// Admins aren't limited.
 	if status, _ := h.admin(t, "POST", "/internal/conversations/7/messages", `{"body":"Sabar ya kak","admin_id":16}`); status != http.StatusCreated {
 		t.Fatalf("admin after limit: %d", status)
+	}
+}
+
+func TestAttachments(t *testing.T) {
+	h := newHarness(t)
+
+	// A card alone, without text.
+	status, body := h.customer(t, 7, "POST", "/chat/messages", `{"body":"  ","attach":{"kind":"product","id":5}}`)
+	if status != http.StatusCreated {
+		t.Fatalf("product card: %d %s", status, body)
+	}
+	var sent struct{ Message Message }
+	if err := json.Unmarshal(body, &sent); err != nil {
+		t.Fatal(err)
+	}
+	card := sent.Message.Attachment
+	if sent.Message.Body != "" || card == nil || card.Kind != "product" || card.ID != 5 || card.Name != "Dress Linen Midi" ||
+		card.Price != 289000 || card.CategoryID == nil || *card.CategoryID != 3 {
+		t.Fatalf("product card = %s", body)
+	}
+
+	// The customer's own order, with a question.
+	status, body = h.customer(t, 7, "POST", "/chat/messages", `{"body":"Sudah sampai mana?","attach":{"kind":"order","id":9}}`)
+	if status != http.StatusCreated || !strings.Contains(string(body), `"attachment":{"kind":"order","id":9,"name":"Dress Linen Midi","status":"shipped","total":319000,"more":1}`) {
+		t.Fatalf("order card: %d %s", status, body)
+	}
+
+	for _, c := range []struct {
+		name, user, body string
+		status           int
+	}{
+		{"someone else's order", "8", `{"body":"x","attach":{"kind":"order","id":9}}`, http.StatusUnprocessableEntity},
+		{"missing product", "7", `{"body":"x","attach":{"kind":"product","id":6}}`, http.StatusUnprocessableEntity},
+		{"catalog down", "7", `{"body":"x","attach":{"kind":"product","id":500}}`, http.StatusBadGateway},
+		{"unknown kind", "7", `{"body":"x","attach":{"kind":"voucher","id":1}}`, http.StatusBadRequest},
+		{"bad id", "7", `{"body":"x","attach":{"kind":"product","id":0}}`, http.StatusBadRequest},
+		{"no text, no card", "7", `{"body":""}`, http.StatusBadRequest},
+	} {
+		user, _ := strconv.ParseInt(c.user, 10, 64)
+		if status, body := h.customer(t, user, "POST", "/chat/messages", c.body); status != c.status {
+			t.Errorf("%s: %d %s, want %d", c.name, status, body, c.status)
+		}
+	}
+
+	// Admins attach products, never orders.
+	if status, body := h.admin(t, "POST", "/internal/conversations/7/messages", `{"body":"","attach":{"kind":"product","id":5},"admin_id":1}`); status != http.StatusCreated {
+		t.Errorf("admin product card: %d %s", status, body)
+	}
+	if status, body := h.admin(t, "POST", "/internal/conversations/7/messages", `{"body":"x","attach":{"kind":"order","id":9},"admin_id":1}`); status != http.StatusBadRequest {
+		t.Errorf("admin order card: %d %s", status, body)
+	}
+
+	// Both sides read the cards back, and the admins' list shows the last one.
+	page := readPage(t)(h.customer(t, 7, "GET", "/chat", ""))
+	if len(page.Messages) != 3 || page.Messages[1].Attachment == nil || page.Messages[1].Attachment.Status != "shipped" ||
+		page.Messages[2].From != "admin" || page.Messages[2].Attachment == nil {
+		t.Fatalf("page = %+v", page)
+	}
+	_, body = h.admin(t, "GET", "/internal/conversations?filter=all", "")
+	if !strings.Contains(string(body), `"last_message":{"id":3,"from":"admin","body":"","attachment":{"kind":"product"`) {
+		t.Errorf("list = %s", body)
+	}
+	// Customer 8, refused above, has no conversation.
+	if page := readPage(t)(h.customer(t, 8, "GET", "/chat", "")); len(page.Messages) != 0 {
+		t.Errorf("customer 8 = %+v", page)
 	}
 }

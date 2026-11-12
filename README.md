@@ -364,19 +364,21 @@ Keeps one conversation per customer with the shop's admins. Customers reach it t
 
 | Request | Does |
 |---|---|
-| `GET /chat?before=&limit=` | The customer's newest messages, oldest first, as `{"messages": [{"id", "from", "body", "created_at"}], "has_more", "read_up_to", "unread"}`. `from` is `customer` or `admin`; `read_up_to` is the newest message the shop has seen |
+| `GET /chat?before=&limit=` | The customer's newest messages, oldest first, as `{"messages": [{"id", "from", "body", "attachment", "created_at"}], "has_more", "read_up_to", "unread"}`. `from` is `customer` or `admin`; `read_up_to` is the newest message the shop has seen |
 | `GET /chat/unread` | How many of the shop's messages the customer hasn't seen |
-| `POST /chat/messages` | Sends `{"body"}`, 1 to 1,000 characters. Answers 429 above 20 a minute |
+| `POST /chat/messages` | Sends `{"body", "attach"}`: up to 1,000 characters, and optionally `{"kind": "product" or "order", "id"}`. The text may be empty with a card. Answers 422 for a product that is gone or an order that isn't the customer's, 502 when catalog or orders don't answer, and 429 above 20 a minute |
 | `POST /chat/read` | Marks every message so far as seen by the customer |
 | `GET /internal/conversations?filter=waiting\|all&limit=&offset=` | Conversations, newest first, with `waiting` (the customer wrote last) and `unread` |
 | `GET /internal/chat/waiting` | How many conversations wait for an answer |
 | `GET /internal/conversations/{user_id}/messages?before=&limit=` | One conversation, as the shop sees it |
-| `POST /internal/conversations/{user_id}/messages` | Answers with `{"body", "admin_id"}`. Admins can't start a conversation |
+| `POST /internal/conversations/{user_id}/messages` | Answers with `{"body", "admin_id", "attach"}`; admins attach only products. Admins can't start a conversation |
 | `POST /internal/conversations/{user_id}/read` | Marks the customer's messages as seen by the shop |
+
+A card (`attachment`) is kept as it was when sent: a product's `name`, `price` and `category_id` from catalog-service, or an order's `status`, `total`, first item `name` and how many `more` items from order-service. Orders are looked up with the customer's own token, so order-service itself refuses another customer's order.
 
 It keeps only user ids, so admin-service adds names and emails. After each message it publishes `{"type": "chat", "message_id"}` to `chat.<user id>` on NATS, so the customer's open chat updates at once; a lost signal only waits for the next poll. Admins get no signal: their page asks again every 5 seconds while open.
 
-It needs `DATABASE_URL`, `USER_URL`, `NATS_URL` and `INTERNAL_TOKEN` (at least 32 characters). The tests need a throwaway PostgreSQL, because they empty the tables:
+It needs `DATABASE_URL`, `USER_URL`, `CATALOG_URL`, `ORDER_URL`, `NATS_URL` and `INTERNAL_TOKEN` (at least 32 characters). The tests need a throwaway PostgreSQL, because they empty the tables:
 
 ```bash
 cd ecommerce/chat-service

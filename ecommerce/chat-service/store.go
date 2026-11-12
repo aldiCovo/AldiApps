@@ -28,10 +28,12 @@ type Store struct {
 
 // Message is one line in a conversation. From is "customer" or "admin".
 type Message struct {
-	ID        int64     `json:"id"`
-	From      string    `json:"from"`
-	Body      string    `json:"body"`
-	CreatedAt time.Time `json:"created_at"`
+	ID   int64  `json:"id"`
+	From string `json:"from"`
+	// Empty when the message is only a card.
+	Body       string      `json:"body"`
+	Attachment *Attachment `json:"attachment,omitempty"`
+	CreatedAt  time.Time   `json:"created_at"`
 }
 
 // Page is part of a conversation, oldest first.
@@ -62,17 +64,17 @@ const (
 	adminSide
 )
 
-const messageColumns = `id, CASE WHEN admin_id IS NULL THEN 'customer' ELSE 'admin' END, body, created_at`
+const messageColumns = `id, CASE WHEN admin_id IS NULL THEN 'customer' ELSE 'admin' END, body, attachment, created_at`
 
 func scanMessage(row pgx.Row) (Message, error) {
 	var m Message
-	err := row.Scan(&m.ID, &m.From, &m.Body, &m.CreatedAt)
+	err := row.Scan(&m.ID, &m.From, &m.Body, &m.Attachment, &m.CreatedAt)
 	return m, err
 }
 
-// Send adds a message. adminID is 0 when the customer writes. Admins can only answer a
+// Send adds a message, with a card when attachment isn't nil. adminID is 0 when the customer writes. Admins can only answer a
 // conversation the customer started, because only the customer's own token proves the account.
-func (s *Store) Send(ctx context.Context, userID, adminID int64, body string) (Message, error) {
+func (s *Store) Send(ctx context.Context, userID, adminID int64, body string, attachment *Attachment) (Message, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return Message{}, err
@@ -104,13 +106,16 @@ func (s *Store) Send(ctx context.Context, userID, adminID int64, body string) (M
 			return Message{}, errTooFast
 		}
 	}
-	var admin any
+	var admin, card any
 	if adminID != 0 {
 		admin = adminID
 	}
+	if attachment != nil {
+		card = attachment
+	}
 	message, err := scanMessage(tx.QueryRow(ctx,
-		"INSERT INTO messages (user_id, admin_id, body) VALUES ($1, $2, $3) RETURNING "+messageColumns,
-		userID, admin, body))
+		"INSERT INTO messages (user_id, admin_id, body, attachment) VALUES ($1, $2, $3, $4) RETURNING "+messageColumns,
+		userID, admin, body, card))
 	if err != nil {
 		return Message{}, err
 	}
@@ -228,7 +233,7 @@ func (s *Store) Conversations(ctx context.Context, waitingOnly bool, limit, offs
 	rows, err := s.pool.Query(ctx,
 		`SELECT c.user_id, NOT c.last_from_admin,
 		        (SELECT count(*) FROM messages u WHERE u.user_id = c.user_id AND u.admin_id IS NULL AND u.id > c.admin_read_id),
-		        m.id, CASE WHEN m.admin_id IS NULL THEN 'customer' ELSE 'admin' END, m.body, m.created_at
+		        m.id, CASE WHEN m.admin_id IS NULL THEN 'customer' ELSE 'admin' END, m.body, m.attachment, m.created_at
 		 FROM conversations c JOIN messages m ON m.id = c.last_message_id
 		 WHERE `+filter+`
 		 ORDER BY c.last_at DESC, c.user_id DESC LIMIT $1 OFFSET $2`,
@@ -238,7 +243,7 @@ func (s *Store) Conversations(ctx context.Context, waitingOnly bool, limit, offs
 	}
 	list, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (Summary, error) {
 		var s Summary
-		err := row.Scan(&s.UserID, &s.Waiting, &s.Unread, &s.LastMessage.ID, &s.LastMessage.From, &s.LastMessage.Body, &s.LastMessage.CreatedAt)
+		err := row.Scan(&s.UserID, &s.Waiting, &s.Unread, &s.LastMessage.ID, &s.LastMessage.From, &s.LastMessage.Body, &s.LastMessage.Attachment, &s.LastMessage.CreatedAt)
 		return s, err
 	})
 	if list == nil {

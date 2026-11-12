@@ -22,20 +22,23 @@ type signaler interface {
 }
 
 type messageInput struct {
-	Body string `json:"body"`
+	Body   string       `json:"body"`
+	Attach *attachInput `json:"attach"`
 }
 
 type adminMessageInput struct {
-	Body string `json:"body"`
+	Body   string       `json:"body"`
+	Attach *attachInput `json:"attach"`
 	// The admin writing, as admin-service checked it.
 	AdminID int64 `json:"admin_id"`
 }
 
 // cleanBody trims the text and keeps line breaks as \n, so both sides show the same thing.
-func cleanBody(body string) (string, error) {
+// The text may be empty only when a card goes with it.
+func cleanBody(body string, withCard bool) (string, error) {
 	body = strings.TrimSpace(strings.ReplaceAll(body, "\r\n", "\n"))
 	switch {
-	case body == "":
+	case body == "" && !withCard:
 		return "", errors.New("body is required")
 	case !utf8.ValidString(body) || strings.ContainsRune(body, 0):
 		return "", errors.New("body must be text")
@@ -63,7 +66,7 @@ func pageArgs(r *http.Request) (before int64, limit int, err error) {
 	return before, limit, nil
 }
 
-func newHandler(store *Store, verifier *Verifier, signals signaler, internalToken string) http.Handler {
+func newHandler(store *Store, verifier *Verifier, signals signaler, cards attacher, internalToken string) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -142,13 +145,53 @@ func newHandler(store *Store, verifier *Verifier, signals signaler, internalToke
 		writeJSON(w, http.StatusOK, page)
 	}
 
-	send := func(w http.ResponseWriter, r *http.Request, userID, adminID int64, body string) {
-		body, err := cleanBody(body)
+	// card builds what in asks to attach. Customers may attach a product or one of their own
+	// orders; admins only a product, since only the customer's token can prove an order is theirs.
+	card := func(w http.ResponseWriter, r *http.Request, in *attachInput, bearer string) (*Attachment, bool) {
+		if in == nil {
+			return nil, true
+		}
+		if in.ID <= 0 {
+			writeError(w, http.StatusBadRequest, "attach.id must be a positive integer")
+			return nil, false
+		}
+		var attachment *Attachment
+		var err error
+		switch {
+		case in.Kind == attachProduct:
+			attachment, err = cards.Product(r.Context(), in.ID)
+		case in.Kind == attachOrder && bearer != "":
+			attachment, err = cards.Order(r.Context(), in.ID, bearer)
+		case in.Kind == attachOrder:
+			writeError(w, http.StatusBadRequest, "only the customer can attach an order")
+			return nil, false
+		default:
+			writeError(w, http.StatusBadRequest, `attach.kind must be "product" or "order"`)
+			return nil, false
+		}
+		switch {
+		case errors.Is(err, errCannotAttach):
+			writeError(w, http.StatusUnprocessableEntity, err.Error())
+			return nil, false
+		case err != nil:
+			slog.Error("building a card failed", "error", err)
+			writeError(w, http.StatusBadGateway, errLookupFailed.Error())
+			return nil, false
+		}
+		return attachment, true
+	}
+
+	send := func(w http.ResponseWriter, r *http.Request, userID, adminID int64, body string, in *attachInput, bearer string) {
+		body, err := cleanBody(body, in != nil)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		message, err := store.Send(r.Context(), userID, adminID, body)
+		attachment, ok := card(w, r, in, bearer)
+		if !ok {
+			return
+		}
+		message, err := store.Send(r.Context(), userID, adminID, body, attachment)
 		switch {
 		case errors.Is(err, errNotFound):
 			writeError(w, http.StatusNotFound, err.Error())
@@ -181,7 +224,8 @@ func newHandler(store *Store, verifier *Verifier, signals signaler, internalToke
 	mux.HandleFunc("POST /chat/messages", authenticated(func(w http.ResponseWriter, r *http.Request, userID int64) {
 		var in messageInput
 		if readJSON(w, r, &in) {
-			send(w, r, userID, 0, in.Body)
+			bearer, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+			send(w, r, userID, 0, in.Body, in.Attach, bearer)
 		}
 	}))
 	mux.HandleFunc("POST /chat/read", authenticated(func(w http.ResponseWriter, r *http.Request, userID int64) {
@@ -252,7 +296,7 @@ func newHandler(store *Store, verifier *Verifier, signals signaler, internalToke
 			writeError(w, http.StatusBadRequest, "admin_id is required")
 			return
 		}
-		send(w, r, userID, in.AdminID, in.Body)
+		send(w, r, userID, in.AdminID, in.Body, in.Attach, "")
 	}))
 	mux.HandleFunc("POST /internal/conversations/{id}/read", internal(func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := customerID(w, r)

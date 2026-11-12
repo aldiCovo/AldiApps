@@ -820,6 +820,7 @@ async function openProduct(id) {
     $("order-error").hidden = true;
     $("cart-note").hidden = true;
     shownProductId = product.id;
+    chatSawProduct(product);
     showProductRating(product.id);
     loadReviews(product.id, 0);
     markFavorites();
@@ -1765,6 +1766,12 @@ function orderDetail(order) {
     print.addEventListener("click", () => window.print());
     box.append(print);
   }
+  const ask = el("button", "ask-chat", "Tanya soal pesanan ini");
+  ask.type = "button";
+  ask.dataset.key = `ask-${order.id}`;
+  ask.prepend(chatIcon());
+  ask.addEventListener("click", () => askAbout(orderAttachment(order)));
+  box.append(ask);
   orderActions(order, box);
   return box;
 }

@@ -140,7 +140,17 @@
               <button id="chat-older" class="link chat-older" type="button" hidden>Muat pesan sebelumnya</button>
               <div id="chat-lines" class="chat-lines"></div>
             </div>
+            <div id="chat-picker" class="chat-picker" hidden>
+              <div class="chat-picker-head">
+                <label for="chat-pick-search">Lampirkan produk</label>
+                <button id="chat-picker-close" class="link" type="button">Tutup</button>
+              </div>
+              <input id="chat-pick-search" type="search" placeholder="Cari nama produk…" autocomplete="off">
+              <div id="chat-pick-list" class="chat-pick-list"></div>
+            </div>
+            <div id="chat-pending" class="chat-pending" hidden></div>
             <form id="chat-form" class="chat-form" novalidate>
+              <button id="chat-attach" class="secondary chat-attach" type="button" aria-label="Lampirkan produk" aria-controls="chat-picker" aria-expanded="false">+</button>
               <label class="visually-hidden" for="chat-input">Balasan</label>
               <textarea id="chat-input" rows="2" maxlength="1000" placeholder="Tulis balasan… (Enter kirim, Shift+Enter baris baru)"></textarea>
               <button id="chat-send" class="primary" type="submit">Kirim</button>

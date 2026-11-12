@@ -48,6 +48,15 @@ func TestChat(t *testing.T) {
 	if got := f.chatHits[len(f.chatHits)-1]; !strings.Contains(got, `"admin_id":`) || !strings.Contains(got, `"body":"Siap"`) {
 		t.Fatalf("send forwarded: %q", got)
 	}
+	if status, _ := do(t, server, "POST", "/chat/conversations/2/messages", "admin-token", `{"body":"","attach":{"kind":"product","id":5}}`); status != http.StatusCreated {
+		t.Fatalf("send card: status %d", status)
+	}
+	if got := f.chatHits[len(f.chatHits)-1]; !strings.Contains(got, `"attach":{"kind":"product","id":5}`) || strings.Contains(got, `"attach":null`) {
+		t.Fatalf("card forwarded: %q", got)
+	}
+	if status, _ := do(t, server, "POST", "/chat/conversations/2/messages", "admin-token", `{"body":"Siap lagi"}`); status != http.StatusCreated || strings.Contains(f.chatHits[len(f.chatHits)-1], "attach") {
+		t.Fatalf("no card forwarded: %q", f.chatHits[len(f.chatHits)-1])
+	}
 	if status, _ := do(t, server, "POST", "/chat/conversations/2/messages", "admin-token", `{"body":"x","admin_id":99}`); status != http.StatusBadRequest {
 		t.Fatalf("admin_id from the page: status %d", status)
 	}

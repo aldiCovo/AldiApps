@@ -279,3 +279,35 @@ func TestEmailShowsTheVoucherDiscount(t *testing.T) {
 		t.Fatalf("an order without a voucher mentions one: %q", got)
 	}
 }
+
+func TestRepliesGoToTheShopMailbox(t *testing.T) {
+	m, err := newSMTPMailer("mail:25", "Prastika Fashion <no-reply@example.com>")
+	if err != nil {
+		t.Fatal(err)
+	}
+	email := Email{To: User{Name: "Budi", Email: "budi@example.com"}, OrderID: 1, Kind: "paid", Subject: "s", Body: "b"}
+	raw, err := m.render(email)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "Reply-To") {
+		t.Fatal("Reply-To without MAIL_REPLY_TO")
+	}
+	if err := m.withReplyTo("not an address"); err == nil {
+		t.Fatal("a bad Reply-To was accepted")
+	}
+	if err := m.withReplyTo("Prastika Fashion <toko@example.com>"); err != nil {
+		t.Fatal(err)
+	}
+	raw, err = m.render(email)
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg, err := mail.ReadMessage(strings.NewReader(string(raw)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := msg.Header.Get("Reply-To"); got != `"Prastika Fashion" <toko@example.com>` {
+		t.Fatalf("Reply-To = %q", got)
+	}
+}

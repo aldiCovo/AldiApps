@@ -761,12 +761,23 @@ body.on-account main > :not(#akun) { display: none !important; }
 .acc-review-body { margin-top: 4px; font-size: .92rem; overflow-wrap: anywhere; }
 .account-vouchers { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 16px; }
 .voucher-card { display: flex; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; }
-.voucher-stub { display: grid; place-items: center; flex: none; width: 96px; padding: 12px; border-right: 2px dashed rgb(164 90 102 / .3); background: rgb(164 90 102 / .1); color: var(--accent-dark); font: 600 1.6rem/1.05 var(--serif); text-align: center; overflow-wrap: anywhere; }
+.voucher-stub { display: grid; place-items: center; flex: none; width: 96px; padding: 12px; border-right: 2px dashed rgb(164 90 102 / .3); background: rgb(164 90 102 / .1); color: var(--accent-dark); font: 600 1.4rem/1.05 var(--serif); text-align: center; white-space: nowrap; }
 .voucher-body { display: grid; flex: 1; gap: 4px; min-width: 0; padding: 14px 16px; }
 .voucher-title { font-weight: 600; }
 .voucher-rule { color: var(--muted); font-size: .84rem; }
 .voucher-code-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
 .voucher-code { padding: 4px 10px; border-radius: 6px; background: var(--sand); font-weight: 600; letter-spacing: .06em; }
+.voucher-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.voucher-badge { padding: 2px 10px; border-radius: 999px; background: var(--sand); color: var(--muted); font-size: .74rem; font-weight: 600; }
+.voucher-badge.for-you { background: var(--accent); color: #fff; }
+.voucher-state { color: var(--muted); font-size: .8rem; font-weight: 600; }
+.voucher-actions { display: flex; align-items: center; gap: 14px; }
+.voucher-shop { color: var(--accent-dark); font-weight: 600; }
+.voucher-card.is-past { background: var(--sand); }
+.voucher-card.is-past .voucher-stub { background: rgb(43 36 32 / .06); border-right-color: rgb(43 36 32 / .15); color: var(--muted); }
+.voucher-card.is-past .voucher-title, .voucher-card.is-past .voucher-code { color: var(--muted); }
+.voucher-card.is-past .voucher-badge:not(.for-you) { background: rgb(255 255 255 / .7); }
+.voucher-card.is-past .voucher-code { background: rgb(255 255 255 / .6); text-decoration: line-through; }
 .bio-layout { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 32px; margin-top: 16px; }
 .bio-photo { display: grid; justify-items: center; gap: 10px; flex: 0 0 220px; padding: 20px; border: 1px solid var(--line); border-radius: 16px; text-align: center; }
 .bio-photo .secondary { width: 100%; }
@@ -838,6 +849,6 @@ fieldset.address-label input { flex: 1 1 160px; width: auto; }
   .account-favs { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 12px; }
   .account-picks { padding: 20px 16px; }
   .account-picks .picks-track { margin-inline: -16px; padding-inline: 16px; scroll-padding-inline: 16px; }
-  .voucher-stub { width: 80px; font-size: 1.3rem; }
+  .voucher-stub { width: 80px; padding: 8px; font-size: 1.15rem; }
 }
 .buy-again svg { width: 16px; height: 16px; margin: 0 8px 0 0; }

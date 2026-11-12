@@ -102,7 +102,7 @@ func newTestServer(t *testing.T) (*httptest.Server, *fakes) {
 		f.mu.Unlock()
 		switch {
 		case r.URL.Path == "/internal/vouchers" && r.Method == http.MethodGet:
-			io.WriteString(w, `{"vouchers":[{"id":1,"code":"HEMAT10","used":3}]}`)
+			io.WriteString(w, `{"vouchers":[{"id":1,"code":"HEMAT10","used":3,"user_id":null},{"id":2,"code":"KHUSUS","audience":"user","user_id":2,"used":0}]}`)
 		case r.URL.Path == "/internal/vouchers" && r.Method == http.MethodPost:
 			if strings.Contains(string(body), `"code":"TAKEN"`) {
 				w.WriteHeader(http.StatusConflict)

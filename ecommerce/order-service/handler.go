@@ -156,6 +156,17 @@ func newHandler(store *Store, verifier *Verifier, catalog *Catalog, internalToke
 		writeJSON(w, http.StatusCreated, order)
 	}))
 
+	// The vouchers this customer can see on their account page.
+	mux.HandleFunc("GET /vouchers/mine", authenticated(func(w http.ResponseWriter, r *http.Request, userID int64) {
+		list, err := store.MyVouchers(r.Context(), userID)
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		writeJSON(w, http.StatusOK, map[string]any{"vouchers": list})
+	}))
+
 	// What a voucher would take off this checkout. The items are priced from the catalog, as
 	// the order will be, and the province and courier price the shipping.
 	mux.HandleFunc("POST /vouchers/check", authenticated(func(w http.ResponseWriter, r *http.Request, userID int64) {

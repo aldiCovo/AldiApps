@@ -56,8 +56,11 @@ const account = {
   page: 1,
   query: "",
   reviewTab: "wait",
-  // undefined until read; null when the shop has none.
-  voucher: undefined,
+  // The vouchers this customer can see, null until read.
+  vouchers: null,
+  vouchersRequest: null,
+  vouchersFailed: false,
+  voucherTab: "usable",
   address: undefined,
   provinces: false,
   favRequest: 0,
@@ -131,12 +134,33 @@ function loadAccountOrders(force = false) {
   return request;
 }
 
-function loadVoucherOnce() {
-  if (account.voucher !== undefined) return Promise.resolve(account.voucher);
-  return api("/vouchers/banner").then(({ voucher }) => {
-    account.voucher = voucher || null;
-    return account.voucher;
-  });
+// Reads the customer's vouchers again; calls made meanwhile share the one request.
+function loadAccountVouchers() {
+  if (account.vouchersRequest) return account.vouchersRequest;
+  const userId = account.userId;
+  const request = api("/vouchers/mine")
+    .then(({ vouchers }) => {
+      if (account.userId !== userId) return account.vouchers;
+      account.vouchers = vouchers || [];
+      account.vouchersFailed = false;
+      return account.vouchers;
+    }, (error) => {
+      if (account.userId === userId) account.vouchersFailed = true;
+      throw error;
+    })
+    .finally(() => {
+      if (account.vouchersRequest === request) account.vouchersRequest = null;
+    });
+  account.vouchersRequest = request;
+  return request;
+}
+
+const usableVouchers = () => (account.vouchers || []).filter((voucher) => voucher.state === "usable");
+
+// The one beside the menu: a voucher just for this customer first, then the soonest to end.
+function promoVoucher() {
+  const usable = usableVouchers();
+  return usable.find((voucher) => voucher.for_you) || usable[0] || null;
 }
 
 // "Menunggu bayar", "Dikemas", "Dikirim" and "Sudah sampai", each with how many orders wait there.
@@ -272,6 +296,9 @@ function accountChanged(user) {
     account.ordersAt = 0;
     account.addresses = null;
     account.addressCountAsked = false;
+    account.vouchers = null;
+    account.vouchersFailed = false;
+    account.voucherTab = "usable";
     account.group = "semua";
     account.page = 1;
   }
@@ -400,17 +427,25 @@ function refreshSide() {
       setNavCount("alamat", account.addresses.addresses.length);
     }, () => {});
   }
-  loadVoucherOnce().then((voucher) => {
-    setNavCount("voucher", voucher ? 1 : 0);
-    renderPromo(voucher);
-  }, () => {});
+  const drawVouchers = () => {
+    if (!account.vouchers) return;
+    setNavCount("voucher", usableVouchers().length);
+    renderPromo(promoVoucher());
+  };
+  drawVouchers();
+  loadAccountVouchers().then(() => {
+    drawVouchers();
+    if (account.section === "voucher") renderVoucherPanel();
+  }, () => {
+    if (account.section === "voucher") renderVoucherPanel();
+  });
 }
 
 function showSection(section) {
   if (section === "pesanan") renderOrdersPanel();
   if (section === "ulasan") renderReviewsPanel();
   if (section === "favorit") loadAccountFavorites();
-  if (section === "voucher") loadVoucherPanel();
+  if (section === "voucher") renderVoucherPanel();
   if (section === "alamat") loadAddress();
   if (section === "biodata") fillBioForm();
   if (section === "keamanan") {
@@ -630,39 +665,78 @@ function voucherTerms(voucher) {
   return parts.join(" · ");
 }
 
+// What happened to a voucher that can no longer be used.
+const pastVoucherText = {
+  used: "Sudah dipakai",
+  used_up: "Kuota habis",
+  ended: "Berakhir",
+};
+
 function voucherCard(voucher) {
-  const card = el("article", "voucher-card");
+  const usable = voucher.state === "usable";
+  const card = el("article", usable ? "voucher-card" : "voucher-card is-past");
   const big = voucher.kind === "percent" ? `${voucher.value}%` : voucher.kind === "amount" ? `Rp${Math.round(voucher.value / 1000)}rb` : "Ongkir";
   const stub = el("span", "voucher-stub", big);
   stub.setAttribute("aria-hidden", "true");
   const body = el("div", "voucher-body");
+  const head = el("p", "voucher-head");
+  head.append(el("span", voucher.for_you ? "voucher-badge for-you" : "voucher-badge", voucher.for_you ? "Khusus kamu" : "Untuk semua"));
+  if (!usable) head.append(el("span", "voucher-state", pastVoucherText[voucher.state] || "Tidak berlaku"));
+  body.append(head);
   body.append(el("p", "voucher-title", voucher.description || voucherSummary(voucher)));
   if (voucher.description) body.append(el("p", "voucher-rule", voucherSummary(voucher)));
-  const terms = voucherTerms(voucher);
-  if (terms) body.append(el("p", "voucher-rule", terms));
+  if (voucher.min_subtotal > 0) body.append(el("p", "voucher-rule", `Min. belanja ${rupiah.format(voucher.min_subtotal)}`));
+  const ends = shortDate.format(new Date(voucher.ends_at));
+  if (usable) {
+    const left = voucher.uses_left > 1 ? `Bisa dipakai ${voucher.uses_left}x lagi · ` : "";
+    body.append(el("p", "voucher-rule", `${left}Berlaku sampai ${ends}`));
+  } else if (voucher.state === "ended") {
+    body.append(el("p", "voucher-rule", `Berlaku sampai ${ends}`));
+  }
+  if (!usable && voucher.last_order_id > 0) {
+    const used = el("p", "voucher-rule");
+    const link = el("button", "link", `pesanan #${voucher.last_order_id}`);
+    link.type = "button";
+    link.addEventListener("click", () => openOrderDetail(voucher.last_order_id));
+    used.append(document.createTextNode("Dipakai di "), link);
+    body.append(used);
+  }
   const row = el("div", "voucher-code-row");
-  const copy = el("button", "link", "Salin kode");
-  copy.type = "button";
-  copy.setAttribute("aria-label", `Salin kode ${voucher.code}`);
-  copy.addEventListener("click", () => copyCode(copy, voucher.code));
-  row.append(el("code", "voucher-code", voucher.code), copy);
+  row.append(el("code", "voucher-code", voucher.code));
+  if (usable) {
+    const actions = el("span", "voucher-actions");
+    const copy = el("button", "link", "Salin kode");
+    copy.type = "button";
+    copy.setAttribute("aria-label", `Salin kode ${voucher.code}`);
+    copy.addEventListener("click", () => copyCode(copy, voucher.code));
+    const shop = el("a", "voucher-shop", "Belanja");
+    shop.href = "#";
+    actions.append(copy, shop);
+    row.append(actions);
+  }
   body.append(row);
   card.append(stub, body);
   return card;
 }
 
-async function loadVoucherPanel() {
+function renderVoucherPanel() {
   const status = $("akun-voucher-status");
-  if (account.voucher === undefined) status.textContent = "Memuat voucher…";
-  let voucher;
-  try {
-    voucher = await loadVoucherOnce();
-  } catch {
-    status.textContent = "Voucher belum bisa dimuat. Coba lagi sebentar lagi.";
+  if (!account.vouchers) {
+    $("akun-voucher-list").replaceChildren();
+    status.textContent = account.vouchersFailed ? "Voucher belum bisa dimuat. Coba lagi sebentar lagi." : "Memuat voucher…";
     return;
   }
-  $("akun-voucher-list").replaceChildren(...(voucher ? [voucherCard(voucher)] : []));
-  status.textContent = voucher ? "" : "Belum ada voucher yang bisa dipakai saat ini.";
+  const usable = usableVouchers();
+  const past = account.vouchers.filter((voucher) => voucher.state !== "usable");
+  $("akun-voucher-usable").textContent = `Bisa dipakai (${usable.length})`;
+  $("akun-voucher-past").textContent = `Sudah dipakai & berakhir (${past.length})`;
+  $("akun-voucher-usable").setAttribute("aria-pressed", String(account.voucherTab === "usable"));
+  $("akun-voucher-past").setAttribute("aria-pressed", String(account.voucherTab === "past"));
+  const shown = account.voucherTab === "usable" ? usable : past;
+  $("akun-voucher-list").replaceChildren(...shown.map(voucherCard));
+  status.textContent = shown.length > 0 ? ""
+    : account.voucherTab === "usable" ? "Belum ada voucher yang bisa kamu pakai saat ini."
+    : "Belum ada voucher yang sudah kamu pakai atau berakhir dalam 30 hari terakhir.";
 }
 
 // The voucher card beside the menu, on a category photo once the photos are known.
@@ -1100,6 +1174,8 @@ $("akun-order-search").addEventListener("input", (event) => {
 });
 $("akun-review-wait").addEventListener("click", () => { account.reviewTab = "wait"; renderReviewsPanel(); });
 $("akun-review-done").addEventListener("click", () => { account.reviewTab = "done"; renderReviewsPanel(); });
+$("akun-voucher-usable").addEventListener("click", () => { account.voucherTab = "usable"; renderVoucherPanel(); });
+$("akun-voucher-past").addEventListener("click", () => { account.voucherTab = "past"; renderVoucherPanel(); });
 $("akun-address-add").addEventListener("click", () => openAddressDialog(null));
 for (const chip of document.querySelectorAll(".address-label [data-label]")) {
   chip.addEventListener("click", () => {
@@ -1122,7 +1198,8 @@ $("akun-address-dialog").addEventListener("close", () => {
 $("akun-address-form").addEventListener("submit", submitAccountAddress);
 $("akun-security-send").addEventListener("click", sendPasswordLink);
 $("akun-promo-copy").addEventListener("click", () => {
-  if (account.voucher) copyCode($("akun-promo-copy"), account.voucher.code);
+  const voucher = promoVoucher();
+  if (voucher) copyCode($("akun-promo-copy"), voucher.code);
 });
 // Paying, receiving or reviewing in the order dialog changes the orders shown here.
 $("orders-dialog").addEventListener("close", () => {

@@ -276,7 +276,11 @@
 
           <section id="akun-voucher" class="account-panel" aria-labelledby="akun-voucher-title" hidden>
             <h2 id="akun-voucher-title" class="panel-title">Voucher saya</h2>
-            <p class="panel-sub">Voucher yang bisa kamu pakai saat checkout.</p>
+            <p class="panel-sub">Salin kodenya, lalu tempel di kolom voucher saat checkout.</p>
+            <div class="chips account-tabs" role="group" aria-label="Jenis voucher">
+              <button id="akun-voucher-usable" class="chip" type="button" aria-pressed="true">Bisa dipakai</button>
+              <button id="akun-voucher-past" class="chip" type="button" aria-pressed="false">Sudah dipakai &amp; berakhir</button>
+            </div>
             <p id="akun-voucher-status" class="status" role="status" aria-live="polite"></p>
             <div id="akun-voucher-list" class="account-vouchers"></div>
           </section>

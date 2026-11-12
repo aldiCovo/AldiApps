@@ -461,7 +461,6 @@ function primaryAction(order) {
   if (order.status === "awaiting_payment") return "Bayar sekarang";
   if (order.status === "arrived") return "Pesanan diterima";
   if (order.status === "completed" && order.items.some((item) => !(order.reviews && order.reviews[item.product_id]))) return "Tulis ulasan";
-  if (order.status === "rejected") return "Pesan lagi";
   return "";
 }
 
@@ -483,6 +482,14 @@ function accountOrderCard(order) {
   const foot = el("div", "acc-order-foot");
   foot.append(linkButton("Lihat detail", `acc-detail-${order.id}`, () => openOrderDetail(order.id)));
   const action = primaryAction(order);
+  // Beli lagi is the main button only when there is nothing else to do with the order.
+  if (canBuyAgain(order)) {
+    foot.append(buyAgainButton(order, action ? "secondary small" : "primary small", (text) => {
+      const status = $("akun-order-status");
+      status.textContent = text;
+      if (text) status.scrollIntoView({ block: "nearest" });
+    }));
+  }
   if (action) {
     const button = el("button", "primary small", action);
     button.type = "button";

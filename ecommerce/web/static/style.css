@@ -716,6 +716,11 @@ body.on-account main > :not(#akun) { display: none !important; }
 .stats-grid dt { color: var(--muted); font-size: .76rem; }
 .stats-grid dd { margin: 0; font: 600 1.75rem/1 var(--serif); }
 .stats-since { margin-top: 12px; color: var(--muted); font-size: .84rem; }
+.account-help h2 { margin-bottom: 6px; font: 600 .95rem/1.3 var(--sans); }
+.account-help p { color: var(--muted); font-size: .88rem; }
+.help-whatsapp { display: inline-flex; align-items: center; justify-content: center; width: 100%; margin-top: 12px; text-decoration: none; }
+.help-number { margin-top: 8px; text-align: center; font-size: .8rem; }
+.footer-phone { color: var(--muted); font-size: .9rem; }
 .account-promo { position: relative; display: flex; align-items: flex-end; min-height: 300px; overflow: hidden; border-radius: 16px; background: var(--sand); }
 .promo-art { position: absolute; inset: 0; }
 .promo-photo { width: 100%; height: 100%; object-fit: cover; object-position: center top; }

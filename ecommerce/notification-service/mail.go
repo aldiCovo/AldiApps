@@ -40,12 +40,24 @@ type SMTPMailer struct {
 	from mail.Address
 	// Empty for Mailpit.
 	username, password string
+	// Where customers' replies go, since the sender takes none. Nil leaves the header out.
+	replyTo *mail.Address
 }
 
 // withLogin makes the mailer switch to TLS and log in before sending.
 func (m *SMTPMailer) withLogin(username, password string) *SMTPMailer {
 	m.username, m.password = username, password
 	return m
+}
+
+// withReplyTo sends customers' replies to the shop's own mailbox.
+func (m *SMTPMailer) withReplyTo(address string) error {
+	parsed, err := mail.ParseAddress(address)
+	if err != nil {
+		return fmt.Errorf("MAIL_REPLY_TO: %w", err)
+	}
+	m.replyTo = parsed
+	return nil
 }
 
 func newSMTPMailer(addr, from string) (*SMTPMailer, error) {
@@ -117,8 +129,7 @@ func (m *SMTPMailer) Send(email Email) error {
 func (m *SMTPMailer) render(email Email) ([]byte, error) {
 	to := mail.Address{Name: email.To.Name, Address: email.To.Email}
 	domain := m.from.Address[strings.LastIndex(m.from.Address, "@")+1:]
-	var message bytes.Buffer
-	for _, header := range [][2]string{
+	headers := [][2]string{
 		{"From", m.from.String()},
 		{"To", to.String()},
 		{"Subject", encodeSubject(email.Subject)},
@@ -128,7 +139,12 @@ func (m *SMTPMailer) render(email Email) ([]byte, error) {
 		{"MIME-Version", "1.0"},
 		{"Content-Type", `text/plain; charset="utf-8"`},
 		{"Content-Transfer-Encoding", "quoted-printable"},
-	} {
+	}
+	if m.replyTo != nil {
+		headers = append(headers, [2]string{"Reply-To", m.replyTo.String()})
+	}
+	var message bytes.Buffer
+	for _, header := range headers {
 		fmt.Fprintf(&message, "%s: %s\r\n", header[0], header[1])
 	}
 	message.WriteString("\r\n")

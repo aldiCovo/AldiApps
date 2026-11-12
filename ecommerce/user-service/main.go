@@ -63,6 +63,11 @@ func run() error {
 	if username := os.Getenv("SMTP_USERNAME"); username != "" {
 		mailer.withLogin(username, os.Getenv("SMTP_PASSWORD"))
 	}
+	if replyTo := os.Getenv("MAIL_REPLY_TO"); replyTo != "" {
+		if err := mailer.withReplyTo(replyTo); err != nil {
+			return err
+		}
+	}
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"

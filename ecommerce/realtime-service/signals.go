@@ -9,7 +9,9 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
-const signalSubjects = "orders.*"
+// Order changes from order-service and new chat messages from chat-service, each on the
+// subject of the customer they belong to.
+var signalSubjects = []string{"orders.*", "chat.*"}
 
 // listen passes order signals to the hub. Core NATS keeps nothing, so a signal sent while this
 // is disconnected is lost, and browsers catch up through their slower polling.
@@ -34,8 +36,8 @@ func listen(url string, hub *Hub) (*nats.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err := conn.Subscribe(signalSubjects, func(msg *nats.Msg) {
-		id, found := strings.CutPrefix(msg.Subject, "orders.")
+	deliver := func(msg *nats.Msg) {
+		_, id, found := strings.Cut(msg.Subject, ".")
 		if !found {
 			return
 		}
@@ -45,9 +47,12 @@ func listen(url string, hub *Hub) (*nats.Conn, error) {
 			return
 		}
 		hub.Deliver(userID, msg.Data)
-	}); err != nil {
-		conn.Close()
-		return nil, err
+	}
+	for _, subject := range signalSubjects {
+		if _, err := conn.Subscribe(subject, deliver); err != nil {
+			conn.Close()
+			return nil, err
+		}
 	}
 	return conn, nil
 }

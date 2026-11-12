@@ -100,7 +100,7 @@ func newTestGateway(t *testing.T) (*httptest.Server, *fakeServices) {
 		}
 		io.WriteString(w, `{"ok":true}`)
 	}
-	server := httptest.NewServer(newHandler(f.start(t, "catalog", ok), f.start(t, "search", ok), f.start(t, "user", users), f.start(t, "order", orders), f.start(t, "realtime", ok), f.start(t, "cart", orders), t.TempDir()))
+	server := httptest.NewServer(newHandler(f.start(t, "catalog", ok), f.start(t, "search", ok), f.start(t, "user", users), f.start(t, "order", orders), f.start(t, "realtime", ok), f.start(t, "cart", orders), f.start(t, "chat", orders), t.TempDir()))
 	t.Cleanup(server.Close)
 	return server, f
 }
@@ -363,7 +363,7 @@ func TestDownServiceAnswers502WithoutDetails(t *testing.T) {
 	down := httptest.NewServer(http.NotFoundHandler())
 	url := down.URL
 	down.Close()
-	server := httptest.NewServer(newHandler(url, url, url, url, url, url, t.TempDir()))
+	server := httptest.NewServer(newHandler(url, url, url, url, url, url, url, t.TempDir()))
 	defer server.Close()
 	for _, c := range []struct{ method, path string }{{"GET", "/api/search"}, {"POST", "/api/login"}} {
 		resp, body := do(t, c.method, server.URL+c.path, "application/json", "{}")
@@ -457,7 +457,7 @@ func TestCategoryPhotos(t *testing.T) {
 	if err := os.Symlink(filepath.Join(photos, "secret.jpg"), filepath.Join(dir, "link.jpg")); err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewServer(newHandler("http://127.0.0.1:1", "", "", "", "http://127.0.0.1:1", "", photos))
+	server := httptest.NewServer(newHandler("http://127.0.0.1:1", "", "", "", "http://127.0.0.1:1", "", "", photos))
 	t.Cleanup(server.Close)
 
 	resp, body := do(t, "GET", server.URL+"/api/category-photos", "", "")
@@ -481,7 +481,7 @@ func TestCategoryPhotos(t *testing.T) {
 			t.Fatalf("%s: status %d, body %q", path, resp.StatusCode, body)
 		}
 	}
-	empty := httptest.NewServer(newHandler("http://127.0.0.1:1", "", "", "", "http://127.0.0.1:1", "", t.TempDir()))
+	empty := httptest.NewServer(newHandler("http://127.0.0.1:1", "", "", "", "http://127.0.0.1:1", "", "", t.TempDir()))
 	t.Cleanup(empty.Close)
 	if resp, body := do(t, "GET", empty.URL+"/api/category-photos", "", ""); resp.StatusCode != http.StatusOK || strings.TrimSpace(body) != "{}" {
 		t.Fatalf("no folder: status %d, body %q", resp.StatusCode, body)
@@ -495,6 +495,10 @@ func TestOrdersUseTheSessionCookie(t *testing.T) {
 		{"POST", "/api/orders", "order POST /orders"},
 		{"POST", "/api/vouchers/check", "order POST /vouchers/check"},
 		{"GET", "/api/vouchers/mine", "order GET /vouchers/mine"},
+		{"GET", "/api/chat?before=9&limit=20", "chat GET /chat?before=9&limit=20"},
+		{"GET", "/api/chat/unread", "chat GET /chat/unread"},
+		{"POST", "/api/chat/messages", "chat POST /chat/messages"},
+		{"POST", "/api/chat/read", "chat POST /chat/read"},
 		{"GET", "/api/orders?limit=5", "order GET /orders?limit=5"},
 		{"GET", "/api/orders/12", "order GET /orders/12"},
 		{"POST", "/api/orders/12/pay", "order POST /orders/12/pay"},
@@ -520,7 +524,7 @@ func TestOrdersUseTheSessionCookie(t *testing.T) {
 
 func TestOrdersWithoutValidSession(t *testing.T) {
 	server, f := newTestGateway(t)
-	for _, c := range []struct{ method, path string }{{"POST", "/api/orders"}, {"GET", "/api/orders"}, {"GET", "/api/vouchers/mine"}, {"GET", "/api/orders/1"}, {"POST", "/api/orders/1/pay"}, {"POST", "/api/orders/1/cancel"}, {"POST", "/api/orders/1/receive"}, {"PUT", "/api/orders/1/reviews/10"}} {
+	for _, c := range []struct{ method, path string }{{"POST", "/api/orders"}, {"GET", "/api/orders"}, {"GET", "/api/vouchers/mine"}, {"GET", "/api/chat"}, {"POST", "/api/chat/messages"}, {"GET", "/api/orders/1"}, {"POST", "/api/orders/1/pay"}, {"POST", "/api/orders/1/cancel"}, {"POST", "/api/orders/1/receive"}, {"PUT", "/api/orders/1/reviews/10"}} {
 		before := len(f.seen())
 		resp, _ := do(t, c.method, server.URL+c.path, "application/json", "{}")
 		if resp.StatusCode != http.StatusUnauthorized || len(f.seen()) != before {
@@ -587,7 +591,7 @@ func TestProductPhotos(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(photos, "products", "7"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewServer(newHandler("http://127.0.0.1:1", "", "", "", "http://127.0.0.1:1", "", photos))
+	server := httptest.NewServer(newHandler("http://127.0.0.1:1", "", "", "", "http://127.0.0.1:1", "", "", photos))
 	t.Cleanup(server.Close)
 
 	resp, body := do(t, "GET", server.URL+"/api/product-photos", "", "")
@@ -619,7 +623,7 @@ func TestProductPhotos(t *testing.T) {
 			t.Fatalf("%s: status %d, body %q", path, resp.StatusCode, body)
 		}
 	}
-	empty := httptest.NewServer(newHandler("http://127.0.0.1:1", "", "", "", "http://127.0.0.1:1", "", t.TempDir()))
+	empty := httptest.NewServer(newHandler("http://127.0.0.1:1", "", "", "", "http://127.0.0.1:1", "", "", t.TempDir()))
 	t.Cleanup(empty.Close)
 	if resp, body := do(t, "GET", empty.URL+"/api/product-photos", "", ""); resp.StatusCode != http.StatusOK || strings.TrimSpace(body) != "{}" {
 		t.Fatalf("no folder: status %d, body %q", resp.StatusCode, body)

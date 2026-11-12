@@ -51,6 +51,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	chatURL, err := requireEnv("CHAT_URL")
+	if err != nil {
+		return err
+	}
 	cartURL, err := requireEnv("CART_URL")
 	if err != nil {
 		return err
@@ -65,7 +69,7 @@ func run() error {
 
 	server := &http.Server{
 		Addr:              ":" + port,
-		Handler:           newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, os.Getenv("PHOTOS_DIR")),
+		Handler:           newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, chatURL, os.Getenv("PHOTOS_DIR")),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      20 * time.Second,

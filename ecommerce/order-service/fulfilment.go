@@ -87,11 +87,13 @@ func withItems(ctx context.Context, q querier, list []AdminOrder) error {
 	return nil
 }
 
-// AdminList lists every customer's orders, newest first, optionally with one status.
-func (s *Store) AdminList(ctx context.Context, status string, limit, offset int) ([]AdminOrder, error) {
+// AdminList lists every customer's orders, newest first, optionally only with one status
+// or of one customer (userID 0 for everyone).
+func (s *Store) AdminList(ctx context.Context, status string, userID int64, limit, offset int) ([]AdminOrder, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT `+adminColumns+` FROM orders WHERE $1 = '' OR status = $1 ORDER BY id DESC LIMIT $2 OFFSET $3`,
-		status, limit, offset)
+		`SELECT `+adminColumns+` FROM orders WHERE ($1 = '' OR status = $1) AND ($4 = 0 OR user_id = $4)
+		 ORDER BY id DESC LIMIT $2 OFFSET $3`,
+		status, limit, offset, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +300,14 @@ func addInternalRoutes(mux *http.ServeMux, store *Store, internalToken string) {
 				return
 			}
 		}
-		list, err := store.AdminList(r.Context(), status, limit, offset)
+		var userID int64
+		if value := query.Get("user_id"); value != "" {
+			if userID, err = strconv.ParseInt(value, 10, 64); err != nil || userID < 1 {
+				writeError(w, http.StatusBadRequest, "user_id must be a positive integer")
+				return
+			}
+		}
+		list, err := store.AdminList(r.Context(), status, userID, limit, offset)
 		if err != nil {
 			writeStoreError(w, err)
 			return

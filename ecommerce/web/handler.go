@@ -42,18 +42,19 @@ var (
 const productPhotoSlots = 4
 
 type gateway struct {
-	catalogURL, searchURL, userURL, orderURL, cartURL string
+	catalogURL, searchURL, userURL, orderURL, cartURL, chatURL string
 	client                                            *http.Client
 	events                                            http.Handler
 }
 
-func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, photosDir string) http.Handler {
+func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, chatURL, photosDir string) http.Handler {
 	g := &gateway{
 		catalogURL: catalogURL,
 		searchURL:  searchURL,
 		userURL:    userURL,
 		orderURL:   orderURL,
 		cartURL:    cartURL,
+		chatURL:    chatURL,
 		client: &http.Client{
 			Timeout: upstreamTimeout,
 			// Redirects from a service stay inside the cluster, so they must not reach the browser.
@@ -161,6 +162,23 @@ func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, 
 	// The voucher shown above the header, the same for everyone.
 	mux.HandleFunc("GET /api/vouchers/banner", func(w http.ResponseWriter, r *http.Request) {
 		g.pass(w, r, g.orderURL+"/vouchers/banner", nil, "")
+	})
+	// The customer's conversation with the shop's admins.
+	mux.HandleFunc("GET /api/chat", func(w http.ResponseWriter, r *http.Request) {
+		g.withSession(w, r, g.chatURL+"/chat?"+r.URL.RawQuery, nil)
+	})
+	mux.HandleFunc("GET /api/chat/unread", func(w http.ResponseWriter, r *http.Request) {
+		g.withSession(w, r, g.chatURL+"/chat/unread", nil)
+	})
+	mux.HandleFunc("POST /api/chat/messages", func(w http.ResponseWriter, r *http.Request) {
+		if body, ok := readBody(w, r); ok {
+			g.withSession(w, r, g.chatURL+"/chat/messages", body)
+		}
+	})
+	mux.HandleFunc("POST /api/chat/read", func(w http.ResponseWriter, r *http.Request) {
+		if body, ok := readBody(w, r); ok {
+			g.withSession(w, r, g.chatURL+"/chat/read", body)
+		}
 	})
 	// The vouchers this customer can see on the account page.
 	mux.HandleFunc("GET /api/vouchers/mine", func(w http.ResponseWriter, r *http.Request) {
@@ -467,7 +485,7 @@ func versionedPage(files fs.FS) ([]byte, map[string]string) {
 		panic(err)
 	}
 	assets := make(map[string]string)
-	for _, name := range []string{"style.css", "app.js", "account.js"} {
+	for _, name := range []string{"style.css", "app.js", "account.js", "chat.js"} {
 		content, err := fs.ReadFile(files, name)
 		if err != nil {
 			panic(err)

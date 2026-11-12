@@ -12,6 +12,7 @@
   <script src="/admin/users.js" defer></script>
   <script src="/admin/vouchers.js" defer></script>
   <script src="/admin/looks.js" defer></script>
+  <script src="/admin/chat.js" defer></script>
 </head>
 <body>
   <header class="bar">
@@ -20,6 +21,7 @@
       <a class="nav-link" href="#pesanan" data-view="orders">Pesanan</a>
       <a class="nav-link" href="#produk" data-view="products">Produk</a>
       <a class="nav-link" href="#voucher" data-view="vouchers">Voucher</a>
+      <a class="nav-link" href="#chat" data-view="chat">Chat <span id="chat-badge" class="nav-badge" hidden></span></a>
       <a class="nav-link" href="#look" data-view="looks">Shop the look</a>
       <a class="nav-link" href="#pengguna" data-view="users">Pengguna</a>
     </nav>
@@ -108,6 +110,52 @@
       <p id="users-status" class="status" role="status" aria-live="polite"></p>
       <div id="user-list" class="user-list"></div>
       <button id="more-users" class="secondary more" type="button" hidden>Muat lebih banyak</button>
+    </section>
+
+    <section id="chat-view" hidden aria-labelledby="chat-title">
+      <div class="view-head">
+        <h1 id="chat-title">Chat</h1>
+      </div>
+      <div class="chat-layout">
+        <div class="chat-inbox">
+          <div class="tabs" role="group" aria-label="Percakapan">
+            <button id="chat-tab-waiting" class="tab" type="button" aria-pressed="true">Belum dibalas</button>
+            <button id="chat-tab-all" class="tab" type="button" aria-pressed="false">Semua</button>
+          </div>
+          <p id="chat-list-status" class="status" role="status" aria-live="polite"></p>
+          <ul id="chat-list" class="chat-list"></ul>
+          <button id="chat-more" class="secondary chat-more" type="button" hidden>Muat lebih banyak</button>
+        </div>
+        <div id="chat-thread" class="chat-thread">
+          <p id="chat-empty" class="muted chat-empty">Pilih percakapan di kiri untuk membaca dan membalas.</p>
+          <div id="chat-open" class="chat-open" hidden>
+            <div class="chat-thread-head">
+              <button id="chat-back" class="link chat-back" type="button">‹ Daftar chat</button>
+              <div>
+                <h2 id="chat-who"></h2>
+                <p id="chat-who-email" class="muted small"></p>
+              </div>
+            </div>
+            <div id="chat-messages" class="chat-messages" aria-live="polite">
+              <button id="chat-older" class="link chat-older" type="button" hidden>Muat pesan sebelumnya</button>
+              <div id="chat-lines" class="chat-lines"></div>
+            </div>
+            <form id="chat-form" class="chat-form" novalidate>
+              <label class="visually-hidden" for="chat-input">Balasan</label>
+              <textarea id="chat-input" rows="2" maxlength="1000" placeholder="Tulis balasan… (Enter kirim, Shift+Enter baris baru)"></textarea>
+              <button id="chat-send" class="primary" type="submit">Kirim</button>
+            </form>
+            <p id="chat-error" class="error small" role="alert" hidden></p>
+          </div>
+        </div>
+        <aside id="chat-info" class="chat-info" hidden>
+          <h3>Pelanggan</h3>
+          <p id="chat-info-name"></p>
+          <p id="chat-info-since" class="muted small"></p>
+          <h3>Pesanan terakhir</h3>
+          <ul id="chat-info-orders" class="chat-info-orders"></ul>
+        </aside>
+      </div>
     </section>
 
     <section id="vouchers-view" hidden aria-labelledby="vouchers-title">

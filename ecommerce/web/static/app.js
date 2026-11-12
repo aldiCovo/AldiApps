@@ -1309,6 +1309,7 @@ function renderAccount(user) {
   accountKnown = true;
   // account.js runs after this file. Should the answer come first, it draws these itself.
   if (typeof accountChanged === "function") accountChanged(user);
+  if (typeof chatUserChanged === "function") chatUserChanged(user);
   const account = $("account");
   if (!user) {
     const login = el("button", "secondary", "Masuk");
@@ -1838,7 +1839,9 @@ function connectLive() {
   });
   socket.addEventListener("message", (event) => {
     try {
-      updateOrders([JSON.parse(event.data).order_id]);
+      // The same connection also tells of chat messages, which chat.js handles.
+      const signal = JSON.parse(event.data);
+      if (signal.order_id) updateOrders([signal.order_id]);
     } catch {
       // The next poll or signal still brings the status.
     }

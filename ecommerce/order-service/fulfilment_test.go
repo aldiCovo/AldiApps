@@ -69,7 +69,12 @@ func TestAdminListsEveryonesOrdersWithTheirOwner(t *testing.T) {
 	if status != http.StatusOK || json.Unmarshal(data, &got) != nil || len(got.Orders) != 1 || got.Orders[0].ID != first.ID {
 		t.Fatalf("status %d: %s", status, data)
 	}
-	for _, query := range []string{"status=lost", "limit=0", "limit=101", "offset=-1"} {
+	// One customer's orders, as the admin chat shows them.
+	status, data = h.do(t, http.MethodGet, "/internal/orders?user_id=2", "", testInternalToken)
+	if status != http.StatusOK || json.Unmarshal(data, &got) != nil || len(got.Orders) != 1 || got.Orders[0].ID != second.ID {
+		t.Fatalf("user 2: status %d: %s", status, data)
+	}
+	for _, query := range []string{"status=lost", "limit=0", "limit=101", "offset=-1", "user_id=0", "user_id=x"} {
 		if status, _ := h.do(t, http.MethodGet, "/internal/orders?"+query, "", testInternalToken); status != http.StatusBadRequest {
 			t.Fatalf("%s: status %d", query, status)
 		}

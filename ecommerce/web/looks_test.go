@@ -16,7 +16,7 @@ func TestShownLook(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewServer(newHandler("http://127.0.0.1:1", "http://127.0.0.1:1", "http://127.0.0.1:1", "http://127.0.0.1:1", "http://127.0.0.1:1", "http://127.0.0.1:1", photos))
+	server := httptest.NewServer(newHandler("http://127.0.0.1:1", "http://127.0.0.1:1", "http://127.0.0.1:1", "http://127.0.0.1:1", "http://127.0.0.1:1", "http://127.0.0.1:1", "http://127.0.0.1:1", photos))
 	t.Cleanup(server.Close)
 	look := func() *shownLook {
 		t.Helper()

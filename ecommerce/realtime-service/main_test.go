@@ -261,4 +261,15 @@ func TestSignalsArriveFromNATS(t *testing.T) {
 	if err != nil || got != `{"order_id":1,"status":"paid"}` {
 		t.Errorf("read %q, %v", got, err)
 	}
+	// Chat messages come the same way, and only to their customer.
+	if err := sender.Publish("chat.7", []byte(`{"type":"chat","message_id":2}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := sender.Publish("chat.42", []byte(`{"type":"chat","message_id":3}`)); err != nil {
+		t.Fatal(err)
+	}
+	got, err = read(t, conn, 3*time.Second)
+	if err != nil || got != `{"type":"chat","message_id":3}` {
+		t.Errorf("chat: read %q, %v", got, err)
+	}
 }

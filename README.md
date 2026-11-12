@@ -13,6 +13,7 @@ Application source code, one folder per application. Each folder has its own `Do
 | [`ecommerce/realtime-service/`](ecommerce/realtime-service/) | Go service that tells browsers when an order changes, over WebSockets. Only reachable through web |
 | [`ecommerce/notification-service/`](ecommerce/notification-service/) | Go worker that emails customers when their order finishes. It has no public API |
 | [`ecommerce/cart-service/`](ecommerce/cart-service/) | Go API for each customer's cart, using PostgreSQL. Only reachable through `web` |
+| [`ecommerce/chat-service/`](ecommerce/chat-service/) | Go API for the chat between customers and the shop's admins, using PostgreSQL. Reachable through `web` and admin-service |
 | [`ecommerce/web/`](ecommerce/web/) | The shop's pages for customers, at **https://prastika.aldiab.ai.id** |
 | [`ecommerce/admin-service/`](ecommerce/admin-service/) | Go API for the admin pages. It lets in admins only and calls the other services' internal routes. Only reachable through `web-admin` |
 | [`ecommerce/web-admin/`](ecommerce/web-admin/) | The admin pages, with their own login, at **https://prastika.aldiab.ai.id/admin** |
@@ -357,13 +358,38 @@ The *Voucher* page (`/admin/#voucher`) makes, changes, turns off and deletes vou
 
 The *Pesanan* page lists orders by step: *Perlu dikemas* (paid), *Dikemas*, *Dikirim*, *Selesai* and *Semua*. Each order offers only its next step, and shipping asks for the tracking number. It needs `ADMIN_URL`.
 
+## chat-service
+
+Keeps one conversation per customer with the shop's admins. Customers reach it through web with their login token, and only ever see their own. Admins reach it through admin-service with the internal token.
+
+| Request | Does |
+|---|---|
+| `GET /chat?before=&limit=` | The customer's newest messages, oldest first, as `{"messages": [{"id", "from", "body", "created_at"}], "has_more", "read_up_to", "unread"}`. `from` is `customer` or `admin`; `read_up_to` is the newest message the shop has seen |
+| `GET /chat/unread` | How many of the shop's messages the customer hasn't seen |
+| `POST /chat/messages` | Sends `{"body"}`, 1 to 1,000 characters. Answers 429 above 20 a minute |
+| `POST /chat/read` | Marks every message so far as seen by the customer |
+| `GET /internal/conversations?filter=waiting\|all&limit=&offset=` | Conversations, newest first, with `waiting` (the customer wrote last) and `unread` |
+| `GET /internal/chat/waiting` | How many conversations wait for an answer |
+| `GET /internal/conversations/{user_id}/messages?before=&limit=` | One conversation, as the shop sees it |
+| `POST /internal/conversations/{user_id}/messages` | Answers with `{"body", "admin_id"}`. Admins can't start a conversation |
+| `POST /internal/conversations/{user_id}/read` | Marks the customer's messages as seen by the shop |
+
+It keeps only user ids, so admin-service adds names and emails. After each message it publishes `{"type": "chat", "message_id"}` to `chat.<user id>` on NATS, so the customer's open chat updates at once; a lost signal only waits for the next poll. Admins get no signal: their page asks again every 5 seconds while open.
+
+It needs `DATABASE_URL`, `USER_URL`, `NATS_URL` and `INTERNAL_TOKEN` (at least 32 characters). The tests need a throwaway PostgreSQL, because they empty the tables:
+
+```bash
+cd ecommerce/chat-service
+TEST_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable' go test -race ./...
+```
+
 ## realtime-service
 
 | Request | Does |
 |---|---|
 | `GET /ws` | Opens a WebSocket for the user in the `Authorization: Bearer <token>` header. Answers 401 without a valid token, 429 above 5 connections per user, and 503 above 500 in total |
 
-It subscribes to `orders.*` on NATS and sends each signal only to its owner's connections, as `{"order_id", "status"}`. It has no database, and a signal only says that something changed, so the browser reads the order from order-service.
+It subscribes to `orders.*` and `chat.*` on NATS and sends each signal only to its owner's connections, as `{"order_id", "status"}` or `{"type": "chat", "message_id"}`. It has no database, and a signal only says that something changed, so the browser reads the order from order-service.
 
 Core NATS keeps nothing, so a signal is lost if nobody is connected. The browser handles that by reloading open orders whenever the socket opens, and by polling unfinished orders: every 15 seconds while connected, and every 1.5 seconds while not.
 
@@ -390,6 +416,7 @@ Serves the pages in `static/`, and passes on only these requests:
 | `POST /api/orders`, `GET /api/orders`, `GET /api/orders/{id}`, `POST /api/orders/{id}/pay` | order-service, with the token from the cookie |
 | `POST /api/vouchers/check` | order-service, with the token from the cookie |
 | `GET` and `DELETE /api/cart`, `POST /api/cart/merge`, `PUT` and `DELETE /api/cart/items/{id}` | cart-service, with the token from the cookie |
+| `GET /api/chat`, `GET /api/chat/unread`, `POST /api/chat/messages`, `POST /api/chat/read` | chat-service, with the token from the cookie |
 
 Anything else answers 404, so the other services' write endpoints stay inside the cluster, and a new endpoint stays private until it's added here.
 

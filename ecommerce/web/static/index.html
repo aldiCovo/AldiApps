@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/style.css">
   <script src="/app.js" defer></script>
   <script src="/account.js" defer></script>
+  <script src="/chat.js" defer></script>
 </head>
 <body>
   <!-- Drawings of each kind of garment, until products have photos. -->
@@ -242,8 +243,9 @@
 
           <div class="account-card account-help">
             <h2>Butuh bantuan?</h2>
-            <p>Tanya soal pesanan, ukuran, atau pembayaran. Kami balas lewat WhatsApp.</p>
-            <a class="secondary help-whatsapp" href="https://wa.me/6281282709876?text=Halo%20Prastika%2C%20saya%20butuh%20bantuan." target="_blank" rel="noopener">Hubungi kami</a>
+            <p>Tanya soal pesanan, ukuran, atau pembayaran.</p>
+            <button id="akun-help-chat" class="primary help-chat" type="button">Chat admin</button>
+            <a class="secondary help-whatsapp" href="https://wa.me/6281282709876?text=Halo%20Prastika%2C%20saya%20butuh%20bantuan." target="_blank" rel="noopener">WhatsApp</a>
             <p class="help-number">+62 812 8270 9876</p>
           </div>
         </aside>
@@ -385,6 +387,35 @@
     </section>
   </main>
 
+  <button id="chat-fab" class="chat-fab" type="button" aria-controls="chat-panel" aria-expanded="false">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg>
+    <span class="chat-fab-label">Chat admin</span>
+    <span id="chat-fab-count" class="chat-fab-count" hidden></span>
+  </button>
+  <section id="chat-panel" class="chat-panel" aria-labelledby="chat-panel-title" hidden>
+    <header class="chat-head">
+      <span class="chat-avatar" aria-hidden="true">P</span>
+      <div class="chat-head-text">
+        <h2 id="chat-panel-title">Admin Prastika</h2>
+        <p id="chat-hours" class="chat-hours"></p>
+      </div>
+      <button id="chat-close" class="chat-close" type="button" aria-label="Tutup chat">×</button>
+    </header>
+    <div id="chat-box" class="chat-box">
+      <button id="chat-older" class="link-button chat-older" type="button" hidden>Muat pesan sebelumnya</button>
+      <p id="chat-welcome" class="chat-welcome" hidden>Halo! Ada yang bisa kami bantu? Tanya soal ukuran, stok, pesanan, atau pembayaran.</p>
+      <div id="chat-lines" class="chat-lines" aria-live="polite"></div>
+    </div>
+    <p id="chat-note" class="chat-note" role="alert" hidden></p>
+    <form id="chat-form" class="chat-form" novalidate>
+      <label class="visually-hidden" for="chat-text">Pesan</label>
+      <textarea id="chat-text" rows="1" maxlength="1000" placeholder="Tulis pesan…"></textarea>
+      <button id="chat-send" class="chat-send" type="submit" aria-label="Kirim">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12 20 4l-6 16-2-7z"/></svg>
+      </button>
+    </form>
+  </section>
+
   <footer class="site-footer">
     <div class="footer-top">
       <div class="footer-about">
@@ -403,6 +434,7 @@
       </nav>
       <nav class="footer-links" aria-label="Bantuan">
         <h2>Bantuan</h2>
+        <button id="footer-chat" class="footer-link" type="button">Chat admin</button>
         <a href="https://wa.me/6281282709876?text=Halo%20Prastika%2C%20saya%20butuh%20bantuan." target="_blank" rel="noopener">Hubungi kami (WhatsApp)</a>
         <span class="footer-phone">+62 812 8270 9876</span>
       </nav>

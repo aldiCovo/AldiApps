@@ -80,6 +80,8 @@ function show(view) {
   $("users-view").hidden = view !== "users";
   $("vouchers-view").hidden = view !== "vouchers";
   $("looks-view").hidden = view !== "looks";
+  $("chat-view").hidden = view !== "chat";
+  if (view !== "chat") leaveChat();
   $("who").hidden = view === "login";
   $("nav").hidden = view === "login";
   for (const link of document.querySelectorAll(".nav-link")) {
@@ -102,6 +104,9 @@ function openView(view) {
   } else if (view === "looks") {
     show("looks");
     loadLooks();
+  } else if (view === "chat") {
+    show("chat");
+    openChat();
   } else {
     show("orders");
     loadOrders(true);
@@ -145,8 +150,9 @@ async function start() {
 function loggedIn(me) {
   currentAdmin = me;
   $("who-name").textContent = `${me.name} (${me.email})`;
-  const views = { "#produk": "products", "#pengguna": "users", "#voucher": "vouchers", "#look": "looks" };
+  const views = { "#produk": "products", "#pengguna": "users", "#voucher": "vouchers", "#look": "looks", "#chat": "chat" };
   openView(views[location.hash] || "orders");
+  watchChatBadge();
 }
 
 $("login-form").addEventListener("submit", async (event) => {

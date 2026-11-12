@@ -15,6 +15,7 @@ const (
 	orderToken   = "order-internal-token-0123456789abcdef"
 	catalogToken = "catalog-internal-token-0123456789abcdef"
 	userAdmin    = "user-admin-token-0123456789abcdef-xyz"
+	chatToken    = "chat-internal-token-0123456789abcdef"
 )
 
 // fakes stands in for user-service and order-service, and records what reached order-service.
@@ -29,6 +30,7 @@ type fakes struct {
 	photos      string // the photos folder
 	userHits    []string
 	userRefuses bool // user-service refuses the admin token
+	chatHits    []string
 }
 
 func newTestServer(t *testing.T) (*httptest.Server, *fakes) {
@@ -175,8 +177,39 @@ func newTestServer(t *testing.T) (*httptest.Server, *fakes) {
 		}
 	}))
 	t.Cleanup(catalog.Close)
+	chat := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer "+chatToken {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		body, _ := io.ReadAll(r.Body)
+		f.mu.Lock()
+		f.chatHits = append(f.chatHits, r.Method+" "+r.URL.RequestURI()+" "+string(body))
+		f.mu.Unlock()
+		switch {
+		case r.URL.Path == "/internal/conversations":
+			io.WriteString(w, `{"conversations":[{"user_id":2,"waiting":true,"unread":1,"last_message":{"id":5,"from":"customer","body":"Halo"}},{"user_id":7,"waiting":false,"unread":0,"last_message":{"id":3,"from":"admin","body":"Siap"}}],"total":2,"waiting":1}`)
+		case r.URL.Path == "/internal/chat/waiting":
+			io.WriteString(w, `{"waiting":1}`)
+		case r.URL.Path == "/internal/conversations/2/messages" && r.Method == http.MethodGet:
+			io.WriteString(w, `{"messages":[{"id":5,"from":"customer","body":"Halo"}],"has_more":false,"read_up_to":5,"unread":1}`)
+		case r.URL.Path == "/internal/conversations/2/messages":
+			w.WriteHeader(http.StatusCreated)
+			io.WriteString(w, `{"message":{"id":6,"from":"admin","body":"Siap"}}`)
+		case r.URL.Path == "/internal/conversations/2/read":
+			w.WriteHeader(http.StatusNoContent)
+		case r.URL.Path == "/internal/conversations/8/messages":
+			w.WriteHeader(http.StatusInternalServerError)
+			io.WriteString(w, `{"error":"secret detail"}`)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+			io.WriteString(w, `{"error":"conversation not found"}`)
+		}
+	}))
+	t.Cleanup(chat.Close)
 	server := httptest.NewServer(newHandler(services{userURL: users.URL, orderURL: orders.URL, catalogURL: catalog.URL,
-		userInternalToken: userToken, orderInternalToken: orderToken, catalogInternalToken: catalogToken, photosDir: f.photos, userAdminToken: userAdmin}))
+		userInternalToken: userToken, orderInternalToken: orderToken, catalogInternalToken: catalogToken, photosDir: f.photos, userAdminToken: userAdmin,
+		chatURL: chat.URL, chatInternalToken: chatToken}))
 	t.Cleanup(server.Close)
 	return server, f
 }

@@ -251,6 +251,12 @@ func TestVoucherRoutesPass(t *testing.T) {
 		{http.MethodPost, "/admin/api/vouchers", `{"code":"HEMAT10"}`, `POST /vouchers Bearer tok-123 {"code":"HEMAT10"}`},
 		{http.MethodPut, "/admin/api/vouchers/4", `{"code":"HEMAT20"}`, `PUT /vouchers/4 Bearer tok-123 {"code":"HEMAT20"}`},
 		{http.MethodDelete, "/admin/api/vouchers/4", "", "DELETE /vouchers/4 Bearer tok-123 "},
+		{http.MethodGet, "/admin/api/chat/conversations?filter=waiting&limit=20&secret=1", "", "GET /chat/conversations?filter=waiting&limit=20 Bearer tok-123 "},
+		{http.MethodGet, "/admin/api/chat/waiting", "", "GET /chat/waiting Bearer tok-123 "},
+		{http.MethodGet, "/admin/api/chat/conversations/7", "", "GET /chat/conversations/7 Bearer tok-123 "},
+		{http.MethodGet, "/admin/api/chat/conversations/7/messages?before=40", "", "GET /chat/conversations/7/messages?before=40 Bearer tok-123 "},
+		{http.MethodPost, "/admin/api/chat/conversations/7/messages", `{"body":"Halo"}`, `POST /chat/conversations/7/messages Bearer tok-123 {"body":"Halo"}`},
+		{http.MethodPost, "/admin/api/chat/conversations/7/read", "", "POST /chat/conversations/7/read Bearer tok-123 "},
 		{http.MethodGet, "/admin/api/looks", "", "GET /looks Bearer tok-123 "},
 		{http.MethodPost, "/admin/api/looks", `{"title":"A"}`, `POST /looks Bearer tok-123 {"title":"A"}`},
 		{http.MethodPut, "/admin/api/looks/2", `{"title":"B"}`, `PUT /looks/2 Bearer tok-123 {"title":"B"}`},
@@ -267,6 +273,8 @@ func TestVoucherRoutesPass(t *testing.T) {
 	for _, c := range []struct{ method, path, body string }{
 		{http.MethodPost, "/admin/api/vouchers", `{"code":"X"}`},
 		{http.MethodDelete, "/admin/api/vouchers/4", ""},
+		{http.MethodPost, "/admin/api/chat/conversations/7/messages", `{"body":"x"}`},
+		{http.MethodPost, "/admin/api/chat/conversations/7/read", ""},
 	} {
 		if resp := request(t, server, c.method, c.path, c.body, cookie, false); resp.StatusCode != http.StatusUnsupportedMediaType {
 			t.Fatalf("%s %s as a form: %d", c.method, c.path, resp.StatusCode)

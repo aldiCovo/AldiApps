@@ -117,6 +117,12 @@ func newHandler(adminURL string) http.Handler {
 		{http.MethodPost, "/looks", true},
 		{http.MethodPut, "/looks/{id}", true},
 		{http.MethodDelete, "/looks/{id}", false},
+		{http.MethodGet, "/chat/conversations", false},
+		{http.MethodGet, "/chat/waiting", false},
+		{http.MethodGet, "/chat/conversations/{id}", false},
+		{http.MethodGet, "/chat/conversations/{id}/messages", false},
+		{http.MethodPost, "/chat/conversations/{id}/messages", true},
+		{http.MethodPost, "/chat/conversations/{id}/read", false},
 	} {
 		mux.HandleFunc(route.method+" /admin/api"+route.path, func(w http.ResponseWriter, r *http.Request) {
 			path := route.path
@@ -139,7 +145,7 @@ func newHandler(adminURL string) http.Handler {
 			}
 			if route.method == http.MethodGet {
 				query := url.Values{}
-				for _, name := range []string{"limit", "offset", "category_id"} {
+				for _, name := range []string{"limit", "offset", "category_id", "filter", "before"} {
 					if value := r.URL.Query().Get(name); value != "" {
 						query.Set(name, value)
 					}
@@ -216,7 +222,7 @@ func versionedPage(files fs.FS) ([]byte, map[string]string) {
 		panic(err)
 	}
 	assets := make(map[string]string)
-	for _, name := range []string{"admin.css", "admin.js", "products.js", "photos.js", "users.js", "vouchers.js", "looks.js"} {
+	for _, name := range []string{"admin.css", "admin.js", "products.js", "photos.js", "users.js", "vouchers.js", "looks.js", "chat.js"} {
 		content, err := fs.ReadFile(files, name)
 		if err != nil {
 			panic(err)

@@ -29,6 +29,7 @@ type services struct {
 	userInternalToken, orderInternalToken, catalogInternalToken string
 	photosDir                                                   string
 	userAdminToken                                              string
+	chatURL, chatInternalToken                                  string
 }
 
 // User is an account as user-service describes it.
@@ -171,6 +172,7 @@ func newHandler(s services) http.Handler {
 	a.addUserRoutes(mux)
 	a.addVoucherRoutes(mux)
 	a.addLookRoutes(mux)
+	a.addChatRoutes(mux)
 	return mux
 }
 

@@ -407,7 +407,21 @@
       <div id="chat-lines" class="chat-lines" aria-live="polite"></div>
     </div>
     <p id="chat-note" class="chat-note" role="alert" hidden></p>
+    <div id="chat-picker" class="chat-picker" hidden>
+      <div class="chat-picker-head">
+        <h3>Lampirkan</h3>
+        <button id="chat-picker-close" class="chat-close" type="button" aria-label="Tutup pilihan lampiran">×</button>
+      </div>
+      <h4>Pesanan kamu</h4>
+      <div id="chat-pick-orders" class="chat-pick-list"></div>
+      <h4>Produk yang baru kamu lihat</h4>
+      <div id="chat-pick-products" class="chat-pick-list"></div>
+    </div>
+    <div id="chat-pending" class="chat-pending" hidden></div>
     <form id="chat-form" class="chat-form" novalidate>
+      <button id="chat-attach" class="chat-attach" type="button" aria-label="Lampirkan produk atau pesanan" aria-controls="chat-picker" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
       <label class="visually-hidden" for="chat-text">Pesan</label>
       <textarea id="chat-text" rows="1" maxlength="1000" placeholder="Tulis pesan…"></textarea>
       <button id="chat-send" class="chat-send" type="submit" aria-label="Kirim">
@@ -486,6 +500,10 @@
           <p id="cart-note" class="cart-note" role="status" hidden><span id="cart-note-text"></span> <button id="cart-note-open" class="link" type="button">Lihat keranjang</button></p>
           <p id="order-error" class="error" role="alert" hidden></p>
         </form>
+        <button id="product-ask" class="ask-chat" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg>
+          Tanya soal produk ini
+        </button>
       </div>
     </div>
     <section id="product-reviews" class="product-reviews" aria-labelledby="reviews-title">

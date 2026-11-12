@@ -266,6 +266,25 @@ select:focus, textarea:focus { border-color: var(--accent); outline: none; box-s
 .chat-form textarea { flex: 1; min-width: 0; min-height: 44px; max-height: 160px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; font: inherit; resize: vertical; }
 .chat-form textarea:focus { border-color: var(--accent); outline: none; }
 #chat-error { padding: 0 12px 10px; }
+.chat-attach { flex: none; width: 44px; height: 44px; padding: 0; border-radius: 50%; font-size: 1.3rem; line-height: 1; }
+.chat-line.with-card { gap: 6px; }
+.chat-card { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); font: inherit; font-size: .84rem; line-height: 1.35; text-align: left; }
+button.chat-card { cursor: pointer; }
+button.chat-card:hover { border-color: var(--accent); }
+.chat-line.mine .chat-card { border-color: transparent; }
+.chat-card-thumb { display: grid; flex: none; place-items: center; width: 40px; height: 52px; overflow: hidden; border-radius: 8px; background: var(--line); color: var(--accent); font-weight: 700; }
+.chat-card.order .chat-card-thumb { height: 40px; border-radius: 50%; }
+.chat-card-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.chat-card-text { display: grid; min-width: 0; }
+.chat-card-text span { color: var(--muted); overflow-wrap: anywhere; }
+.chat-card-stock:empty { display: none; }
+.chat-picker { display: grid; gap: 8px; max-height: 45%; padding: 10px 12px; overflow-y: auto; border-top: 1px solid var(--line); background: var(--card); }
+.chat-picker-head { display: flex; align-items: center; justify-content: space-between; font-weight: 600; }
+.chat-picker input { width: 100%; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; font: inherit; }
+.chat-pick-list { display: grid; gap: 6px; }
+.chat-pending { display: flex; align-items: center; gap: 10px; padding: 8px 12px 0; border-top: 1px solid var(--line); }
+.chat-pending .chat-card { flex: 1; background: var(--paper); }
+.chat-pending:not([hidden]) + .chat-form { border-top: 0; }
 .chat-info { display: grid; align-content: start; gap: 6px; padding: 16px; border-left: 1px solid var(--line); overflow-y: auto; font-size: .88rem; }
 .chat-info h3 { margin-top: 8px; color: var(--muted); font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; }
 .chat-info h3:first-child { margin-top: 0; }

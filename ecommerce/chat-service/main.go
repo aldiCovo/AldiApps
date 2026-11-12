@@ -29,7 +29,7 @@ func main() {
 
 func run() error {
 	values := map[string]string{}
-	for _, name := range []string{"DATABASE_URL", "USER_URL", "NATS_URL", "INTERNAL_TOKEN"} {
+	for _, name := range []string{"DATABASE_URL", "USER_URL", "CATALOG_URL", "ORDER_URL", "NATS_URL", "INTERNAL_TOKEN"} {
 		value := os.Getenv(name)
 		if value == "" {
 			return fmt.Errorf("%s is required", name)
@@ -62,8 +62,9 @@ func run() error {
 	defer notifier.Close()
 
 	server := &http.Server{
-		Addr:              ":" + port,
-		Handler:           newHandler(&Store{pool: pool}, newVerifier(values["USER_URL"]), notifier, values["INTERNAL_TOKEN"]),
+		Addr: ":" + port,
+		Handler: newHandler(&Store{pool: pool}, newVerifier(values["USER_URL"]), notifier,
+			newLookup(values["CATALOG_URL"], values["ORDER_URL"]), values["INTERNAL_TOKEN"]),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      20 * time.Second,

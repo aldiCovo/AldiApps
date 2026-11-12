@@ -29,7 +29,122 @@ const chat = {
   badgeTimer: 0,
   request: 0,
   sending: false,
+  // The product card that goes with the next reply, and the catalog the picker searches.
+  pending: null,
+  catalog: null,
+  // Product id -> promise of its live stock line, kept while the page is open.
+  stock: new Map(),
 };
+const chatOrderStatus = {
+  pending: "Diproses", awaiting_payment: "Menunggu bayar", paying: "Dibayar", paid: "Dibayar", packed: "Dikemas",
+  shipped: "Dikirim", arrived: "Sampai", completed: "Selesai", rejected: "Ditolak", cancelled: "Dibatalkan",
+};
+
+// What the list shows for a message that is only a card.
+function cardSummary(card) {
+  return card.kind === "product" ? `Produk: ${card.name}` : `Pesanan #${card.id}`;
+}
+
+function cardPhoto(card) {
+  if (card.kind !== "product") return "";
+  const own = (productPhotos[card.id] || []).find(Boolean);
+  return own || categoryPhotos[card.category_id] || "";
+}
+
+// The stock of each size and colour now, so the admin answers from what is really left.
+function liveStock(id) {
+  if (!chat.stock.has(id)) {
+    chat.stock.set(id, api(`/products/${id}`).then((product) => {
+      const variants = product.variants || [];
+      if (variants.length === 0) return "Belum ada varian";
+      return "Stok sekarang: " + variants.map((v) => `${v.size} ${v.color} ${v.stock}`).join(" · ");
+    }, (error) => (error.status === 404 ? "Produk ini sudah dihapus" : "")));
+  }
+  return chat.stock.get(id);
+}
+
+// A product or order card, in a message, the picker, or waiting to be sent.
+function chatCard(card, onClick) {
+  const box = el(onClick ? "button" : "div", `chat-card ${card.kind}`);
+  if (onClick) {
+    box.type = "button";
+    box.addEventListener("click", onClick);
+  }
+  const thumb = el("span", "chat-card-thumb");
+  thumb.setAttribute("aria-hidden", "true");
+  const url = cardPhoto(card);
+  if (url) {
+    const image = el("img");
+    image.src = url;
+    image.alt = "";
+    image.loading = "lazy";
+    image.addEventListener("error", () => image.remove());
+    thumb.append(image);
+  } else if (card.kind === "order") {
+    thumb.textContent = "#";
+  }
+  const text = el("span", "chat-card-text");
+  if (card.kind === "product") {
+    text.append(el("strong", "", card.name), el("span", "", `${rupiah.format(card.price)} · #${card.id}`));
+  } else {
+    text.append(el("strong", "", `Pesanan #${card.id}`),
+      el("span", "", `${chatOrderStatus[card.status] || card.status} saat ditanya · ${rupiah.format(card.total)}`));
+    if (card.name) text.append(el("span", "", card.more > 0 ? `${card.name} dan ${card.more} lainnya` : card.name));
+  }
+  box.append(thumb, text);
+  return box;
+}
+
+function setChatPending(card) {
+  chat.pending = card;
+  const box = $("chat-pending");
+  if (!card) {
+    box.hidden = true;
+    box.replaceChildren();
+    return;
+  }
+  box.replaceChildren(chatCard(card), button("Hapus", "link", () => {
+    setChatPending(null);
+    $("chat-input").focus();
+  }));
+  box.hidden = false;
+}
+
+async function openChatPicker() {
+  $("chat-picker").hidden = false;
+  $("chat-attach").setAttribute("aria-expanded", "true");
+  $("chat-pick-search").value = "";
+  $("chat-pick-search").focus();
+  if (!chat.catalog) {
+    $("chat-pick-list").replaceChildren(el("p", "muted small", "Memuat produk…"));
+    try {
+      const [page] = await Promise.all([api("/products?limit=100"), photosLoaded ? null : loadPhotoLists()]);
+      chat.catalog = page.products;
+    } catch (error) {
+      if (!handleAuth(error)) $("chat-pick-list").replaceChildren(el("p", "muted small", "Produk belum bisa dimuat."));
+      return;
+    }
+  }
+  showChatPicks();
+}
+
+function showChatPicks() {
+  const words = $("chat-pick-search").value.trim().toLowerCase();
+  const found = chat.catalog.filter((product) => product.name.toLowerCase().includes(words)).slice(0, 30);
+  $("chat-pick-list").replaceChildren(...(found.length > 0 ? found.map((product) => {
+    const card = { kind: "product", id: product.id, name: product.name, price: product.price, category_id: product.category_id };
+    return chatCard(card, () => {
+      setChatPending(card);
+      closeChatPicker();
+      $("chat-input").focus();
+    });
+  }) : [el("p", "muted small", "Tidak ada produk dengan nama itu.")]));
+}
+
+function closeChatPicker() {
+  $("chat-picker").hidden = true;
+  $("chat-attach").setAttribute("aria-expanded", "false");
+}
 
 function chatWhen(iso) {
   const date = new Date(iso);
@@ -111,7 +226,9 @@ function chatRow(conversation) {
   const head = el("span", "chat-row-head");
   head.append(el("strong", "", customerName(conversation)), el("span", "muted small", chatWhen(conversation.last_message.created_at)));
   const last = el("span", "chat-row-last");
-  const text = (conversation.last_message.from === "admin" ? "Anda: " : "") + conversation.last_message.body;
+  const lastMessage = conversation.last_message;
+  const said = lastMessage.body || (lastMessage.attachment ? cardSummary(lastMessage.attachment) : "");
+  const text = (lastMessage.from === "admin" ? "Anda: " : "") + said;
   last.append(el("span", "chat-row-text", text));
   if (conversation.unread > 0) last.append(el("span", "chat-count", String(conversation.unread)));
   row.append(head, last);
@@ -133,6 +250,10 @@ async function openConversation(conversation) {
   $("chat-lines").replaceChildren();
   $("chat-error").hidden = true;
   $("chat-input").value = "";
+  setChatPending(null);
+  closeChatPicker();
+  chat.stock.clear();
+  if (!photosLoaded) loadPhotoLists().then(() => { if (chat.userId === conversation.user_id) renderChatMessages(); });
   renderChatList();
   loadChatInfo(conversation.user_id);
   await loadChatMessages(true);
@@ -220,7 +341,18 @@ function renderChatMessages() {
       lastDay = day;
     }
     const line = el("div", `chat-line ${message.from === "admin" ? "mine" : "theirs"}`);
-    line.append(el("p", "chat-body", message.body));
+    if (message.attachment) {
+      const card = message.attachment;
+      line.classList.add("with-card");
+      const shown = chatCard(card);
+      if (card.kind === "product") {
+        const stock = el("span", "chat-card-stock");
+        shown.querySelector(".chat-card-text").append(stock);
+        liveStock(card.id).then((text) => { stock.textContent = text; });
+      }
+      line.append(shown);
+    }
+    if (message.body) line.append(el("p", "chat-body", message.body));
     let meta = chatShortTime.format(new Date(message.created_at));
     if (message === lastMine) meta += message.id <= chat.readUpTo ? " · Dibaca" : " · Terkirim";
     line.append(el("span", "chat-meta", meta));
@@ -231,15 +363,17 @@ function renderChatMessages() {
 
 async function sendChat() {
   const body = $("chat-input").value.trim();
-  if (!body || chat.sending || chat.userId === null) return;
+  const card = chat.pending;
+  if ((!body && !card) || chat.sending || chat.userId === null) return;
   const userId = chat.userId;
   chat.sending = true;
   $("chat-send").disabled = true;
   $("chat-error").hidden = true;
   try {
-    const { message } = await post(`/chat/conversations/${userId}/messages`, { body });
+    const { message } = await post(`/chat/conversations/${userId}/messages`, card ? { body, attach: { kind: card.kind, id: card.id } } : { body });
     if (chat.userId === userId) {
       $("chat-input").value = "";
+      if (chat.pending === card) setChatPending(null);
       if (!chat.messages.some((shown) => shown.id === message.id)) chat.messages.push(message);
       renderChatMessages();
       $("chat-messages").scrollTop = $("chat-messages").scrollHeight;
@@ -247,7 +381,12 @@ async function sendChat() {
     loadChatList(false, Math.max(chat.list.length, chatPageSize));
   } catch (error) {
     if (!handleAuth(error)) {
-      $("chat-error").textContent = error.status === 400 ? "Balasan kosong atau lebih dari 1.000 huruf." : "Balasan belum terkirim. Coba lagi.";
+      $("chat-error").textContent = error.status === 422 ? "Produk itu sudah dihapus, jadi tidak bisa dilampirkan."
+        : error.status === 400 ? "Balasan kosong atau lebih dari 1.000 huruf." : "Balasan belum terkirim. Coba lagi.";
+      if (error.status === 422) {
+        setChatPending(null);
+        chat.catalog = null;
+      }
       $("chat-error").hidden = false;
     }
   } finally {
@@ -268,6 +407,18 @@ $("chat-input").addEventListener("keydown", (event) => {
   }
 });
 $("chat-older").addEventListener("click", () => loadChatMessages(false, true));
+$("chat-attach").addEventListener("click", () => ($("chat-picker").hidden ? openChatPicker() : closeChatPicker()));
+$("chat-picker-close").addEventListener("click", () => {
+  closeChatPicker();
+  $("chat-attach").focus();
+});
+$("chat-pick-search").addEventListener("input", () => { if (chat.catalog) showChatPicks(); });
+$("chat-pick-search").addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeChatPicker();
+    $("chat-attach").focus();
+  }
+});
 $("chat-back").addEventListener("click", closeConversation);
 $("chat-more").addEventListener("click", () => loadChatList(false, chatPageSize, chat.list.length));
 for (const [id, filter] of [["chat-tab-waiting", "waiting"], ["chat-tab-all", "all"]]) {

@@ -126,12 +126,21 @@ func (a *admin) addChatRoutes(mux *http.ServeMux) {
 		}
 		var in struct {
 			Body string `json:"body"`
+			// A product card; chat-service checks the product and refuses orders from admins.
+			Attach *struct {
+				Kind string `json:"kind"`
+				ID   int64  `json:"id"`
+			} `json:"attach"`
 		}
 		if !readJSON(w, r, &in) {
 			return
 		}
 		// Who answered is the admin the token belongs to, never what the page says.
-		body, _ := json.Marshal(map[string]any{"body": in.Body, "admin_id": me.ID})
+		out := map[string]any{"body": in.Body, "admin_id": me.ID}
+		if in.Attach != nil {
+			out["attach"] = in.Attach
+		}
+		body, _ := json.Marshal(out)
 		pass(w, http.MethodPost, a.chatURL+"/internal/conversations/"+id+"/messages", body, r)
 	}))
 

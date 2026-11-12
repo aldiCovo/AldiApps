@@ -69,7 +69,7 @@ func newTestServer(t *testing.T, passwords *Passwords) *testServer {
 	if err := migrate(ctx, pool); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, "TRUNCATE users, addresses, password_resets, user_photos RESTART IDENTITY"); err != nil {
+	if _, err := pool.Exec(ctx, "TRUNCATE users, user_addresses, password_resets, user_photos RESTART IDENTITY"); err != nil {
 		t.Fatal(err)
 	}
 	if passwords == nil {
@@ -556,7 +556,7 @@ func TestAddressIsSavedPerAccount(t *testing.T) {
 		t.Fatalf("after change: %s", body)
 	}
 	var count int
-	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM addresses").Scan(&count); err != nil || count != 1 {
+	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM user_addresses").Scan(&count); err != nil || count != 1 {
 		t.Fatalf("rows %d, err %v", count, err)
 	}
 
@@ -567,7 +567,7 @@ func TestAddressIsSavedPerAccount(t *testing.T) {
 	if status, _ := request(t, http.MethodPut, s.URL+"/me/address", sariAddress, sari); status != http.StatusUnauthorized {
 		t.Fatalf("deleted account: status %d", status)
 	}
-	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM addresses").Scan(&count); err != nil || count != 0 {
+	if err := s.pool.QueryRow(context.Background(), "SELECT count(*) FROM user_addresses").Scan(&count); err != nil || count != 0 {
 		t.Fatalf("rows after delete %d, err %v", count, err)
 	}
 }

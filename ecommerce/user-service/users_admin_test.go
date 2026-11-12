@@ -149,7 +149,7 @@ func TestRoleChanges(t *testing.T) {
 func TestTwoAdminsCantRemoveEachOther(t *testing.T) {
 	server := newTestServer(t, nil)
 	for round := 0; round < 20; round++ {
-		if _, err := server.pool.Exec(context.Background(), "TRUNCATE users, addresses, password_resets, user_photos RESTART IDENTITY"); err != nil {
+		if _, err := server.pool.Exec(context.Background(), "TRUNCATE users, user_addresses, password_resets, user_photos RESTART IDENTITY"); err != nil {
 			t.Fatal(err)
 		}
 		a := server.register(t, "a@example.com", "rahasia-sekali")

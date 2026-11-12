@@ -270,7 +270,8 @@ function accountChanged(user) {
     account.userId = id;
     account.orders = null;
     account.ordersAt = 0;
-    account.address = undefined;
+    account.addresses = null;
+    account.addressCountAsked = false;
     account.group = "semua";
     account.page = 1;
   }
@@ -391,6 +392,14 @@ function refreshSide() {
     if (account.section === "pesanan") renderOrdersPanel();
     if (account.section === "ulasan") renderReviewsPanel();
   });
+  if (account.addresses) setNavCount("alamat", account.addresses.addresses.length);
+  else if (!account.addressCountAsked) {
+    account.addressCountAsked = true;
+    api("/me/addresses").then((book) => {
+      if (!account.addresses) account.addresses = book;
+      setNavCount("alamat", account.addresses.addresses.length);
+    }, () => {});
+  }
   loadVoucherOnce().then((voucher) => {
     setNavCount("voucher", voucher ? 1 : 0);
     renderPromo(voucher);
@@ -666,74 +675,174 @@ function addressLines(address) {
   return [`${address.recipient} · ${address.phone}`, address.street, `${address.district}, ${address.city}`, `${address.province} ${address.postal_code}`];
 }
 
-function showAddressView() {
-  const address = account.address;
-  $("akun-address-form").hidden = true;
-  $("akun-address-card").hidden = !address;
-  $("akun-address-add").hidden = Boolean(address);
-  if (address) $("akun-address-text").replaceChildren(...addressLines(address).map((line) => el("span", "", line)));
-  else $("akun-address-status").textContent = "Belum ada alamat tersimpan. Tambahkan supaya checkout lebih cepat.";
+function addressCard(address) {
+  const card = el("article", address.main ? "address-card is-main" : "address-card");
+  const head = el("p", "address-card-head");
+  head.append(el("span", "address-tag", address.label));
+  if (address.main) head.append(el("span", "badge-main", "Utama"));
+  const text = el("p", "address-text");
+  text.append(...addressLines(address).map((line) => el("span", "", line)));
+  const actions = el("div", "address-card-actions");
+  const button = (label, onClick, extra = "") => {
+    const node = el("button", `link ${extra}`.trim(), label);
+    node.type = "button";
+    node.addEventListener("click", onClick);
+    return node;
+  };
+  const edit = button("Ubah", () => openAddressDialog(address));
+  edit.setAttribute("aria-label", `Ubah alamat ${address.label}`);
+  actions.append(edit);
+  if (!address.main) {
+    const main = button("Jadikan utama", () => changeAddresses(main, () => send("PUT", `/me/addresses/${address.id}/main`), `${address.label} sekarang alamat utama.`));
+    const remove = button("Hapus", () => confirmRemove(), "muted");
+    remove.setAttribute("aria-label", `Hapus alamat ${address.label}`);
+    const confirmRemove = () => {
+      const ask = el("div", "address-confirm");
+      ask.setAttribute("role", "group");
+      ask.setAttribute("aria-label", "Hapus alamat");
+      const yes = el("button", "secondary small", "Hapus");
+      yes.type = "button";
+      const no = button("Batal", () => {
+        ask.replaceWith(actions);
+        remove.focus();
+      });
+      yes.addEventListener("click", () => changeAddresses(yes, () => send("DELETE", `/me/addresses/${address.id}`), `Alamat ${address.label} dihapus.`));
+      ask.append(el("span", "", `Hapus alamat ${address.label}?`), yes, no);
+      actions.replaceWith(ask);
+      no.focus();
+    };
+    actions.append(main, remove);
+  }
+  card.append(head, text, actions);
+  return card;
 }
 
-function editAddress() {
-  const address = account.address || { recipient: currentUser ? currentUser.name : "" };
-  for (const field of addressFields) $(`akun-address-${field}`).value = address[field] || "";
-  if (![...$("akun-address-province").options].some((option) => option.value && option.value === address.province)) $("akun-address-province").value = "";
-  $("akun-address-error").hidden = true;
-  $("akun-address-status").textContent = "";
-  $("akun-address-card").hidden = true;
-  $("akun-address-add").hidden = true;
-  $("akun-address-form").hidden = false;
-  $("akun-address-recipient").focus();
+function renderAddresses() {
+  const book = account.addresses;
+  const count = book.addresses.length;
+  setNavCount("alamat", count);
+  $("akun-address-add").hidden = count >= book.limit;
+  $("akun-address-note").hidden = false;
+  $("akun-address-note").textContent = count === 0
+    ? "Belum ada alamat tersimpan. Tambahkan supaya checkout lebih cepat."
+    : `${count} dari ${book.limit} alamat. Alamat utama dipilih otomatis saat checkout.`;
+  $("akun-address-list").replaceChildren(...book.addresses.map(addressCard));
 }
 
-async function loadAddress() {
+// Sends one change to the list, then shows the list the shop answered with.
+async function changeAddresses(button, request, done) {
+  button.disabled = true;
   const status = $("akun-address-status");
-  if (account.address === undefined) {
-    status.textContent = "Memuat alamat…";
-    $("akun-address-card").hidden = true;
-  }
-  const [address, table] = await Promise.allSettled([api("/me/address"), account.provinces ? null : api("/shipping")]);
-  if (address.status === "rejected" && address.reason.status === 401) {
-    renderAccount(null);
-    return;
-  }
-  if (address.status === "rejected" && address.reason.status !== 404) {
-    status.textContent = "Alamat belum bisa dimuat. Coba lagi sebentar lagi.";
-    return;
-  }
-  if (!account.provinces && table.status === "fulfilled") {
-    account.provinces = true;
-    $("akun-address-province").append(...table.value.provinces.map(({ name }) => {
-      const option = el("option", "", name);
-      option.value = name;
-      return option;
-    }));
-  }
-  account.address = address.status === "fulfilled" ? address.value : null;
+  status.classList.remove("error");
   status.textContent = "";
-  if ($("akun-address-form").hidden) showAddressView();
-}
-
-async function submitAccountAddress(event) {
-  event.preventDefault();
-  const saveButton = $("akun-address-save");
-  saveButton.disabled = true;
-  $("akun-address-error").hidden = true;
   try {
-    const address = Object.fromEntries(addressFields.map((field) => [field, $(`akun-address-${field}`).value]));
-    // The answer is the address as stored, with the phone number in one form.
-    account.address = await send("PUT", "/me/address", address);
-    savedAddress = account.address;
-    showAddressView();
-    $("akun-address-status").textContent = "Alamat tersimpan.";
+    account.addresses = await request();
+    renderAddresses();
+    status.textContent = done;
   } catch (error) {
     if (error.status === 401) {
       renderAccount(null);
       return;
     }
+    button.disabled = false;
+    status.textContent = error.status === 404
+      ? "Alamat ini sudah tidak ada. Daftarnya dimuat ulang."
+      : "Alamat belum bisa diubah. Coba lagi sebentar lagi.";
+    status.classList.add("error");
+    if (error.status === 404) loadAddress();
+  }
+}
+
+async function loadProvinceChoices() {
+  if (account.provinces) return;
+  const table = shippingTable || await api("/shipping");
+  if (account.provinces) return;
+  account.provinces = true;
+  $("akun-address-province").append(...table.provinces.map(({ name }) => {
+    const option = el("option", "", name);
+    option.value = name;
+    return option;
+  }));
+}
+
+async function loadAddress() {
+  const status = $("akun-address-status");
+  status.classList.remove("error");
+  if (!account.addresses) {
+    status.textContent = "Memuat alamat…";
+    $("akun-address-note").hidden = true;
+    $("akun-address-list").replaceChildren();
+  }
+  try {
+    const [book] = await Promise.all([api("/me/addresses"), loadProvinceChoices()]);
+    account.addresses = book;
+    status.textContent = "";
+    renderAddresses();
+  } catch (error) {
+    if (error.status === 401) {
+      renderAccount(null);
+      return;
+    }
+    if (!account.addresses) status.textContent = "Alamat belum bisa dimuat. Coba lagi sebentar lagi.";
+  }
+}
+
+function setAddressLabel(value) {
+  $("akun-address-label").value = value;
+  const chosen = ["Rumah", "Kantor"].includes(value) ? value : "";
+  for (const chip of document.querySelectorAll(".address-label [data-label]")) {
+    chip.setAttribute("aria-pressed", String(chip.dataset.label === chosen));
+  }
+}
+
+// Opens the form for a new address, or for changing the given one.
+function openAddressDialog(address) {
+  const book = account.addresses;
+  const first = !book || book.addresses.length === 0;
+  account.editingAddress = address || null;
+  $("akun-address-dialog-title").textContent = address ? "Ubah alamat" : "Tambah alamat";
+  const values = address || { label: first ? "Rumah" : "", recipient: currentUser ? currentUser.name : "", phone: currentUser ? currentUser.phone || "" : "" };
+  setAddressLabel(values.label || "");
+  for (const field of addressFields) $(`akun-address-${field}`).value = values[field] || "";
+  if (![...$("akun-address-province").options].some((option) => option.value && option.value === values.province)) $("akun-address-province").value = "";
+  // The main address stays main until another is chosen; the first one is main anyway.
+  $("akun-address-main-row").hidden = first || Boolean(address && address.main);
+  $("akun-address-main").checked = false;
+  $("akun-address-error").hidden = true;
+  account.addressOpener = document.activeElement;
+  $("akun-address-dialog").showModal();
+  (address ? $("akun-address-recipient") : $("akun-address-label")).focus();
+}
+
+async function submitAccountAddress(event) {
+  event.preventDefault();
+  const form = $("akun-address-form");
+  $("akun-address-error").hidden = true;
+  if (!form.reportValidity()) return;
+  const saveButton = $("akun-address-save");
+  saveButton.disabled = true;
+  const editing = account.editingAddress;
+  try {
+    const body = Object.fromEntries(addressFields.map((field) => [field, $(`akun-address-${field}`).value]));
+    body.label = $("akun-address-label").value.trim();
+    body.main = $("akun-address-main").checked;
+    account.addresses = editing
+      ? await send("PUT", `/me/addresses/${editing.id}`, body)
+      : await send("POST", "/me/addresses", body);
+    $("akun-address-dialog").close();
+    renderAddresses();
+    $("akun-address-status").classList.remove("error");
+    $("akun-address-status").textContent = editing ? "Alamat tersimpan." : "Alamat ditambahkan.";
+  } catch (error) {
+    if (error.status === 401) {
+      $("akun-address-dialog").close();
+      renderAccount(null);
+      return;
+    }
     $("akun-address-error").textContent = error.status === 400
       ? "Periksa lagi alamatnya. Nomor HP harus nomor ponsel Indonesia dan kode pos 5 angka."
+      : error.status === 409 ? "Sudah ada 10 alamat. Hapus salah satu dulu."
+      : error.status === 404 ? "Alamat ini sudah tidak ada. Tutup lalu buka lagi daftarnya."
       : "Alamat belum bisa disimpan. Coba lagi sebentar lagi.";
     $("akun-address-error").hidden = false;
   } finally {
@@ -984,11 +1093,24 @@ $("akun-order-search").addEventListener("input", (event) => {
 });
 $("akun-review-wait").addEventListener("click", () => { account.reviewTab = "wait"; renderReviewsPanel(); });
 $("akun-review-done").addEventListener("click", () => { account.reviewTab = "done"; renderReviewsPanel(); });
-$("akun-address-add").addEventListener("click", editAddress);
-$("akun-address-edit").addEventListener("click", editAddress);
-$("akun-address-cancel").addEventListener("click", () => {
-  showAddressView();
-  $(account.address ? "akun-address-edit" : "akun-address-add").focus();
+$("akun-address-add").addEventListener("click", () => openAddressDialog(null));
+for (const chip of document.querySelectorAll(".address-label [data-label]")) {
+  chip.addEventListener("click", () => {
+    setAddressLabel(chip.dataset.label);
+    if (!chip.dataset.label) $("akun-address-label").focus();
+  });
+}
+$("akun-address-label").addEventListener("input", (event) => {
+  const value = event.target.value.trim();
+  for (const chip of document.querySelectorAll(".address-label [data-label]")) {
+    chip.setAttribute("aria-pressed", String(chip.dataset.label === (["Rumah", "Kantor"].includes(value) ? value : "")));
+  }
+});
+$("akun-address-dialog").addEventListener("close", () => {
+  const opener = account.addressOpener;
+  account.addressOpener = null;
+  if (opener && opener.isConnected) opener.focus();
+  else $("akun-address-add").focus();
 });
 $("akun-address-form").addEventListener("submit", submitAccountAddress);
 $("akun-security-send").addEventListener("click", sendPasswordLink);

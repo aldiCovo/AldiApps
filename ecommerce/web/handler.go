@@ -121,6 +121,31 @@ func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, 
 		g.withSession(w, r, g.userURL+"/me/photo", nil)
 	})
 	mux.HandleFunc("GET /api/me/photo", g.mePhoto)
+	mux.HandleFunc("GET /api/me/addresses", func(w http.ResponseWriter, r *http.Request) {
+		g.withSession(w, r, g.userURL+"/me/addresses", nil)
+	})
+	mux.HandleFunc("POST /api/me/addresses", func(w http.ResponseWriter, r *http.Request) {
+		if body, ok := readBody(w, r); ok {
+			g.withSession(w, r, g.userURL+"/me/addresses", body)
+		}
+	})
+	mux.HandleFunc("PUT /api/me/addresses/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if id, ok := addressID(w, r); ok {
+			if body, ok := readBody(w, r); ok {
+				g.withSession(w, r, g.userURL+"/me/addresses/"+id, body)
+			}
+		}
+	})
+	mux.HandleFunc("PUT /api/me/addresses/{id}/main", func(w http.ResponseWriter, r *http.Request) {
+		if id, ok := addressID(w, r); ok {
+			g.withSession(w, r, g.userURL+"/me/addresses/"+id+"/main", nil)
+		}
+	})
+	mux.HandleFunc("DELETE /api/me/addresses/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if id, ok := addressID(w, r); ok {
+			g.withSession(w, r, g.userURL+"/me/addresses/"+id, nil)
+		}
+	})
 	mux.HandleFunc("GET /api/me/address", func(w http.ResponseWriter, r *http.Request) {
 		g.withSession(w, r, g.userURL+"/me/address", nil)
 	})
@@ -576,6 +601,15 @@ func orderPath(w http.ResponseWriter, r *http.Request) (string, bool) {
 
 func (g *gateway) me(w http.ResponseWriter, r *http.Request) {
 	g.withSession(w, r, g.userURL+"/me", nil)
+}
+
+func addressID(w http.ResponseWriter, r *http.Request) (string, bool) {
+	id := r.PathValue("id")
+	if !numericID.MatchString(id) {
+		writeError(w, http.StatusNotFound, "address not found")
+		return "", false
+	}
+	return id, true
 }
 
 // mePhoto passes the account's picture on as an image. The page asks for it with

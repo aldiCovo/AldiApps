@@ -701,3 +701,41 @@ func TestProfileRequestsCarryTheSession(t *testing.T) {
 		t.Fatalf("photo with a bad session: status %d, headers %v", resp.StatusCode, resp.Header)
 	}
 }
+
+func TestAddressListRequests(t *testing.T) {
+	server, f := newTestGateway(t)
+	session := &http.Cookie{Name: sessionCookie, Value: testToken}
+	for _, c := range []struct{ method, path, body, want string }{
+		{"GET", "/api/me/addresses", "", "user GET /me/addresses"},
+		{"POST", "/api/me/addresses", `{"label":"Rumah"}`, "user POST /me/addresses"},
+		{"PUT", "/api/me/addresses/7", `{"label":"Rumah"}`, "user PUT /me/addresses/7"},
+		{"PUT", "/api/me/addresses/7/main", "", "user PUT /me/addresses/7/main"},
+		{"DELETE", "/api/me/addresses/7", "", "user DELETE /me/addresses/7"},
+	} {
+		contentType := ""
+		if c.body != "" {
+			contentType = "application/json"
+		}
+		resp, _ := do(t, c.method, server.URL+c.path, contentType, c.body, session)
+		seen := f.seen()
+		if resp.StatusCode >= 300 || seen[len(seen)-1] != c.want || resp.Header.Get("Cache-Control") != "no-store" {
+			t.Fatalf("%s %s: status %d, seen %v", c.method, c.path, resp.StatusCode, seen)
+		}
+		f.mu.Lock()
+		got := f.headers[len(f.headers)-1].Get("Authorization")
+		f.mu.Unlock()
+		if got != "Bearer "+testToken {
+			t.Fatalf("%s %s: Authorization %q", c.method, c.path, got)
+		}
+		before := len(f.seen())
+		if resp, _ := do(t, c.method, server.URL+c.path, contentType, c.body); resp.StatusCode != http.StatusUnauthorized || len(f.seen()) != before {
+			t.Fatalf("%s %s without a session: status %d", c.method, c.path, resp.StatusCode)
+		}
+	}
+	for _, path := range []string{"/api/me/addresses/abc", "/api/me/addresses/..%2fphoto", "/api/me/addresses/-1/main"} {
+		before := len(f.seen())
+		if resp, _ := do(t, "DELETE", server.URL+path, "", "", session); resp.StatusCode != http.StatusNotFound || len(f.seen()) != before {
+			t.Fatalf("%s: status %d", path, resp.StatusCode)
+		}
+	}
+}

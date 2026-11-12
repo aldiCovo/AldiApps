@@ -69,30 +69,3 @@ func (s *Store) ByEmail(ctx context.Context, email string) (User, string, error)
 		"SELECT "+userColumns+", password_hash FROM users WHERE email = $1", email), &passwordHash)
 	return user, passwordHash, err
 }
-
-func (s *Store) Address(ctx context.Context, userID int64) (Address, error) {
-	var a Address
-	err := s.pool.QueryRow(ctx,
-		`SELECT recipient, phone, street, district, city, province, postal_code FROM addresses WHERE user_id = $1`,
-		userID).Scan(&a.Recipient, &a.Phone, &a.Street, &a.District, &a.City, &a.Province, &a.PostalCode)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return Address{}, errNoAddress
-	}
-	return a, err
-}
-
-// SaveAddress replaces the account's address. An account deleted meanwhile gives errNotFound.
-func (s *Store) SaveAddress(ctx context.Context, userID int64, a Address) error {
-	_, err := s.pool.Exec(ctx,
-		`INSERT INTO addresses (user_id, recipient, phone, street, district, city, province, postal_code)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		 ON CONFLICT (user_id) DO UPDATE SET recipient = EXCLUDED.recipient, phone = EXCLUDED.phone,
-		     street = EXCLUDED.street, district = EXCLUDED.district, city = EXCLUDED.city,
-		     province = EXCLUDED.province, postal_code = EXCLUDED.postal_code, updated_at = now()`,
-		userID, a.Recipient, a.Phone, a.Street, a.District, a.City, a.Province, a.PostalCode)
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == pgForeignKeyViolation {
-		return errNotFound
-	}
-	return err
-}

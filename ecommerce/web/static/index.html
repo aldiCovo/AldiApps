@@ -405,6 +405,7 @@
       <button id="chat-older" class="link-button chat-older" type="button" hidden>Muat pesan sebelumnya</button>
       <p id="chat-welcome" class="chat-welcome" hidden>Halo! Ada yang bisa kami bantu? Tanya soal ukuran, stok, pesanan, atau pembayaran.</p>
       <div id="chat-lines" class="chat-lines" aria-live="polite"></div>
+      <div id="chat-menu" class="chat-menu" hidden></div>
     </div>
     <p id="chat-note" class="chat-note" role="alert" hidden></p>
     <div id="chat-picker" class="chat-picker" hidden>
@@ -416,6 +417,15 @@
       <div id="chat-pick-orders" class="chat-pick-list"></div>
       <h4>Produk yang baru kamu lihat</h4>
       <div id="chat-pick-products" class="chat-pick-list"></div>
+    </div>
+    <div id="chat-menu-pick" class="chat-picker" hidden>
+      <div class="chat-picker-head">
+        <h3 id="chat-menu-pick-title"></h3>
+        <button id="chat-menu-pick-close" class="chat-close" type="button" aria-label="Tutup pilihan">×</button>
+      </div>
+      <label id="chat-menu-pick-label" class="visually-hidden" for="chat-menu-pick-search"></label>
+      <input id="chat-menu-pick-search" class="chat-menu-search" type="search" autocomplete="off">
+      <div id="chat-menu-pick-list" class="chat-pick-list"></div>
     </div>
     <div id="chat-pending" class="chat-pending" hidden></div>
     <form id="chat-form" class="chat-form" novalidate>

@@ -110,3 +110,35 @@ func TestQuickReplies(t *testing.T) {
 		t.Fatalf("missing: %d", status)
 	}
 }
+
+func TestBotRoutes(t *testing.T) {
+	server, f := newTestServer(t)
+	for _, token := range []string{"", "customer-token"} {
+		if status, _ := do(t, server, "GET", "/chat/bot-settings", token, ""); status != http.StatusUnauthorized && status != http.StatusForbidden {
+			t.Fatalf("token %q: status %d", token, status)
+		}
+	}
+	if status, body := do(t, server, "GET", "/chat/bot-settings", "admin-token", ""); status != http.StatusOK || !strings.Contains(body, `"configured":true`) {
+		t.Fatalf("settings: %d %s", status, body)
+	}
+	if status, _ := do(t, server, "PUT", "/chat/bot-settings", "admin-token", `{"mode":"off","store_info":"Retur 3 hari","telegram":false,"quiet_outside_hours":true,"ai":"none"}`); status != http.StatusNoContent {
+		t.Fatalf("save: %d", status)
+	}
+	if got := f.chatHits[len(f.chatHits)-1]; got != `PUT /internal/bot-settings {"mode":"off","store_info":"Retur 3 hari","telegram":false,"quiet_outside_hours":true,"ai":"none"}` {
+		t.Fatalf("save forwarded: %q", got)
+	}
+	if status, _ := do(t, server, "PUT", "/chat/bot-settings", "admin-token", `{"mode":"off","extra":1}`); status != http.StatusBadRequest {
+		t.Fatalf("unknown field: %d", status)
+	}
+	if status, _ := do(t, server, "POST", "/chat/conversations/2/bot", "admin-token", `{"on":false}`); status != http.StatusNoContent {
+		t.Fatalf("take over: %d", status)
+	}
+	if got := f.chatHits[len(f.chatHits)-1]; got != `POST /internal/conversations/2/bot {"on":false}` {
+		t.Fatalf("take over forwarded: %q", got)
+	}
+	for _, c := range []struct{ path, body string }{{"/chat/conversations/2/bot", `{}`}, {"/chat/conversations/x/bot", `{"on":true}`}} {
+		if status, _ := do(t, server, "POST", c.path, "admin-token", c.body); status != http.StatusBadRequest && status != http.StatusNotFound {
+			t.Errorf("%s %s: %d", c.path, c.body, status)
+		}
+	}
+}

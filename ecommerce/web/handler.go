@@ -43,8 +43,8 @@ const productPhotoSlots = 4
 
 type gateway struct {
 	catalogURL, searchURL, userURL, orderURL, cartURL, chatURL string
-	client                                            *http.Client
-	events                                            http.Handler
+	client                                                     *http.Client
+	events                                                     http.Handler
 }
 
 func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, chatURL, photosDir string) http.Handler {
@@ -178,6 +178,17 @@ func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, 
 	mux.HandleFunc("POST /api/chat/read", func(w http.ResponseWriter, r *http.Request) {
 		if body, ok := readBody(w, r); ok {
 			g.withSession(w, r, g.chatURL+"/chat/read", body)
+		}
+	})
+	// The bot's menu, and "Bicara dengan admin".
+	mux.HandleFunc("POST /api/chat/menu", func(w http.ResponseWriter, r *http.Request) {
+		if body, ok := readBody(w, r); ok {
+			g.withSession(w, r, g.chatURL+"/chat/menu", body)
+		}
+	})
+	mux.HandleFunc("POST /api/chat/handoff", func(w http.ResponseWriter, r *http.Request) {
+		if body, ok := readBody(w, r); ok {
+			g.withSession(w, r, g.chatURL+"/chat/handoff", body)
 		}
 	})
 	// The vouchers this customer can see on the account page.

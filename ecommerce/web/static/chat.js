@@ -26,6 +26,13 @@ const chatState = {
   // The card that goes with the next message, and the products seen lately, newest first.
   pending: null,
   recentProducts: [],
+  // Who answers now: the bot, or a person the chat waits for, whether the bot is writing, and
+  // whether the menu buttons answer.
+  status: { botOn: false, needsAdmin: false, working: false, menuOn: false },
+  // A menu button is being answered.
+  menuBusy: false,
+  // The menu's chips show every button, rather than the ones that follow the last answer.
+  menuAll: false,
 };
 const chatRecentMax = 5;
 
@@ -185,11 +192,195 @@ function showChatHours() {
   const hours = $("chat-hours");
   hours.replaceChildren();
   const online = chatOnline();
-  const dot = el("span", online ? "chat-dot on" : "chat-dot");
+  const { botOn, needsAdmin } = chatState.status;
+  const dot = el("span", botOn || (online && !needsAdmin) ? "chat-dot on" : needsAdmin ? "chat-dot wait" : "chat-dot");
   dot.setAttribute("aria-hidden", "true");
-  hours.append(dot, document.createTextNode(online
-    ? "Online · biasanya membalas dalam beberapa menit"
+  hours.append(dot, document.createTextNode(botOn ? "Dijawab langsung oleh asisten · admin siap membantu"
+    : needsAdmin ? (online ? "Menunggu admin · biasanya beberapa menit" : "Menunggu admin · dibalas Senin–Sabtu, 08.00–20.00 WIB")
+    : online ? "Online · biasanya membalas dalam beberapa menit"
     : "Di luar jam kerja · dibalas Senin–Sabtu, 08.00–20.00 WIB"));
+}
+
+// The menu: buttons the bot answers from the shop's data, without an AI. The labels are what
+// the customer's message says once pressed.
+const chatMenuButtons = [
+  { action: "orders", label: "Status pesanan saya", chip: "Status pesanan", icon: "M3 7l9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10" },
+  { action: "stock", label: "Cek stok & ukuran", chip: "Cek stok", icon: "M8 3l-5 4 3 3 2-1v12h8V9l2 1 3-3-5-4c0 2-1.5 3-4 3S8 5 8 3z" },
+  { action: "shipping", label: "Ongkir ke kotaku", chip: "Ongkir", icon: "M2 7h11v9H2zM13 10h4l4 3v3h-8zM6 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM17 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" },
+  { action: "vouchers", label: "Voucher saya", chip: "Voucher", icon: "M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z" },
+  { action: "returns", label: "Cara retur & tukar", chip: "Retur & tukar", icon: "M4 4h16v12H8l-4 4zM8 9h8M8 12h5" },
+  { action: "admin", label: "Bicara dengan admin", chip: "Bicara dengan admin", icon: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c0-4 4-6 8-6s8 2 8 6" },
+];
+
+function menuIcon(d) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", d);
+  svg.append(path);
+  return svg;
+}
+
+function menuChip(label, onClick) {
+  const chip = el("button", "chat-chip", label);
+  chip.type = "button";
+  chip.disabled = chatState.menuBusy;
+  chip.addEventListener("click", onClick);
+  return chip;
+}
+
+// pressMenu starts a button: stock first asks which product, the rest go straight to the bot.
+function pressMenu(action) {
+  chatState.menuAll = false;
+  if (action === "stock") openMenuPick("stock");
+  else chatMenu({ action });
+}
+
+// renderChatMenu shows the buttons as a grid in an empty chat, and as chips after messages:
+// the ones that follow the last answer, or all of them.
+function renderChatMenu() {
+  const menu = $("chat-menu");
+  const { menuOn, working, needsAdmin } = chatState.status;
+  menu.hidden = !menuOn || working;
+  if (menu.hidden) {
+    menu.replaceChildren();
+    return;
+  }
+  if (chatState.messages.length === 0) {
+    const grid = el("div", "chat-menu-grid");
+    for (const button of chatMenuButtons) {
+      const tile = el("button", "chat-menu-tile");
+      tile.dataset.action = button.action;
+      tile.type = "button";
+      tile.disabled = chatState.menuBusy;
+      tile.append(menuIcon(button.icon), el("span", "", button.label));
+      tile.addEventListener("click", () => pressMenu(button.action));
+      grid.append(tile);
+    }
+    menu.replaceChildren(grid, el("p", "chat-menu-note", "Menu dijawab langsung dari data toko. Pertanyaan lain? Ketik saja di bawah."));
+    return;
+  }
+  const chips = [];
+  const asked = chatState.messages.findLast((message) => message.from === "customer");
+  const lastAnswered = asked && chatState.messages.at(-1).from === "bot" ? asked.body : "";
+  if (!chatState.menuAll && lastAnswered === "Status pesanan saya") {
+    chips.push(
+      menuChip("Ubah alamat / batal", () => chatMenu({ action: "admin", reason: "change_order" })),
+      menuChip("Belum sampai", () => chatMenu({ action: "admin", reason: "not_arrived" })),
+    );
+  } else if (!chatState.menuAll && lastAnswered.startsWith("Ongkir ke")) {
+    chips.push(menuChip("Provinsi lain", () => openMenuPick("province")));
+  }
+  if (chips.length > 0) {
+    chips.push(menuChip("Menu lain", () => {
+      chatState.menuAll = true;
+      renderChatMenu();
+    }));
+  } else {
+    for (const button of chatMenuButtons) {
+      if (button.action === "admin" && needsAdmin) continue;
+      chips.push(menuChip(button.chip, () => pressMenu(button.action)));
+    }
+  }
+  const row = el("div", "chat-chips");
+  row.setAttribute("role", "group");
+  row.setAttribute("aria-label", "Menu cepat");
+  row.append(...chips);
+  menu.replaceChildren(row);
+}
+
+async function chatMenu(body) {
+  if (chatState.menuBusy || !chatState.user) return;
+  chatState.menuBusy = true;
+  $("chat-note").hidden = true;
+  closeMenuPick();
+  renderChatMenu();
+  try {
+    const result = await post("/chat/menu", body);
+    if (result && result.need === "province") {
+      openMenuPick("province");
+      return;
+    }
+    await loadChat(true);
+  } catch (error) {
+    if (error.status === 429) showChatNote("Terlalu cepat. Tunggu sebentar, lalu coba lagi.");
+    else if (error.status === 401) {
+      showChatNote("Sesi kamu sudah berakhir. Silakan masuk lagi.");
+      loadAccount();
+    } else if (error.status === 409) {
+      showChatNote("Menu sedang tidak aktif. Tulis pesan, admin yang membalas.");
+      loadChat(false);
+    } else if (error.status === 404) showChatNote("Produk itu sudah tidak dijual.");
+    else showChatNote("Belum bisa dijawab. Coba lagi sebentar lagi.");
+  } finally {
+    chatState.menuBusy = false;
+    renderChatMenu();
+  }
+}
+
+// The menu's own picker: which product for stock, which province for shipping.
+let menuPickKind = "";
+let menuPickTimer = 0;
+let menuPickSearch = 0;
+
+function openMenuPick(kind) {
+  menuPickKind = kind;
+  closeChatPicker();
+  const stock = kind === "stock";
+  $("chat-menu-pick-title").textContent = stock ? "Cek stok produk yang mana?" : "Ongkir ke provinsi mana?";
+  $("chat-menu-pick-label").textContent = stock ? "Cari nama produk" : "Cari provinsi";
+  const search = $("chat-menu-pick-search");
+  search.value = "";
+  search.placeholder = stock ? "Cari nama produk…" : "Cari provinsi…";
+  $("chat-menu-pick").hidden = false;
+  fillMenuPick("");
+  search.focus();
+}
+
+function closeMenuPick() {
+  menuPickKind = "";
+  clearTimeout(menuPickTimer);
+  $("chat-menu-pick").hidden = true;
+}
+
+async function fillMenuPick(query) {
+  const list = $("chat-menu-pick-list");
+  const kind = menuPickKind;
+  const q = query.trim().toLowerCase();
+  if (kind === "province") {
+    try {
+      shippingTable = shippingTable || await api("/shipping");
+    } catch {
+      list.replaceChildren(el("p", "chat-pick-empty", "Daftar provinsi belum bisa dimuat."));
+      return;
+    }
+    if (menuPickKind !== kind) return;
+    const provinces = shippingTable.provinces.filter((p) => p.name.toLowerCase().includes(q));
+    list.replaceChildren(...(provinces.length > 0 ? provinces.map((p) => {
+      const button = el("button", "chat-pick-province", p.name);
+      button.type = "button";
+      button.addEventListener("click", () => chatMenu({ action: "shipping", province: p.name }));
+      return button;
+    }) : [el("p", "chat-pick-empty", "Provinsi tidak ditemukan.")]));
+    return;
+  }
+  const pick = (card) => chatCard(card, () => chatMenu({ action: "stock", product_id: card.id }));
+  if (q === "") {
+    const recent = chatState.recentProducts.map(pick);
+    list.replaceChildren(...(recent.length > 0 ? [el("p", "chat-pick-empty", "Yang baru kamu lihat:"), ...recent]
+      : [el("p", "chat-pick-empty", "Ketik nama produknya di atas.")]));
+    return;
+  }
+  const mine = ++menuPickSearch;
+  try {
+    const result = await api(`/search?limit=5&q=${encodeURIComponent(q)}`);
+    if (mine !== menuPickSearch || menuPickKind !== kind) return;
+    list.replaceChildren(...(result.products.length > 0 ? result.products.map((product) => pick(productAttachment(product)))
+      : [el("p", "chat-pick-empty", "Produk tidak ditemukan.")]));
+  } catch {
+    if (mine === menuPickSearch) list.replaceChildren(el("p", "chat-pick-empty", "Pencarian belum bisa dipakai."));
+  }
 }
 
 function setChatCount(unread) {
@@ -315,6 +506,10 @@ async function loadChat(scrollDown, older = false) {
   const oldHeight = box.scrollHeight;
   const shownBefore = chatState.messages.map((message) => message.id).join();
   const readBefore = chatState.readUpTo;
+  const statusBefore = JSON.stringify(chatState.status);
+  chatState.status = { botOn: page.bot_on, needsAdmin: page.needs_admin, working: page.bot_working, menuOn: page.menu_on };
+  const statusChanged = statusBefore !== JSON.stringify(chatState.status);
+  if (statusChanged) showChatHours();
   if (older) {
     chatState.messages = [...page.messages, ...chatState.messages];
     chatState.hasMore = page.has_more;
@@ -326,7 +521,7 @@ async function loadChat(scrollDown, older = false) {
   }
   chatState.readUpTo = page.read_up_to;
   chatState.loaded = true;
-  if (!older && !scrollDown && shownBefore === chatState.messages.map((message) => message.id).join() && readBefore === chatState.readUpTo) return;
+  if (!older && !scrollDown && !statusChanged && shownBefore === chatState.messages.map((message) => message.id).join() && readBefore === chatState.readUpTo) return;
   renderChat();
   if (older) box.scrollTop = box.scrollHeight - oldHeight;
   else if (scrollDown || atBottom) box.scrollTop = box.scrollHeight;
@@ -336,6 +531,10 @@ async function loadChat(scrollDown, older = false) {
 function renderChat() {
   $("chat-older").hidden = !chatState.hasMore;
   $("chat-welcome").hidden = chatState.messages.length > 0;
+  const name = chatState.user && chatState.user.name ? firstName(chatState.user.name) : "";
+  $("chat-welcome").textContent = chatState.status.menuOn
+    ? `Halo${name ? ` Kak ${name}` : ""}! Saya Asisten Prastika. Pilih menu di bawah, atau ketik pertanyaan Kakak langsung.`
+    : "Halo! Ada yang bisa kami bantu? Tanya soal ukuran, stok, pesanan, atau pembayaran.";
   const lines = [];
   let lastDay = "";
   const lastMine = chatState.messages.findLast((message) => message.from === "customer");
@@ -348,6 +547,12 @@ function renderChat() {
     }
     const mine = message.from === "customer";
     const line = el("div", mine ? "chat-msg mine" : "chat-msg theirs");
+    if (message.from === "bot") {
+      line.classList.add("bot");
+      const from = el("span", "chat-from");
+      from.append(el("span", "chat-bot-tag", "bot"), document.createTextNode("Asisten Prastika"));
+      line.append(from);
+    }
     if (message.attachment) {
       const card = message.attachment;
       line.classList.add("with-card");
@@ -359,7 +564,11 @@ function renderChat() {
     line.append(el("span", "chat-msg-meta", meta));
     lines.push(line);
   }
+  const { needsAdmin, working } = chatState.status;
+  if (working) lines.push(el("p", "chat-typing", "Asisten Prastika sedang mengetik…"));
+  else if (needsAdmin && chatState.messages.length > 0) lines.push(el("p", "chat-handed", "Diteruskan ke admin · Senin–Sabtu 08.00–20.00 WIB"));
   $("chat-lines").replaceChildren(...lines);
+  renderChatMenu();
 }
 
 function showChatNote(text) {
@@ -380,6 +589,8 @@ async function sendChat() {
     if (chatState.pending === card) setChatPending(null);
     fitChatText();
     if (!chatState.messages.some((shown) => shown.id === message.id)) chatState.messages.push(message);
+    // The bot answers in a moment; say so at once rather than after it starts.
+    if (chatState.status.botOn) chatState.status = { ...chatState.status, working: true };
     renderChat();
     $("chat-box").scrollTop = $("chat-box").scrollHeight;
   } catch (error) {
@@ -432,11 +643,28 @@ $("chat-panel").addEventListener("keydown", (event) => {
     $("chat-attach").focus();
     return;
   }
+  if (!$("chat-menu-pick").hidden) {
+    closeMenuPick();
+    $("chat-text").focus();
+    return;
+  }
   closeChat();
   $("chat-fab").focus();
 });
 $("akun-help-chat").addEventListener("click", () => openChat());
-$("chat-attach").addEventListener("click", () => ($("chat-picker").hidden ? openChatPicker() : closeChatPicker()));
+$("chat-attach").addEventListener("click", () => {
+  closeMenuPick();
+  if ($("chat-picker").hidden) openChatPicker();
+  else closeChatPicker();
+});
+$("chat-menu-pick-close").addEventListener("click", () => {
+  closeMenuPick();
+  $("chat-text").focus();
+});
+$("chat-menu-pick-search").addEventListener("input", (event) => {
+  clearTimeout(menuPickTimer);
+  menuPickTimer = setTimeout(() => fillMenuPick(event.target.value), menuPickKind === "stock" ? 250 : 0);
+});
 $("chat-picker-close").addEventListener("click", () => {
   closeChatPicker();
   $("chat-attach").focus();

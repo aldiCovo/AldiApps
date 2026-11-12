@@ -127,6 +127,9 @@ func newHandler(adminURL string) http.Handler {
 		{http.MethodPost, "/chat/quick-replies", true},
 		{http.MethodPut, "/chat/quick-replies/{id}", true},
 		{http.MethodDelete, "/chat/quick-replies/{id}", false},
+		{http.MethodGet, "/chat/bot-settings", false},
+		{http.MethodPut, "/chat/bot-settings", true},
+		{http.MethodPost, "/chat/conversations/{id}/bot", true},
 	} {
 		mux.HandleFunc(route.method+" /admin/api"+route.path, func(w http.ResponseWriter, r *http.Request) {
 			path := route.path

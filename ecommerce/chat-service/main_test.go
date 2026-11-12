@@ -26,15 +26,20 @@ const (
 	testInternalToken = "internal-token-for-tests-0123456789abcdef"
 )
 
-// signals remembers what would have gone to NATS.
+// signals remembers what would have gone to NATS: new messages, and how many other changes.
 type signals struct {
-	mu   sync.Mutex
-	sent []string
+	mu      sync.Mutex
+	sent    []string
+	changes int
 }
 
 func (s *signals) Message(userID, messageID int64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if messageID == 0 {
+		s.changes++
+		return
+	}
 	s.sent = append(s.sent, fmt.Sprintf("%d:%d", userID, messageID))
 }
 
@@ -46,12 +51,21 @@ func (s *signals) count() int {
 
 type harness struct {
 	*httptest.Server
-	private ed25519.PrivateKey
-	signals *signals
-	pool    *pgxpool.Pool
+	private  ed25519.PrivateKey
+	signals  *signals
+	pool     *pgxpool.Pool
+	bot      *Assistant
+	claude   *fakeClaude
+	gemini   *fakeGemini
+	telegram *fakeTelegram
 }
 
+// newHarness runs chat-service with the bot off, as before there was one.
 func newHarness(t *testing.T) *harness {
+	return newHarnessWith(t, false)
+}
+
+func newHarnessWith(t *testing.T, withBot bool) *harness {
 	t.Helper()
 	url := os.Getenv("TEST_DATABASE_URL")
 	if url == "" {
@@ -66,7 +80,15 @@ func newHarness(t *testing.T) *harness {
 	if err := migrate(ctx, pool); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, "TRUNCATE messages, conversations RESTART IDENTITY"); err != nil {
+	if _, err := pool.Exec(ctx, "TRUNCATE messages, conversations, handoffs, bot_daily RESTART IDENTITY"); err != nil {
+		t.Fatal(err)
+	}
+	// With the bot, Claude answers; tests switch to Gemini or no AI themselves.
+	mode := "off"
+	if withBot {
+		mode = "always"
+	}
+	if _, err := pool.Exec(ctx, "UPDATE bot_settings SET mode = $1, store_info = '', telegram = true, quiet_outside_hours = true, ai = 'claude'", mode); err != nil {
 		t.Fatal(err)
 	}
 	public, private, err := ed25519.GenerateKey(rand.Reader)
@@ -74,6 +96,23 @@ func newHarness(t *testing.T) *harness {
 		t.Fatal(err)
 	}
 	users := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/me" {
+			if tokenSubject(r) == "" {
+				http.Error(w, "no", http.StatusUnauthorized)
+				return
+			}
+			fmt.Fprintf(w, `{"id":%s,"name":"Sari Maharani","email":"sari@contoh.id"}`, tokenSubject(r))
+			return
+		}
+		// Customer 7 has an address in Jawa Barat; the others have none.
+		if r.URL.Path == "/me/address" {
+			if tokenSubject(r) != "7" {
+				http.Error(w, `{"error":"no address"}`, http.StatusNotFound)
+				return
+			}
+			fmt.Fprint(w, `{"recipient":"Sari","phone":"0812","street":"Jl. Melati 5","city":"Bandung","province":"Jawa Barat"}`)
+			return
+		}
 		fmt.Fprintf(w, `{"keys":[{"kty":"OKP","crv":"Ed25519","kid":%q,"x":%q}]}`, testKeyID, base64.RawURLEncoding.EncodeToString(public))
 	}))
 	t.Cleanup(users.Close)
@@ -81,7 +120,7 @@ func newHarness(t *testing.T) *harness {
 	catalog := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/products/5":
-			fmt.Fprint(w, `{"id":5,"name":"Dress Linen Midi","price":289000,"category_id":3,"variants":[]}`)
+			fmt.Fprint(w, `{"id":5,"name":"Dress Linen Midi","price":289000,"original_price":329000,"category_id":3,"variants":[{"size":"M","color":"Hitam","stock":3},{"size":"L","color":"Hitam","stock":0}]}`)
 		case "/products/500":
 			http.Error(w, "broken", http.StatusInternalServerError)
 		default:
@@ -90,21 +129,78 @@ func newHarness(t *testing.T) *harness {
 	}))
 	t.Cleanup(catalog.Close)
 	// Order 9 is customer 7's; anyone else gets 404, as order-service answers.
+	const order9 = `{"id":9,"status":"shipped","total":319000,"tracking_number":"JNE123","shipping":{"courier":"JNE","service":"Reguler","estimate":"2–3 hari","cost":10000},"shipping_address":{"street":"Jl. Melati 5","city":"Bandung"},"items":[{"product_name":"Dress Linen Midi"},{"product_name":"Hijab Voal"}]}`
 	orders := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-		claims := jwt.RegisteredClaims{}
-		_, _, err := jwt.NewParser().ParseUnverified(token, &claims)
-		if err != nil || claims.Subject != "7" || r.URL.Path != "/orders/9" {
+		switch {
+		case r.URL.Path == "/shipping":
+			fmt.Fprint(w, `{"provinces":[{"name":"Jawa Barat","zone":1},{"name":"Papua","zone":4}],"options":[`+
+				`{"id":"jne-reg","courier":"JNE","service":"Reguler","costs":[10000,20000,30000,45000],"estimates":["2–3 hari","3–5 hari","4–6 hari","5–8 hari"]},`+
+				`{"id":"jne-express","courier":"JNE","service":"Express","costs":[20000,38000,55000,80000],"estimates":["1 hari","1–2 hari","2–3 hari","2–4 hari"]},`+
+				`{"id":"jnt-reg","courier":"J&T","service":"Reguler","costs":[9000,19000,29000,44000],"estimates":["2–3 hari","3–5 hari","4–6 hari","5–8 hari"]},`+
+				`{"id":"sicepat-express","courier":"SiCepat","service":"Express","costs":[18000,35000,52000,77000],"estimates":["1 hari","1–2 hari","2–3 hari","2–4 hari"]}]}`)
+		case tokenSubject(r) == "":
+			http.Error(w, "no", http.StatusUnauthorized)
+		case r.URL.Path == "/orders":
+			if tokenSubject(r) != "7" {
+				fmt.Fprint(w, `{"orders":[]}`)
+				return
+			}
+			fmt.Fprint(w, `{"orders":[`+order9+`,{"id":4,"status":"completed","total":120000,"items":[{"product_name":"Hijab Voal"}]}]}`)
+		case r.URL.Path == "/vouchers/mine":
+			if tokenSubject(r) != "7" {
+				fmt.Fprint(w, `{"vouchers":[]}`)
+				return
+			}
+			fmt.Fprint(w, `{"vouchers":[{"code":"HEMAT10","kind":"percent","value":10,"max_discount":50000,"min_subtotal":200000,"state":"usable"},`+
+				`{"code":"ONGKIR","kind":"amount","value":15000,"min_subtotal":0,"state":"usable"},{"code":"LAMA","kind":"amount","value":5000,"state":"ended"}]}`)
+		case tokenSubject(r) == "7" && r.URL.Path == "/orders/9":
+			fmt.Fprint(w, order9)
+		default:
 			http.NotFound(w, r)
-			return
 		}
-		fmt.Fprint(w, `{"id":9,"status":"shipped","total":319000,"items":[{"product_name":"Dress Linen Midi"},{"product_name":"Hijab Voal"}]}`)
 	}))
 	t.Cleanup(orders.Close)
+	search := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{"total":1,"products":[{"id":5,"name":"Dress Linen Midi %s","price":289000,"variants":[{"size":"M","color":"Hitam","stock":3}]}]}`, r.URL.Query().Get("q"))
+	}))
+	t.Cleanup(search.Close)
+	claude := &fakeClaude{}
+	claudeServer := httptest.NewServer(claude)
+	t.Cleanup(claudeServer.Close)
+	gemini := &fakeGemini{}
+	geminiServer := httptest.NewServer(gemini)
+	t.Cleanup(geminiServer.Close)
+	telegram := &fakeTelegram{}
+	telegramServer := httptest.NewServer(telegram)
+	t.Cleanup(telegramServer.Close)
+
 	sig := &signals{}
-	server := httptest.NewServer(newHandler(&Store{pool: pool}, newVerifier(users.URL), sig, newLookup(catalog.URL, orders.URL), testInternalToken))
+	store := &Store{pool: pool}
+	lookup := newLookup(catalog.URL, orders.URL)
+	config := assistantConfig{
+		searchURL: search.URL, catalogURL: catalog.URL, orderURL: orders.URL, userURL: users.URL,
+		telegramURL: telegramServer.URL, telegramToken: "bot-token", telegramChatID: "-100",
+		adminURL: "https://toko.test/admin", debounce: 0,
+	}
+	if withBot {
+		config.anthropicKey, config.anthropicURL, config.debounce = "test-key", claudeServer.URL, 150*time.Millisecond
+		config.geminiKey, config.geminiURL = "gemini-key", geminiServer.URL
+	}
+	bot := newAssistant(store, sig, lookup, config)
+	server := httptest.NewServer(newHandler(store, newVerifier(users.URL), sig, lookup, bot, testInternalToken))
 	t.Cleanup(server.Close)
-	return &harness{Server: server, private: private, signals: sig, pool: pool}
+	t.Cleanup(bot.Wait)
+	return &harness{Server: server, private: private, signals: sig, pool: pool, bot: bot, claude: claude, gemini: gemini, telegram: telegram}
+}
+
+// tokenSubject reads the user from a test token without checking it.
+func tokenSubject(r *http.Request) string {
+	token, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	claims := jwt.RegisteredClaims{}
+	if _, _, err := jwt.NewParser().ParseUnverified(token, &claims); err != nil {
+		return ""
+	}
+	return claims.Subject
 }
 
 func (h *harness) token(t *testing.T, userID int64) string {
@@ -217,6 +313,8 @@ func TestConversation(t *testing.T) {
 		t.Fatalf("send: status %d, body %s", status, body)
 	}
 	h.customer(t, budi, "POST", "/chat/messages", `{"body":"Pesanan saya?"}`)
+	// Without a bot, every message goes to the admins.
+	h.bot.Wait()
 	if h.signals.count() != 2 {
 		t.Fatalf("signals: %v", h.signals.sent)
 	}

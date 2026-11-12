@@ -37,6 +37,11 @@ const chat = {
   // The shared quick replies, and the open customer's first name for {nama}.
   quick: null,
   firstName: "",
+  // Where the open conversation stands with the bot, and the shop's bot settings.
+  state: null,
+  bot: null,
+  // A conversation to open once the list is in, from a #chat-<id> link.
+  openId: null,
 };
 const quickMessages = {
   "there can be at most 30 quick replies": "Sudah ada 30 balasan cepat. Hapus satu dulu.",
@@ -252,7 +257,7 @@ function setChatBadge(waiting) {
   const badge = $("chat-badge");
   badge.hidden = !(waiting > 0);
   badge.textContent = waiting > 99 ? "99+" : String(waiting || "");
-  badge.setAttribute("aria-label", `${waiting} belum dibalas`);
+  badge.setAttribute("aria-label", `${waiting} perlu admin`);
 }
 
 // The badge on the menu, on every page.
@@ -267,9 +272,16 @@ function watchChatBadge() {
 }
 
 function openChat() {
-  $("chat-tab-waiting").setAttribute("aria-pressed", String(chat.filter === "waiting"));
-  $("chat-tab-all").setAttribute("aria-pressed", String(chat.filter === "all"));
-  refreshChat(true);
+  for (const filter of ["waiting", "bot", "all"]) {
+    $(`chat-tab-${filter}`).setAttribute("aria-pressed", String(chat.filter === filter));
+  }
+  refreshChat(true).then(() => {
+    if (chat.openId === null) return;
+    const id = chat.openId;
+    chat.openId = null;
+    openConversation(chat.list.find((c) => c.user_id === id) || { user_id: id, customer: null });
+  });
+  loadBotSettings();
   if (!chat.quick) loadQuickReplies();
   clearInterval(chat.timer);
   chat.timer = setInterval(() => { if (!document.hidden) refreshChat(false); }, chatPollOpen);
@@ -300,7 +312,7 @@ async function loadChatList(showLoading, limit = chatPageSize, offset = 0) {
   chat.list = offset === 0 ? page.conversations : [...chat.list, ...page.conversations];
   chat.total = page.total;
   setChatBadge(page.waiting);
-  $("chat-tab-waiting").textContent = `Belum dibalas (${page.waiting})`;
+  $("chat-tab-waiting").textContent = `Perlu admin (${page.waiting})`;
   renderChatList();
 }
 
@@ -308,7 +320,8 @@ function renderChatList() {
   $("chat-list").replaceChildren(...chat.list.map(chatRow));
   $("chat-more").hidden = chat.list.length >= chat.total;
   $("chat-list-status").textContent = chat.list.length > 0 ? ""
-    : chat.filter === "waiting" ? "Semua chat sudah dibalas." : "Belum ada pelanggan yang chat.";
+    : chat.filter === "waiting" ? "Tidak ada chat yang perlu admin."
+    : chat.filter === "bot" ? "Belum ada chat yang dijawab bot." : "Belum ada pelanggan yang chat.";
 }
 
 function chatRow(conversation) {
@@ -322,10 +335,12 @@ function chatRow(conversation) {
   const last = el("span", "chat-row-last");
   const lastMessage = conversation.last_message;
   const said = lastMessage.body || (lastMessage.attachment ? cardSummary(lastMessage.attachment) : "");
-  const text = (lastMessage.from === "admin" ? "Anda: " : "") + said;
+  const text = ({ admin: "Admin: ", bot: "Bot: " }[lastMessage.from] || "") + said;
   last.append(el("span", "chat-row-text", text));
   if (conversation.unread > 0) last.append(el("span", "chat-count", String(conversation.unread)));
   row.append(head, last);
+  if (conversation.waiting) row.append(el("span", "chat-row-reason", conversation.reason || "Perlu admin"));
+  else if (conversation.bot_off) row.append(el("span", "chat-row-reason", "Ditangani admin"));
   row.addEventListener("click", () => openConversation(conversation));
   item.append(row);
   return item;
@@ -336,6 +351,9 @@ async function openConversation(conversation) {
   chat.messages = [];
   chat.hasMore = false;
   chat.readUpTo = 0;
+  chat.state = null;
+  renderBotState();
+  history.replaceState(null, "", `#chat-${conversation.user_id}`);
   $("chat-view").classList.add("thread-open");
   $("chat-empty").hidden = true;
   $("chat-open").hidden = false;
@@ -359,6 +377,7 @@ async function openConversation(conversation) {
 
 function closeConversation() {
   chat.userId = null;
+  history.replaceState(null, "", "#chat");
   $("chat-view").classList.remove("thread-open");
   $("chat-open").hidden = true;
   $("chat-info").hidden = true;
@@ -375,6 +394,12 @@ async function loadChatInfo(userId) {
     return;
   }
   if (chat.userId !== userId) return;
+  if (info.customer) {
+    $("chat-who").textContent = info.customer.name;
+    $("chat-who-email").textContent = info.customer.email;
+    chat.firstName = info.customer.name.trim().split(/\s+/)[0];
+    renderQuickChips();
+  }
   $("chat-info-name").textContent = info.customer ? `${info.customer.name} · ${info.customer.email}` : "Akunnya sudah dihapus.";
   $("chat-info-since").textContent = info.customer && info.customer.created_at
     ? `Member sejak ${chatMonth.format(new Date(info.customer.created_at))}` : "";
@@ -415,6 +440,8 @@ async function loadChatMessages(scrollDown, older = false) {
     if (kept.length === 0) chat.hasMore = page.has_more;
     const same = before === chat.messages.map((message) => message.id).join() && chat.readUpTo === page.read_up_to;
     chat.readUpTo = page.read_up_to;
+    chat.state = { needsAdmin: page.needs_admin, botOff: page.bot_off, botOn: page.bot_on, working: page.bot_working };
+    renderBotState();
     if (same && !scrollDown) return;
   }
   renderChatMessages();
@@ -430,14 +457,18 @@ function renderChatMessages() {
   $("chat-older").hidden = !chat.hasMore;
   const lines = [];
   let lastDay = "";
-  const lastMine = chat.messages.findLast((message) => message.from === "admin");
+  const lastMine = chat.messages.findLast((message) => message.from !== "customer");
   for (const message of chat.messages) {
     const day = new Date(message.created_at).toDateString();
     if (day !== lastDay) {
       lines.push(el("p", "chat-day", chatDay.format(new Date(message.created_at))));
       lastDay = day;
     }
-    const line = el("div", `chat-line ${message.from === "admin" ? "mine" : "theirs"}`);
+    const line = el("div", `chat-line ${message.from === "customer" ? "theirs" : "mine"}`);
+    if (message.from === "bot") {
+      line.classList.add("bot");
+      line.append(el("span", "chat-from", "BOT · Asisten Prastika"));
+    }
     if (message.attachment) {
       const card = message.attachment;
       line.classList.add("with-card");
@@ -528,7 +559,7 @@ $("chat-pick-search").addEventListener("keydown", (event) => {
 });
 $("chat-back").addEventListener("click", closeConversation);
 $("chat-more").addEventListener("click", () => loadChatList(false, chatPageSize, chat.list.length));
-for (const [id, filter] of [["chat-tab-waiting", "waiting"], ["chat-tab-all", "all"]]) {
+for (const [id, filter] of [["chat-tab-waiting", "waiting"], ["chat-tab-bot", "bot"], ["chat-tab-all", "all"]]) {
   $(id).addEventListener("click", () => {
     chat.filter = filter;
     chat.list = [];
@@ -537,4 +568,148 @@ for (const [id, filter] of [["chat-tab-waiting", "waiting"], ["chat-tab-all", "a
 }
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && !$("chat-view").hidden) refreshChat(false);
+});
+
+// Where the open conversation stands with the bot, and the button that changes it.
+function renderBotState() {
+  const state = chat.state;
+  const label = $("chat-bot-state");
+  const toggle = $("chat-bot-toggle");
+  if (!state) {
+    label.hidden = true;
+    toggle.hidden = true;
+    return;
+  }
+  let text = "";
+  let kind = "";
+  let action = null;
+  if (state.working) {
+    text = "Bot sedang mengetik…";
+  } else if (state.botOff) {
+    text = "Bot diam · admin yang menjawab";
+    kind = "quiet";
+    action = true;
+  } else if (state.needsAdmin) {
+    text = "Perlu admin";
+    kind = "waiting";
+    if (chat.bot && chat.bot.mode !== "off") action = true;
+  } else if (state.botOn) {
+    text = "Bot menjawab chat ini";
+    action = false;
+  }
+  label.hidden = !text;
+  label.textContent = text;
+  label.className = `bot-state ${kind}`;
+  toggle.hidden = action === null;
+  toggle.textContent = action ? "Kembalikan ke bot" : "Ambil alih";
+  toggle.dataset.on = String(action);
+}
+
+async function toggleBot() {
+  const userId = chat.userId;
+  const on = $("chat-bot-toggle").dataset.on === "true";
+  $("chat-bot-toggle").disabled = true;
+  try {
+    await post(`/chat/conversations/${userId}/bot`, { on });
+    if (chat.userId === userId) await loadChatMessages(false);
+    loadChatList(false, Math.max(chat.list.length, chatPageSize));
+  } catch (error) {
+    if (!handleAuth(error)) {
+      $("chat-error").textContent = "Belum berhasil. Coba lagi.";
+      $("chat-error").hidden = false;
+    }
+  } finally {
+    $("chat-bot-toggle").disabled = false;
+  }
+}
+
+async function loadBotSettings() {
+  try {
+    chat.bot = await api("/chat/bot-settings");
+  } catch (error) {
+    handleAuth(error);
+    return;
+  }
+  const pill = $("chat-bot-pill");
+  const bot = chat.bot;
+  const [text, kind] = bot.mode === "off" ? ["Bot mati", ""]
+    : bot.mode === "always" ? ["Bot aktif · menjawab dulu", "on"]
+    : bot.answering_now ? ["Bot aktif · di luar jam kerja", "on"] : ["Bot aktif di luar jam kerja", "partly"];
+  pill.textContent = text;
+  pill.className = `bot-pill ${kind}`;
+  pill.hidden = false;
+  renderBotState();
+}
+
+function openBotSettings() {
+  const bot = chat.bot;
+  if (!bot) return;
+  for (const radio of document.querySelectorAll('input[name="bot-mode"]')) radio.checked = radio.value === bot.mode;
+  for (const radio of document.querySelectorAll('input[name="bot-ai"]')) radio.checked = radio.value === bot.ai;
+  renderBotKeys();
+  $("bot-store-info").value = bot.store_info;
+  $("bot-telegram").checked = bot.telegram;
+  $("bot-quiet").checked = bot.quiet_outside_hours;
+  $("bot-telegram-missing").hidden = bot.telegram_configured;
+  $("bot-month").textContent = `Bulan ini: menu dipakai ${bot.month_menu} kali, AI menjawab ${bot.month_ai} pesan, ${bot.month_handoffs} chat diteruskan ke admin.`;
+  $("bot-today").textContent = `Hari ini: AI menjawab ${bot.today_ai} pesan.`;
+  $("bot-settings-status").textContent = "";
+  $("chat-bot-settings").hidden = false;
+  $("chat-layout").hidden = true;
+  $("chat-bot-settings-open").setAttribute("aria-expanded", "true");
+  document.querySelector('input[name="bot-mode"]:checked')?.focus();
+}
+
+// renderBotKeys shows which AIs have a key on the server, and warns when the chosen one has none.
+function renderBotKeys() {
+  const bot = chat.bot;
+  const keys = { gemini: bot.gemini_configured, claude: bot.claude_configured };
+  for (const [ai, ok] of Object.entries(keys)) {
+    const badge = $(`bot-key-${ai}`);
+    badge.textContent = ok ? "Kunci terpasang" : "Belum ada kunci";
+    badge.className = `bot-key ${ok ? "ok" : ""}`;
+  }
+  const chosen = document.querySelector('input[name="bot-ai"]:checked');
+  const missing = chosen && chosen.value !== "none" && !keys[chosen.value];
+  $("bot-ai-missing").hidden = !missing;
+  $("bot-ai-missing").textContent = missing
+    ? `Kunci ${chosen.value === "gemini" ? "Gemini" : "Claude"} belum dipasang di server, jadi kalimat bebas langsung diteruskan ke admin. Tombol menu tetap jalan.`
+    : "";
+}
+
+for (const radio of document.querySelectorAll('input[name="bot-ai"]')) radio.addEventListener("change", renderBotKeys);
+
+function closeBotSettings() {
+  $("chat-bot-settings").hidden = true;
+  $("chat-layout").hidden = false;
+  $("chat-bot-settings-open").setAttribute("aria-expanded", "false");
+}
+
+$("chat-bot-settings-open").addEventListener("click", () => {
+  if ($("chat-bot-settings").hidden) openBotSettings();
+  else closeBotSettings();
+});
+$("chat-bot-settings-close").addEventListener("click", closeBotSettings);
+$("chat-bot-toggle").addEventListener("click", toggleBot);
+$("chat-bot-settings").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const mode = document.querySelector('input[name="bot-mode"]:checked');
+  const ai = document.querySelector('input[name="bot-ai"]:checked');
+  const status = $("bot-settings-status");
+  status.textContent = "Menyimpan…";
+  try {
+    await send("PUT", "/chat/bot-settings", {
+      mode: mode ? mode.value : "always",
+      ai: ai ? ai.value : "gemini",
+      store_info: $("bot-store-info").value,
+      telegram: $("bot-telegram").checked,
+      quiet_outside_hours: $("bot-quiet").checked,
+    });
+    status.textContent = "Disimpan.";
+    await loadBotSettings();
+  } catch (error) {
+    if (!handleAuth(error)) {
+      status.textContent = error.status === 400 ? "Info toko maksimal 4.000 huruf." : "Belum tersimpan. Coba lagi.";
+    }
+  }
 });

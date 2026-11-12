@@ -499,6 +499,8 @@ func TestOrdersUseTheSessionCookie(t *testing.T) {
 		{"GET", "/api/chat/unread", "chat GET /chat/unread"},
 		{"POST", "/api/chat/messages", "chat POST /chat/messages"},
 		{"POST", "/api/chat/read", "chat POST /chat/read"},
+		{"POST", "/api/chat/menu", "chat POST /chat/menu"},
+		{"POST", "/api/chat/handoff", "chat POST /chat/handoff"},
 		{"GET", "/api/orders?limit=5", "order GET /orders?limit=5"},
 		{"GET", "/api/orders/12", "order GET /orders/12"},
 		{"POST", "/api/orders/12/pay", "order POST /orders/12/pay"},

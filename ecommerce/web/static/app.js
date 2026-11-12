@@ -1448,22 +1448,7 @@ function linkButton(label, key, onClick) {
 
 // What the customer can still do with an order, the same in the list and in its detail.
 function orderActions(order, target) {
-  if (order.status === "rejected") {
-    const again = el("button", "link", "Masukkan lagi ke keranjang");
-    again.type = "button";
-    again.addEventListener("click", async () => {
-      again.disabled = true;
-      try {
-        await addToCart(order.items.map(({ product_id, variant_id, quantity }) => ({ product_id, variant_id, quantity })));
-        $("orders-dialog").close();
-        openCart();
-      } catch {
-        $("orders-status").textContent = "Keranjang belum bisa diubah. Coba lagi sebentar lagi.";
-        again.disabled = false;
-      }
-    });
-    target.append(again);
-  }
+  if (canBuyAgain(order)) target.append(buyAgainButton(order, "secondary small", (text) => { $("orders-status").textContent = text; }, () => $("orders-dialog").close()));
   if (order.status === "arrived") target.append(receiveControls(order));
   if (order.status === "completed") target.append(reviewControls(order));
   if (order.status === "awaiting_payment") {
@@ -2368,9 +2353,82 @@ async function refreshCart(note = "") {
   renderCart(notes.join(" "));
 }
 
-function openCart() {
+function openCart(note = "") {
+  $("cart-added").textContent = note;
+  $("cart-added").hidden = !note;
   $("cart-dialog").showModal();
   refreshCart();
+}
+
+// An order that is finished, one way or another, can be ordered again.
+function canBuyAgain(order) {
+  return ["completed", "cancelled", "rejected"].includes(order.status);
+}
+
+// Puts an earlier order's items in the cart again, as far as they are still sold and in stock,
+// and never more than the stock or the cart allows.
+async function buyAgain(order) {
+  const ids = [...new Set(order.items.map((item) => item.product_id))];
+  const results = await Promise.allSettled(ids.map((id) => api(`/products/${id}`)));
+  const failed = results.find((result) => result.status === "rejected" && result.reason.status !== 404);
+  if (failed) throw failed.reason;
+  const variants = new Map();
+  for (const result of results) {
+    if (result.status !== "fulfilled") continue;
+    for (const variant of result.value.variants || []) variants.set(variant.id, variant);
+  }
+  const items = [];
+  let unavailable = 0;
+  let already = 0;
+  for (const item of order.items) {
+    const variant = variants.get(item.variant_id);
+    if (!variant || variant.stock <= 0) {
+      unavailable++;
+      continue;
+    }
+    const inCart = cart.find((entry) => entry.variant_id === item.variant_id)?.quantity || 0;
+    const room = Math.min(variant.stock, cartMaxQuantity) - inCart;
+    if (room <= 0) already++;
+    else items.push({ product_id: item.product_id, variant_id: item.variant_id, quantity: Math.min(item.quantity, room) });
+  }
+  const skipped = items.length ? await addToCart(items) : 0;
+  return { added: items.length - skipped, already, unavailable, full: skipped };
+}
+
+function buyAgainMessage({ added, already, unavailable, full }) {
+  const parts = [];
+  if (added) parts.push(`${added} produk masuk keranjang.`);
+  if (already) parts.push(`${already} produk sudah ada di keranjang sebanyak stoknya.`);
+  if (unavailable) parts.push(`${unavailable} produk stoknya habis atau sudah tidak dijual, tidak dimasukkan.`);
+  if (full) parts.push(`Keranjang penuh, ${full} produk tidak muat.`);
+  return parts.join(" ");
+}
+
+// The Beli lagi button. When something went in, or was in the cart already, the cart opens
+// with a note; otherwise the note is shown where the order is.
+function buyAgainButton(order, className, showProblem, beforeCart) {
+  const button = el("button", `${className} buy-again`);
+  button.type = "button";
+  button.append(chevron("M3 4h2l2.4 11h10.2L20 7H6.2 M9 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2z M17 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"), "Beli lagi");
+  button.setAttribute("aria-label", `Beli lagi pesanan #${order.id}`);
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    showProblem("");
+    try {
+      const result = await buyAgain(order);
+      if (result.added || result.already) {
+        if (beforeCart) beforeCart();
+        openCart(buyAgainMessage(result));
+      } else {
+        showProblem(buyAgainMessage(result) || "Belum ada produk yang bisa dimasukkan ke keranjang.");
+      }
+    } catch (error) {
+      showProblem(error.status === 401 ? "Masuk lagi dulu untuk memakai keranjang." : cartWriteMessage(error));
+    } finally {
+      button.disabled = false;
+    }
+  });
+  return button;
 }
 
 function checkout() {
@@ -2823,8 +2881,8 @@ window.addEventListener("resize", () => {
   if ($("photo-dialog").open) fitPhoto();
 });
 $("order-now").addEventListener("click", orderNow);
-$("cart-open").addEventListener("click", openCart);
-$("footer-cart").addEventListener("click", openCart);
+$("cart-open").addEventListener("click", () => openCart());
+$("footer-cart").addEventListener("click", () => openCart());
 $("footer-orders").addEventListener("click", () => { location.hash = "#akun/pesanan"; });
 $("cart-note-open").addEventListener("click", () => {
   $("product-dialog").close();

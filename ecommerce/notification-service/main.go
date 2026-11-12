@@ -41,6 +41,16 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	if username := os.Getenv("SMTP_USERNAME"); username != "" {
+		mailer.withLogin(username, os.Getenv("SMTP_PASSWORD"))
+	}
+	// chat-service asks for an email when an admin's answer stays unread; without the token
+	// the route is off.
+	chatToken := os.Getenv("CHAT_TOKEN")
+	shopURL := os.Getenv("SHOP_URL")
+	if shopURL == "" {
+		shopURL = "https://prastika.aldiab.ai.id"
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -68,6 +78,9 @@ func run() error {
 	background.Go(func() { (&Consumer{notifier: notifier, url: values["RABBITMQ_URL"]}).Run(ctx) })
 
 	mux := http.NewServeMux()
+	if chatToken != "" {
+		addChatRoutes(mux, notifier, chatToken, shopURL)
+	}
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})

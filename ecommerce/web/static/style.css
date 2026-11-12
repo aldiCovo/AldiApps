@@ -890,8 +890,17 @@ fieldset.address-label input { flex: 1 1 160px; width: auto; }
 .chat-dot.wait { background: var(--wait); }
 .chat-typing { align-self: flex-start; padding: 6px 12px; border-radius: 14px; background: var(--good-soft); color: var(--good); font-size: .8rem; font-style: italic; }
 .chat-handed { align-self: center; max-width: 90%; margin: 4px 0; color: var(--muted); font-size: .76rem; text-align: center; }
-.chat-ask-admin { display: block; margin: 10px 0 2px auto; padding: 7px 14px; border: 1px solid var(--accent); border-radius: 999px; background: var(--card); color: var(--accent); font: 600 .82rem/1.2 var(--sans); cursor: pointer; }
-.chat-ask-admin:hover { background: var(--sand); }
+.chat-menu { display: grid; gap: 8px; margin-top: 8px; }
+.chat-menu-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.chat-menu-tile { display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); font: 500 .84rem/1.3 var(--sans); text-align: left; cursor: pointer; }
+.chat-menu-tile svg { flex: none; width: 20px; height: 20px; fill: none; stroke: var(--accent); stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+.chat-menu-tile:hover:not(:disabled), .chat-chip:hover:not(:disabled), .chat-pick-province:hover { background: var(--sand); }
+.chat-menu-tile:disabled, .chat-chip:disabled { opacity: .6; cursor: progress; }
+.chat-menu-note { color: var(--muted); font-size: .76rem; text-align: center; }
+.chat-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chat-chip { padding: 7px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--accent); font: 500 .8rem/1.2 var(--sans); cursor: pointer; }
+.chat-menu-search { width: 100%; height: 38px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); font: .88rem var(--sans); }
+.chat-pick-province { padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); font: .86rem var(--sans); text-align: left; cursor: pointer; }
 .chat-msg-meta { justify-self: end; font-size: .68rem; opacity: .75; }
 .chat-note { margin: 0; padding: 8px 14px; background: var(--bad-soft); color: var(--accent-dark); font-size: .84rem; }
 .chat-form { display: flex; align-items: flex-end; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); }

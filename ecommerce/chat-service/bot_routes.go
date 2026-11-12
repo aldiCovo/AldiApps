@@ -9,13 +9,13 @@ import (
 
 type botSettingsView struct {
 	BotSettings
-	// Whether the bot has a Claude key; without one, every chat goes to the admins.
-	Configured bool `json:"configured"`
+	// Which AIs have a key. Without the chosen one's, messages the menu doesn't answer go to
+	// the admins.
+	GeminiConfigured bool `json:"gemini_configured"`
+	ClaudeConfigured bool `json:"claude_configured"`
 	// Whether Telegram has a bot token and chat.
 	TelegramConfigured bool `json:"telegram_configured"`
-	// This month in Jakarta: the bot's messages and how often a chat started needing an admin.
-	MonthReplies  int `json:"month_replies"`
-	MonthHandoffs int `json:"month_handoffs"`
+	botUse
 	// The bot answers a new message right now.
 	AnsweringNow bool `json:"answering_now"`
 }
@@ -48,14 +48,14 @@ func addBotRoutes(mux *http.ServeMux, store *Store, bot *Assistant,
 			return
 		}
 		now := bot.now().In(jakarta)
-		replies, handoffs, err := store.BotMonth(r.Context(), time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, jakarta))
+		use, err := store.BotUse(r.Context(), now, time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, jakarta))
 		if err != nil {
 			writeFailure(w, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, botSettingsView{
-			BotSettings: settings, Configured: bot.configured(), TelegramConfigured: bot.telegram != nil,
-			MonthReplies: replies, MonthHandoffs: handoffs, AnsweringNow: bot.answersNow(settings),
+			BotSettings: settings, GeminiConfigured: bot.gemini != nil, ClaudeConfigured: bot.claude != nil,
+			TelegramConfigured: bot.telegram != nil, botUse: use, AnsweringNow: bot.answersNow(settings),
 		})
 	}))
 	mux.HandleFunc("PUT /internal/bot-settings", internal(func(w http.ResponseWriter, r *http.Request) {

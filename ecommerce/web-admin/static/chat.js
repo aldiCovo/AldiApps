@@ -592,7 +592,7 @@ function renderBotState() {
   } else if (state.needsAdmin) {
     text = "Perlu admin";
     kind = "waiting";
-    if (chat.bot && chat.bot.configured) action = true;
+    if (chat.bot && chat.bot.mode !== "off") action = true;
   } else if (state.botOn) {
     text = "Bot menjawab chat ini";
     action = false;
@@ -632,8 +632,7 @@ async function loadBotSettings() {
   }
   const pill = $("chat-bot-pill");
   const bot = chat.bot;
-  const [text, kind] = !bot.configured ? ["Bot belum aktif", ""]
-    : bot.mode === "off" ? ["Bot mati", ""]
+  const [text, kind] = bot.mode === "off" ? ["Bot mati", ""]
     : bot.mode === "always" ? ["Bot aktif · menjawab dulu", "on"]
     : bot.answering_now ? ["Bot aktif · di luar jam kerja", "on"] : ["Bot aktif di luar jam kerja", "partly"];
   pill.textContent = text;
@@ -646,18 +645,39 @@ function openBotSettings() {
   const bot = chat.bot;
   if (!bot) return;
   for (const radio of document.querySelectorAll('input[name="bot-mode"]')) radio.checked = radio.value === bot.mode;
+  for (const radio of document.querySelectorAll('input[name="bot-ai"]')) radio.checked = radio.value === bot.ai;
+  renderBotKeys();
   $("bot-store-info").value = bot.store_info;
   $("bot-telegram").checked = bot.telegram;
   $("bot-quiet").checked = bot.quiet_outside_hours;
-  $("bot-not-configured").hidden = bot.configured;
   $("bot-telegram-missing").hidden = bot.telegram_configured;
-  $("bot-month").textContent = `Bulan ini: bot menjawab ${bot.month_replies} pesan, ${bot.month_handoffs} chat diteruskan ke admin.`;
+  $("bot-month").textContent = `Bulan ini: menu dipakai ${bot.month_menu} kali, AI menjawab ${bot.month_ai} pesan, ${bot.month_handoffs} chat diteruskan ke admin.`;
+  $("bot-today").textContent = `Hari ini: AI menjawab ${bot.today_ai} pesan.`;
   $("bot-settings-status").textContent = "";
   $("chat-bot-settings").hidden = false;
   $("chat-layout").hidden = true;
   $("chat-bot-settings-open").setAttribute("aria-expanded", "true");
   document.querySelector('input[name="bot-mode"]:checked')?.focus();
 }
+
+// renderBotKeys shows which AIs have a key on the server, and warns when the chosen one has none.
+function renderBotKeys() {
+  const bot = chat.bot;
+  const keys = { gemini: bot.gemini_configured, claude: bot.claude_configured };
+  for (const [ai, ok] of Object.entries(keys)) {
+    const badge = $(`bot-key-${ai}`);
+    badge.textContent = ok ? "Kunci terpasang" : "Belum ada kunci";
+    badge.className = `bot-key ${ok ? "ok" : ""}`;
+  }
+  const chosen = document.querySelector('input[name="bot-ai"]:checked');
+  const missing = chosen && chosen.value !== "none" && !keys[chosen.value];
+  $("bot-ai-missing").hidden = !missing;
+  $("bot-ai-missing").textContent = missing
+    ? `Kunci ${chosen.value === "gemini" ? "Gemini" : "Claude"} belum dipasang di server, jadi kalimat bebas langsung diteruskan ke admin. Tombol menu tetap jalan.`
+    : "";
+}
+
+for (const radio of document.querySelectorAll('input[name="bot-ai"]')) radio.addEventListener("change", renderBotKeys);
 
 function closeBotSettings() {
   $("chat-bot-settings").hidden = true;
@@ -674,11 +694,13 @@ $("chat-bot-toggle").addEventListener("click", toggleBot);
 $("chat-bot-settings").addEventListener("submit", async (event) => {
   event.preventDefault();
   const mode = document.querySelector('input[name="bot-mode"]:checked');
+  const ai = document.querySelector('input[name="bot-ai"]:checked');
   const status = $("bot-settings-status");
   status.textContent = "Menyimpan…";
   try {
     await send("PUT", "/chat/bot-settings", {
       mode: mode ? mode.value : "always",
+      ai: ai ? ai.value : "gemini",
       store_info: $("bot-store-info").value,
       telegram: $("bot-telegram").checked,
       quiet_outside_hours: $("bot-quiet").checked,

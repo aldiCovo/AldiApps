@@ -52,6 +52,8 @@ type Page struct {
 	BotWorking bool `json:"bot_working"`
 	// The bot will answer the customer's next message.
 	BotOn bool `json:"bot_on"`
+	// The menu buttons answer now.
+	MenuOn bool `json:"menu_on"`
 	// Admins only: an admin has taken the conversation over, so the bot stays quiet.
 	BotOff bool `json:"bot_off"`
 }

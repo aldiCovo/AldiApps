@@ -121,17 +121,24 @@
         </div>
       </div>
       <form id="chat-bot-settings" class="bot-settings" hidden novalidate>
-        <p class="muted">Asisten Prastika menjawab chat pelanggan lebih dulu. Yang tidak bisa dijawab diteruskan ke admin.</p>
-        <p id="bot-not-configured" class="bot-warning" hidden>Bot belum aktif: kunci Claude belum dipasang di server, jadi semua chat langsung ke admin.</p>
+        <p class="muted">Tombol menu selalu menjawab dari data toko. Kalimat bebas dijawab AI; kalau AI tidak bisa, diteruskan ke admin.</p>
+        <fieldset class="bot-box">
+          <legend>AI untuk kalimat bebas</legend>
+          <label class="bot-choice"><input type="radio" name="bot-ai" value="gemini"><span><strong>Gemini (gratis) <span id="bot-key-gemini" class="bot-key"></span></strong><span class="muted small">Ada batas harian; kalau habis, chat diteruskan ke admin. Isi chat sampai ke Google dan bisa dipakai untuk melatih model; nama, email, alamat, dan nomor HP tidak dikirim.</span></span></label>
+          <label class="bot-choice"><input type="radio" name="bot-ai" value="claude"><span><strong>Claude (berbayar) <span id="bot-key-claude" class="bot-key"></span></strong><span class="muted small">Lebih pintar, sekitar Rp 20 per jawaban dari saldo API.</span></span></label>
+          <label class="bot-choice"><input type="radio" name="bot-ai" value="none"><span><strong>Tanpa AI</strong><span class="muted small">Hanya tombol menu. Kalimat bebas langsung ke admin.</span></span></label>
+          <p id="bot-ai-missing" class="bot-warning small" hidden></p>
+          <p id="bot-today" class="bot-today small"></p>
+        </fieldset>
         <fieldset class="bot-box">
           <legend>Kapan bot menjawab</legend>
           <label class="bot-choice"><input type="radio" name="bot-mode" value="always"><span><strong>Selalu, langsung</strong><span class="muted small">Bot menjawab setiap pesan dulu, siang atau malam.</span></span></label>
           <label class="bot-choice"><input type="radio" name="bot-mode" value="outside_hours"><span><strong>Hanya di luar jam kerja</strong><span class="muted small">Senin–Sabtu 08.00–20.00 WIB admin yang menjawab.</span></span></label>
-          <label class="bot-choice"><input type="radio" name="bot-mode" value="off"><span><strong>Mati</strong><span class="muted small">Semua chat langsung ke admin.</span></span></label>
+          <label class="bot-choice"><input type="radio" name="bot-mode" value="off"><span><strong>Mati</strong><span class="muted small">Tanpa menu dan AI; semua chat langsung ke admin.</span></span></label>
         </fieldset>
         <div class="bot-box">
           <label for="bot-store-info"><strong>Info toko untuk bot</strong></label>
-          <p class="muted small">Bot sudah tahu produk, harga, stok, pesanan, ongkir, dan voucher dari sistem. Tulis di sini yang tidak ada di sistem: retur, tabel ukuran, bahan, waktu kemas.</p>
+          <p class="muted small">Bot sudah tahu produk, harga, stok, pesanan, ongkir, dan voucher dari sistem. Tulis di sini yang tidak ada di sistem: retur, tabel ukuran, bahan, waktu kemas. Dipakai AI, dan ditampilkan apa adanya di menu "Cara retur &amp; tukar".</p>
           <textarea id="bot-store-info" rows="7" maxlength="4000" placeholder="Contoh: Retur: barang bisa ditukar ukuran dalam 3 hari setelah sampai, belum dicuci, label masih ada."></textarea>
         </div>
         <fieldset class="bot-box">

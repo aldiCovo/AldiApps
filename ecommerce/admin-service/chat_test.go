@@ -121,10 +121,10 @@ func TestBotRoutes(t *testing.T) {
 	if status, body := do(t, server, "GET", "/chat/bot-settings", "admin-token", ""); status != http.StatusOK || !strings.Contains(body, `"configured":true`) {
 		t.Fatalf("settings: %d %s", status, body)
 	}
-	if status, _ := do(t, server, "PUT", "/chat/bot-settings", "admin-token", `{"mode":"off","store_info":"Retur 3 hari","telegram":false,"quiet_outside_hours":true}`); status != http.StatusNoContent {
+	if status, _ := do(t, server, "PUT", "/chat/bot-settings", "admin-token", `{"mode":"off","store_info":"Retur 3 hari","telegram":false,"quiet_outside_hours":true,"ai":"none"}`); status != http.StatusNoContent {
 		t.Fatalf("save: %d", status)
 	}
-	if got := f.chatHits[len(f.chatHits)-1]; got != `PUT /internal/bot-settings {"mode":"off","store_info":"Retur 3 hari","telegram":false,"quiet_outside_hours":true}` {
+	if got := f.chatHits[len(f.chatHits)-1]; got != `PUT /internal/bot-settings {"mode":"off","store_info":"Retur 3 hari","telegram":false,"quiet_outside_hours":true,"ai":"none"}` {
 		t.Fatalf("save forwarded: %q", got)
 	}
 	if status, _ := do(t, server, "PUT", "/chat/bot-settings", "admin-token", `{"mode":"off","extra":1}`); status != http.StatusBadRequest {

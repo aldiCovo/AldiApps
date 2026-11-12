@@ -139,7 +139,7 @@ func TestBotAnswers(t *testing.T) {
 	if err := json.Unmarshal([]byte(asked[0]), &first); err != nil {
 		t.Fatal(err)
 	}
-	if first.Model != botModel || len(first.Tools) != len(botTools) || len(first.Messages) != 1 || len(first.Messages[0].Content) != 2 ||
+	if first.Model != claudeModel || len(first.Tools) != len(botTools) || len(first.Messages) != 1 || len(first.Messages[0].Content) != 2 ||
 		!strings.Contains(first.System[1].Text, "Nama pelanggan: Sari.") || !strings.Contains(first.System[0].Text, "Asisten Prastika") {
 		t.Fatalf("first request: %s", asked[0])
 	}
@@ -274,18 +274,19 @@ func TestBotSettings(t *testing.T) {
 	h := newHarnessWith(t, true)
 	status, body := h.admin(t, "GET", "/internal/bot-settings", "")
 	var view botSettingsView
-	if status != http.StatusOK || json.Unmarshal(body, &view) != nil || view.Mode != botAlways || !view.Configured || !view.TelegramConfigured || !view.AnsweringNow {
+	if status != http.StatusOK || json.Unmarshal(body, &view) != nil || view.Mode != botAlways || view.AI != aiClaude ||
+		!view.ClaudeConfigured || !view.GeminiConfigured || !view.TelegramConfigured || !view.AnsweringNow {
 		t.Fatalf("settings: %d %s", status, body)
 	}
-	status, _ = h.admin(t, "PUT", "/internal/bot-settings", `{"mode":"off","store_info":"  Retur 3 hari\r\nUkuran M 96 cm  ","telegram":true,"quiet_outside_hours":false}`)
+	status, _ = h.admin(t, "PUT", "/internal/bot-settings", `{"mode":"off","ai":"gemini","store_info":"  Retur 3 hari\r\nUkuran M 96 cm  ","telegram":true,"quiet_outside_hours":false}`)
 	if status != http.StatusNoContent {
 		t.Fatalf("save: %d", status)
 	}
 	if _, body := h.admin(t, "GET", "/internal/bot-settings", ""); !strings.Contains(string(body), `"store_info":"Retur 3 hari\nUkuran M 96 cm"`) ||
-		!strings.Contains(string(body), `"answering_now":false`) {
+		!strings.Contains(string(body), `"answering_now":false`) || !strings.Contains(string(body), `"ai":"gemini"`) {
 		t.Fatalf("saved: %s", body)
 	}
-	for _, bad := range []string{`{"mode":"kadang"}`, `{"mode":"off","store_info":"` + strings.Repeat("x", 4001) + `"}`, `{"mode":"off","extra":1}`} {
+	for _, bad := range []string{`{"mode":"kadang","ai":"none"}`, `{"mode":"off","ai":"gpt"}`, `{"mode":"off","ai":"none","store_info":"` + strings.Repeat("x", 4001) + `"}`, `{"mode":"off","ai":"none","extra":1}`} {
 		if status, _ := h.admin(t, "PUT", "/internal/bot-settings", bad); status != http.StatusBadRequest {
 			t.Errorf("%.30s: %d", bad, status)
 		}
@@ -310,7 +311,7 @@ func TestBotSettings(t *testing.T) {
 	// The month's counts.
 	h.customer(t, 8, "POST", "/chat/handoff", "")
 	_, body = h.admin(t, "GET", "/internal/bot-settings", "")
-	if !strings.Contains(string(body), `"month_replies":1`) || !strings.Contains(string(body), `"month_handoffs":2`) {
+	if !strings.Contains(string(body), `"month_ai":0`) || !strings.Contains(string(body), `"month_menu":0`) || !strings.Contains(string(body), `"month_handoffs":2`) {
 		t.Fatalf("counts: %s", body)
 	}
 }

@@ -56,10 +56,11 @@ type harness struct {
 	pool     *pgxpool.Pool
 	bot      *Assistant
 	claude   *fakeClaude
+	gemini   *fakeGemini
 	telegram *fakeTelegram
 }
 
-// newHarness runs chat-service without a bot, as before there was one.
+// newHarness runs chat-service with the bot off, as before there was one.
 func newHarness(t *testing.T) *harness {
 	return newHarnessWith(t, false)
 }
@@ -79,10 +80,15 @@ func newHarnessWith(t *testing.T, withBot bool) *harness {
 	if err := migrate(ctx, pool); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, "TRUNCATE messages, conversations, handoffs RESTART IDENTITY"); err != nil {
+	if _, err := pool.Exec(ctx, "TRUNCATE messages, conversations, handoffs, bot_daily RESTART IDENTITY"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, "UPDATE bot_settings SET mode = 'always', store_info = '', telegram = true, quiet_outside_hours = true"); err != nil {
+	// With the bot, Claude answers; tests switch to Gemini or no AI themselves.
+	mode := "off"
+	if withBot {
+		mode = "always"
+	}
+	if _, err := pool.Exec(ctx, "UPDATE bot_settings SET mode = $1, store_info = '', telegram = true, quiet_outside_hours = true, ai = 'claude'", mode); err != nil {
 		t.Fatal(err)
 	}
 	public, private, err := ed25519.GenerateKey(rand.Reader)
@@ -98,6 +104,15 @@ func newHarnessWith(t *testing.T, withBot bool) *harness {
 			fmt.Fprintf(w, `{"id":%s,"name":"Sari Maharani","email":"sari@contoh.id"}`, tokenSubject(r))
 			return
 		}
+		// Customer 7 has an address in Jawa Barat; the others have none.
+		if r.URL.Path == "/me/address" {
+			if tokenSubject(r) != "7" {
+				http.Error(w, `{"error":"no address"}`, http.StatusNotFound)
+				return
+			}
+			fmt.Fprint(w, `{"recipient":"Sari","phone":"0812","street":"Jl. Melati 5","city":"Bandung","province":"Jawa Barat"}`)
+			return
+		}
 		fmt.Fprintf(w, `{"keys":[{"kty":"OKP","crv":"Ed25519","kid":%q,"x":%q}]}`, testKeyID, base64.RawURLEncoding.EncodeToString(public))
 	}))
 	t.Cleanup(users.Close)
@@ -105,7 +120,7 @@ func newHarnessWith(t *testing.T, withBot bool) *harness {
 	catalog := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/products/5":
-			fmt.Fprint(w, `{"id":5,"name":"Dress Linen Midi","price":289000,"category_id":3,"variants":[]}`)
+			fmt.Fprint(w, `{"id":5,"name":"Dress Linen Midi","price":289000,"original_price":329000,"category_id":3,"variants":[{"size":"M","color":"Hitam","stock":3},{"size":"L","color":"Hitam","stock":0}]}`)
 		case "/products/500":
 			http.Error(w, "broken", http.StatusInternalServerError)
 		default:
@@ -114,12 +129,35 @@ func newHarnessWith(t *testing.T, withBot bool) *harness {
 	}))
 	t.Cleanup(catalog.Close)
 	// Order 9 is customer 7's; anyone else gets 404, as order-service answers.
+	const order9 = `{"id":9,"status":"shipped","total":319000,"tracking_number":"JNE123","shipping":{"courier":"JNE","service":"Reguler","estimate":"2–3 hari","cost":10000},"shipping_address":{"street":"Jl. Melati 5","city":"Bandung"},"items":[{"product_name":"Dress Linen Midi"},{"product_name":"Hijab Voal"}]}`
 	orders := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if tokenSubject(r) != "7" || r.URL.Path != "/orders/9" {
+		switch {
+		case r.URL.Path == "/shipping":
+			fmt.Fprint(w, `{"provinces":[{"name":"Jawa Barat","zone":1},{"name":"Papua","zone":4}],"options":[`+
+				`{"id":"jne-reg","courier":"JNE","service":"Reguler","costs":[10000,20000,30000,45000],"estimates":["2–3 hari","3–5 hari","4–6 hari","5–8 hari"]},`+
+				`{"id":"jne-express","courier":"JNE","service":"Express","costs":[20000,38000,55000,80000],"estimates":["1 hari","1–2 hari","2–3 hari","2–4 hari"]},`+
+				`{"id":"jnt-reg","courier":"J&T","service":"Reguler","costs":[9000,19000,29000,44000],"estimates":["2–3 hari","3–5 hari","4–6 hari","5–8 hari"]},`+
+				`{"id":"sicepat-express","courier":"SiCepat","service":"Express","costs":[18000,35000,52000,77000],"estimates":["1 hari","1–2 hari","2–3 hari","2–4 hari"]}]}`)
+		case tokenSubject(r) == "":
+			http.Error(w, "no", http.StatusUnauthorized)
+		case r.URL.Path == "/orders":
+			if tokenSubject(r) != "7" {
+				fmt.Fprint(w, `{"orders":[]}`)
+				return
+			}
+			fmt.Fprint(w, `{"orders":[`+order9+`,{"id":4,"status":"completed","total":120000,"items":[{"product_name":"Hijab Voal"}]}]}`)
+		case r.URL.Path == "/vouchers/mine":
+			if tokenSubject(r) != "7" {
+				fmt.Fprint(w, `{"vouchers":[]}`)
+				return
+			}
+			fmt.Fprint(w, `{"vouchers":[{"code":"HEMAT10","kind":"percent","value":10,"max_discount":50000,"min_subtotal":200000,"state":"usable"},`+
+				`{"code":"ONGKIR","kind":"amount","value":15000,"min_subtotal":0,"state":"usable"},{"code":"LAMA","kind":"amount","value":5000,"state":"ended"}]}`)
+		case tokenSubject(r) == "7" && r.URL.Path == "/orders/9":
+			fmt.Fprint(w, order9)
+		default:
 			http.NotFound(w, r)
-			return
 		}
-		fmt.Fprint(w, `{"id":9,"status":"shipped","total":319000,"tracking_number":"JNE123","shipping_address":{"street":"Jl. Melati 5","city":"Bandung"},"items":[{"product_name":"Dress Linen Midi"},{"product_name":"Hijab Voal"}]}`)
 	}))
 	t.Cleanup(orders.Close)
 	search := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -129,6 +167,9 @@ func newHarnessWith(t *testing.T, withBot bool) *harness {
 	claude := &fakeClaude{}
 	claudeServer := httptest.NewServer(claude)
 	t.Cleanup(claudeServer.Close)
+	gemini := &fakeGemini{}
+	geminiServer := httptest.NewServer(gemini)
+	t.Cleanup(geminiServer.Close)
 	telegram := &fakeTelegram{}
 	telegramServer := httptest.NewServer(telegram)
 	t.Cleanup(telegramServer.Close)
@@ -143,12 +184,13 @@ func newHarnessWith(t *testing.T, withBot bool) *harness {
 	}
 	if withBot {
 		config.anthropicKey, config.anthropicURL, config.debounce = "test-key", claudeServer.URL, 150*time.Millisecond
+		config.geminiKey, config.geminiURL = "gemini-key", geminiServer.URL
 	}
 	bot := newAssistant(store, sig, lookup, config)
 	server := httptest.NewServer(newHandler(store, newVerifier(users.URL), sig, lookup, bot, testInternalToken))
 	t.Cleanup(server.Close)
 	t.Cleanup(bot.Wait)
-	return &harness{Server: server, private: private, signals: sig, pool: pool, bot: bot, claude: claude, telegram: telegram}
+	return &harness{Server: server, private: private, signals: sig, pool: pool, bot: bot, claude: claude, gemini: gemini, telegram: telegram}
 }
 
 // tokenSubject reads the user from a test token without checking it.

@@ -23,6 +23,9 @@ CREATE TABLE bot_settings (
     store_info          TEXT NOT NULL DEFAULT '' CHECK (char_length(store_info) <= 4000),
     telegram            BOOLEAN NOT NULL DEFAULT true,
     quiet_outside_hours BOOLEAN NOT NULL DEFAULT true,
+    -- Which AI answers what the menu doesn't: gemini (free, with a daily limit), claude (paid
+    -- from API credit) or none (only the menu; everything else goes to the admins).
+    ai                  TEXT NOT NULL DEFAULT 'gemini' CHECK (ai IN ('gemini', 'claude', 'none')),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 INSERT INTO bot_settings (id) VALUES (1);
@@ -36,7 +39,15 @@ CREATE TABLE handoffs (
 );
 CREATE INDEX handoffs_created_at ON handoffs (created_at);
 
+-- How often each day the AI answered and the menu was used, in Jakarta's days.
+CREATE TABLE bot_daily (
+    day  DATE PRIMARY KEY,
+    ai   INT NOT NULL DEFAULT 0,
+    menu INT NOT NULL DEFAULT 0
+);
+
 -- +goose Down
+DROP TABLE bot_daily;
 DROP TABLE handoffs;
 DROP TABLE bot_settings;
 DROP INDEX conversations_needs_admin;

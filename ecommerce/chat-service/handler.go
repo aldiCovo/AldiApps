@@ -148,6 +148,7 @@ func newHandler(store *Store, verifier *Verifier, signals signaler, cards attach
 			return
 		}
 		page.BotOn = bot.answersNow(settings) && !page.NeedsAdmin && !page.BotOff
+		page.MenuOn = bot.answersNow(settings) && !page.BotOff
 		writeJSON(w, http.StatusOK, page)
 	}
 
@@ -326,6 +327,7 @@ func newHandler(store *Store, verifier *Verifier, signals signaler, cards attach
 
 	addQuickRoutes(mux, store, internal)
 	addBotRoutes(mux, store, bot, authenticated, internal, customerID)
+	addMenuRoutes(mux, store, bot, authenticated)
 
 	return mux
 }

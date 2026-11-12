@@ -309,6 +309,9 @@ button.chat-card:hover { border-color: var(--accent); }
 .bot-pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 .bot-pill.on { background: var(--good-soft); color: var(--good); }
 .bot-pill.partly { background: var(--wait-soft); color: var(--wait); }
+.bot-key { margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: var(--paper); color: var(--muted); font-size: .74rem; font-weight: 600; }
+.bot-key.ok { background: var(--good-soft); color: var(--good); }
+.bot-today { margin: 0; padding: 8px 12px; border-radius: 10px; background: var(--paper); }
 .chat-who { flex: 1; min-width: 0; }
 .bot-state { padding: 4px 10px; border-radius: 999px; background: var(--good-soft); color: var(--good); font-size: .78rem; font-weight: 600; }
 .bot-state.quiet { background: var(--bad-soft); color: var(--accent); }

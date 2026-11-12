@@ -12,8 +12,6 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
-
-	"github.com/anthropics/anthropic-sdk-go/v2"
 )
 
 // Shop reads what the bot may tell a customer. Orders and vouchers are read with the
@@ -116,10 +114,6 @@ type orderInfo struct {
 		Estimate string `json:"estimate"`
 		Cost     int64  `json:"cost"`
 	} `json:"shipping,omitempty"`
-	ShippingAddress *struct {
-		City     string `json:"city"`
-		Province string `json:"province"`
-	} `json:"shipping_address,omitempty"`
 	Items []struct {
 		ProductID   int64  `json:"product_id"`
 		ProductName string `json:"product_name"`
@@ -139,7 +133,8 @@ func shorten(text string, limit int) string {
 	return string([]rune(text)[:limit]) + "…"
 }
 
-// tool is one thing the bot can do, with what Claude is told about it.
+// tool is one thing the bot can do, with what the AI is told about it. Orders are read
+// without the shipping address, which never goes to the AI.
 type tool struct {
 	name        string
 	description string
@@ -168,18 +163,6 @@ var botTools = []tool{
 		map[string]any{"reason": map[string]any{"type": "string", "description": "Alasan singkat untuk admin, misalnya \"ganti alamat pesanan #41\""}}, []string{"reason"}},
 }
 
-func toolParams() []anthropic.ToolUnionParam {
-	params := make([]anthropic.ToolUnionParam, len(botTools))
-	for i, t := range botTools {
-		params[i] = anthropic.ToolUnionParam{OfTool: &anthropic.ToolParam{
-			Name:        t.name,
-			Description: anthropic.String(t.description),
-			InputSchema: anthropic.ToolInputSchemaParam{Properties: t.properties, Required: t.required},
-		}}
-	}
-	return params
-}
-
 const maxCardsPerAnswer = 3
 
 // turn is what one answer collects from the tools besides text.
@@ -188,7 +171,7 @@ type turn struct {
 	handoff string
 }
 
-// run does one tool call and returns what Claude reads back, and whether it failed.
+// run does one tool call and returns what the AI reads back, and whether it failed.
 func (s *Shop) run(ctx context.Context, cards attacher, bearer, name string, raw json.RawMessage, t *turn) (string, bool) {
 	var in struct {
 		Query     string `json:"query"`
@@ -222,9 +205,6 @@ func (s *Shop) run(ctx context.Context, cards attacher, bearer, name string, raw
 			Orders []orderInfo `json:"orders"`
 		}
 		err = s.get(ctx, s.orderURL+"/orders?limit=5", bearer, &list)
-		for i := range list.Orders {
-			list.Orders[i].ShippingAddress = nil
-		}
 		result = list
 	case "get_order":
 		var order orderInfo

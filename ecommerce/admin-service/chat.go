@@ -196,6 +196,7 @@ func (a *admin) addChatRoutes(mux *http.ServeMux) {
 			StoreInfo         string `json:"store_info"`
 			Telegram          bool   `json:"telegram"`
 			QuietOutsideHours bool   `json:"quiet_outside_hours"`
+			AI                string `json:"ai"`
 		}
 		if !readJSON(w, r, &in) {
 			return

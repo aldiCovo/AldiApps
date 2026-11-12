@@ -41,6 +41,8 @@ func run() error {
 	}
 	bot := assistantConfig{
 		anthropicKey:   os.Getenv("ANTHROPIC_API_KEY"),
+		geminiKey:      os.Getenv("GEMINI_API_KEY"),
+		geminiModel:    os.Getenv("GEMINI_MODEL"),
 		searchURL:      os.Getenv("SEARCH_URL"),
 		catalogURL:     values["CATALOG_URL"],
 		orderURL:       values["ORDER_URL"],
@@ -51,8 +53,8 @@ func run() error {
 		adminURL:       os.Getenv("ADMIN_URL"),
 		debounce:       botDebounce,
 	}
-	if bot.anthropicKey != "" && bot.searchURL == "" {
-		return errors.New("SEARCH_URL is required with ANTHROPIC_API_KEY")
+	if (bot.anthropicKey != "" || bot.geminiKey != "") && bot.searchURL == "" {
+		return errors.New("SEARCH_URL is required with ANTHROPIC_API_KEY or GEMINI_API_KEY")
 	}
 	if bot.adminURL == "" {
 		bot.adminURL = "https://prastika.aldiab.ai.id/admin"
@@ -86,7 +88,7 @@ func run() error {
 	lookup := newLookup(values["CATALOG_URL"], values["ORDER_URL"])
 	assistant := newAssistant(store, notifier, lookup, bot)
 	defer assistant.Wait()
-	slog.Info("bot", "configured", assistant.configured(), "telegram", assistant.telegram != nil)
+	slog.Info("bot", "gemini", assistant.gemini != nil, "claude", assistant.claude != nil, "telegram", assistant.telegram != nil)
 
 	server := &http.Server{
 		Addr:              ":" + port,

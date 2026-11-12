@@ -28,12 +28,16 @@ type BotSettings struct {
 	Telegram bool `json:"telegram"`
 	// Without a sound outside working hours.
 	QuietOutsideHours bool `json:"quiet_outside_hours"`
+	// Which AI answers what the menu doesn't: gemini, claude or none.
+	AI string `json:"ai"`
 }
 
 func (s BotSettings) validate() error {
 	switch {
 	case s.Mode != botAlways && s.Mode != botOutsideHours && s.Mode != botOff:
 		return errors.New(`mode must be "always", "outside_hours" or "off"`)
+	case s.AI != aiGemini && s.AI != aiClaude && s.AI != aiNone:
+		return errors.New(`ai must be "gemini", "claude" or "none"`)
 	case !utf8.ValidString(s.StoreInfo):
 		return errors.New("store_info must be text")
 	case utf8.RuneCountInString(s.StoreInfo) > maxStoreInfoLength:
@@ -44,15 +48,15 @@ func (s BotSettings) validate() error {
 
 func (s *Store) BotSettings(ctx context.Context) (BotSettings, error) {
 	var b BotSettings
-	err := s.pool.QueryRow(ctx, "SELECT mode, store_info, telegram, quiet_outside_hours FROM bot_settings WHERE id = 1").
-		Scan(&b.Mode, &b.StoreInfo, &b.Telegram, &b.QuietOutsideHours)
+	err := s.pool.QueryRow(ctx, "SELECT mode, store_info, telegram, quiet_outside_hours, ai FROM bot_settings WHERE id = 1").
+		Scan(&b.Mode, &b.StoreInfo, &b.Telegram, &b.QuietOutsideHours, &b.AI)
 	return b, err
 }
 
 func (s *Store) SaveBotSettings(ctx context.Context, b BotSettings) error {
 	_, err := s.pool.Exec(ctx,
-		`UPDATE bot_settings SET mode = $1, store_info = $2, telegram = $3, quiet_outside_hours = $4, updated_at = now()
-		 WHERE id = 1`, b.Mode, b.StoreInfo, b.Telegram, b.QuietOutsideHours)
+		`UPDATE bot_settings SET mode = $1, store_info = $2, telegram = $3, quiet_outside_hours = $4, ai = $5,
+		 updated_at = now() WHERE id = 1`, b.Mode, b.StoreInfo, b.Telegram, b.QuietOutsideHours, b.AI)
 	return err
 }
 
@@ -134,10 +138,35 @@ func (s *Store) SetBotOff(ctx context.Context, userID int64, off bool) error {
 	return nil
 }
 
-// BotMonth counts the bot's messages and the handoffs since since.
-func (s *Store) BotMonth(ctx context.Context, since time.Time) (replies, handoffs int, err error) {
-	err = s.pool.QueryRow(ctx,
-		`SELECT (SELECT count(*) FROM messages WHERE admin_id = 0 AND created_at >= $1),
-		        (SELECT count(*) FROM handoffs WHERE created_at >= $1)`, since).Scan(&replies, &handoffs)
-	return replies, handoffs, err
+// botUse is what the settings page shows of how much the bot worked.
+type botUse struct {
+	// Today in Jakarta: the AI's answers.
+	TodayAI int `json:"today_ai"`
+	// This month in Jakarta.
+	MonthAI       int `json:"month_ai"`
+	MonthMenu     int `json:"month_menu"`
+	MonthHandoffs int `json:"month_handoffs"`
+}
+
+// CountBot adds one AI answer (kind "ai") or menu use (kind "menu") to day's count.
+func (s *Store) CountBot(ctx context.Context, day time.Time, kind string) error {
+	query := "INSERT INTO bot_daily (day, ai) VALUES ($1, 1) ON CONFLICT (day) DO UPDATE SET ai = bot_daily.ai + 1"
+	if kind == "menu" {
+		query = "INSERT INTO bot_daily (day, menu) VALUES ($1, 1) ON CONFLICT (day) DO UPDATE SET menu = bot_daily.menu + 1"
+	}
+	_, err := s.pool.Exec(ctx, query, day.Format(time.DateOnly))
+	return err
+}
+
+// BotUse counts the bot's work today and since the month began.
+func (s *Store) BotUse(ctx context.Context, today, monthStart time.Time) (botUse, error) {
+	var u botUse
+	err := s.pool.QueryRow(ctx,
+		`SELECT COALESCE((SELECT ai FROM bot_daily WHERE day = $1), 0),
+		        COALESCE((SELECT sum(ai) FROM bot_daily WHERE day >= $2), 0),
+		        COALESCE((SELECT sum(menu) FROM bot_daily WHERE day >= $2), 0),
+		        (SELECT count(*) FROM handoffs WHERE created_at >= $3)`,
+		today.Format(time.DateOnly), monthStart.Format(time.DateOnly), monthStart).
+		Scan(&u.TodayAI, &u.MonthAI, &u.MonthMenu, &u.MonthHandoffs)
+	return u, err
 }

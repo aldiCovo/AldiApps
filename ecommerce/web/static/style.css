@@ -414,7 +414,10 @@ legend { margin-bottom: 10px; padding: 0; font-size: .92rem; font-weight: 600; }
 .address-view { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8px 16px; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; }
 .address-view[hidden], .address-form[hidden] { display: none; }
 .address-text { display: grid; gap: 2px; margin: 0; overflow-wrap: anywhere; white-space: pre-line; }
-.address-text span:first-child { font-weight: 600; }
+.address-text span:first-child, .address-text .address-head + span { font-weight: 600; }
+.address-text .address-head { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; font-weight: 400; }
+.address-view-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.address-form-title { margin: 0; font-weight: 600; }
 .address-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .address-form .wide { grid-column: 1 / -1; }
 .address-form label { display: grid; gap: 5px; font-size: .92rem; font-weight: 600; }
@@ -779,8 +782,33 @@ body.on-account main > :not(#akun) { display: none !important; }
 .password-toggle { position: absolute; top: 3px; right: 3px; display: grid; place-items: center; width: 40px; height: 40px; border: 0; border-radius: 8px; background: none; color: var(--muted); }
 .password-toggle:hover { color: var(--accent); }
 .security-note { max-width: 560px; margin-top: 16px; padding: 12px 14px; border-radius: 12px; background: var(--soft); font-size: .9rem; }
-.address-card { display: grid; justify-items: start; gap: 8px; padding: 18px; border: 1.5px solid var(--accent); border-radius: 14px; background: var(--soft-faint); }
-.address-card-head { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+.address-list { display: grid; gap: 12px; }
+.address-card { display: grid; justify-items: start; gap: 8px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+.address-card.is-main { border: 1.5px solid var(--accent); background: var(--soft-faint); }
+.address-card-head { display: flex; align-items: center; gap: 10px; margin: 0; font-weight: 600; }
+.address-tag { color: var(--muted); font-size: .8rem; letter-spacing: .08em; text-transform: uppercase; }
+.address-card-actions, .address-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 18px; }
+.address-card-actions .link, .address-confirm .link { min-height: 40px; }
+.address-card-actions .link.muted { color: var(--muted); }
+.address-confirm span { font-weight: 600; }
+fieldset.address-label { display: grid; gap: 6px; min-width: 0; margin: 0; padding: 0; border: 0; }
+fieldset.address-label legend { padding: 0; margin-bottom: 6px; font-size: .92rem; font-weight: 600; }
+fieldset.address-label .chips { align-items: center; }
+fieldset.address-label input { flex: 1 1 160px; width: auto; }
+.check-row { display: flex !important; align-items: center; gap: 10px; min-height: 44px; font-weight: 500 !important; }
+.check-row input { width: 20px !important; min-height: 20px !important; height: 20px; accent-color: var(--accent); }
+.dialog-actions { justify-content: flex-end; margin-top: 4px; }
+#akun-address-dialog { width: min(640px, calc(100vw - 32px)); }
+.address-pick { margin: 12px 0 0; padding: 0; border: 0; min-width: 0; }
+.address-pick-list { display: grid; gap: 10px; max-height: min(52vh, 460px); overflow-y: auto; padding: 2px; }
+.address-option { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: #fff; cursor: pointer; }
+.address-option:has(input:checked) { border-color: var(--accent); background: var(--soft-faint); }
+.address-option input { flex: none; width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--accent); }
+.address-option-text { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; font-size: .93rem; }
+.address-option .address-head { display: flex; align-items: center; gap: 8px; }
+.address-option-name { font-weight: 600; }
+.pick-hint { margin: 12px 0 0; }
+#address-pick-form .dialog-actions { justify-content: space-between; flex-wrap: wrap; margin-top: 16px; }
 .badge-main { padding: 2px 10px; border-radius: 999px; background: var(--accent); color: #fff; font-size: .74rem; }
 .account-address-form { max-width: 640px; }
 .security-box { display: grid; justify-items: start; gap: 12px; max-width: 560px; padding: 20px; border: 1px solid var(--line); border-radius: 14px; }

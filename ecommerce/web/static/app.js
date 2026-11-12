@@ -2386,10 +2386,15 @@ function checkout() {
 // prices and stock are read again here, so they're current. The address is kept on the
 // account, and each order gets its own copy of it.
 const addressFields = ["recipient", "phone", "street", "district", "city", "province", "postal_code"];
+const addressLimit = 10;
 let checkoutItems = [];
 let checkoutFromCart = false;
 let checkoutBlocked = true;
+// The account's addresses, and the one this order goes to.
+let checkoutAddresses = [];
 let savedAddress = null;
+// The address the checkout form changes, or null while it adds a new one.
+let addressEditId = null;
 let latestCheckout = 0;
 // Courier prices by province, from order-service, which prices the order again itself.
 let shippingTable = null;
@@ -2416,7 +2421,7 @@ async function openCheckout(items, fromCart) {
   $("checkout-dialog").showModal();
   const ids = [...new Set(checkoutItems.map((item) => item.product_id))];
   const [address, products, table] = await Promise.allSettled([
-    api("/me/address"),
+    api("/me/addresses"),
     Promise.allSettled(ids.map((id) => api(`/products/${id}`))),
     shippingTable || api("/shipping"),
   ]);
@@ -2427,11 +2432,13 @@ async function openCheckout(items, fromCart) {
     return;
   }
   const failed = products.value.some((result) => result.status === "rejected" && result.reason.status !== 404);
-  if (failed || table.status === "rejected" || (address.status === "rejected" && address.reason.status !== 404)) {
+  if (failed || table.status === "rejected" || address.status === "rejected") {
     $("checkout-status").textContent = "Checkout belum bisa dimuat. Tutup lalu coba lagi sebentar lagi.";
     return;
   }
-  savedAddress = address.status === "fulfilled" ? address.value : null;
+  checkoutAddresses = address.value.addresses;
+  savedAddress = checkoutAddresses.find((a) => a.main) || checkoutAddresses[0] || null;
+  addressEditId = savedAddress ? savedAddress.id : null;
   if (!shippingTable) {
     shippingTable = table.value;
     const select = $("address-province");
@@ -2496,22 +2503,69 @@ function renderCheckoutItems(variants) {
   $("checkout-submit").disabled = checkoutBlocked;
 }
 
-// Shows the saved address, or the form when there's none yet or it's being changed.
+// Shows the chosen address, or the form when there's none yet or one is being added or changed.
 function showAddress(editing) {
   $("address-form").hidden = !editing;
   $("address-view").hidden = editing;
   $("address-cancel").hidden = !(savedAddress && zoneOf(savedAddress.province));
   $("address-error").hidden = true;
   if (editing) {
-    const address = savedAddress || { recipient: currentUser ? currentUser.name : "" };
+    const adding = addressEditId === null;
+    const address = adding
+      ? { label: checkoutAddresses.length ? "" : "Rumah", recipient: currentUser ? currentUser.name : "", phone: currentUser ? currentUser.phone || "" : "" }
+      : savedAddress;
+    $("address-label").value = address.label || "";
     for (const field of addressFields) $(`address-${field}`).value = address[field] || "";
     // A province that isn't in the list leaves the choice empty.
     if (!zoneOf($("address-province").value)) $("address-province").value = "";
+    $("address-form-title").hidden = !(adding && checkoutAddresses.length);
+    $("address-form-title").textContent = "Alamat baru";
   } else {
     const a = savedAddress;
-    $("address-text").replaceChildren(...[`${a.recipient} · ${a.phone}`, a.street, `${a.district}, ${a.city}`, `${a.province} ${a.postal_code}`].map((line) => el("span", "", line)));
+    const head = el("span", "address-head");
+    head.append(el("strong", "", a.label));
+    if (a.main) head.append(el("span", "badge-main", "Utama"));
+    $("address-text").replaceChildren(head, ...[`${a.recipient} · ${a.phone}`, a.street, `${a.district}, ${a.city}`, `${a.province} ${a.postal_code}`].map((line) => el("span", "", line)));
   }
   renderShipping();
+}
+
+// Shows the chosen address, asking for the province again when it isn't one shipping knows.
+function useAddress(address) {
+  savedAddress = address;
+  addressEditId = address.id;
+  const known = zoneOf(address.province);
+  showAddress(!known);
+  if (!known) {
+    $("address-error").textContent = "Pilih provinsi dari daftar supaya ongkir bisa dihitung.";
+    $("address-error").hidden = false;
+  }
+}
+
+function openAddressPicker() {
+  const list = $("address-pick-list");
+  list.replaceChildren(...checkoutAddresses.map((address) => {
+    const option = el("label", "address-option");
+    const radio = el("input");
+    radio.type = "radio";
+    radio.name = "pick-address";
+    radio.value = String(address.id);
+    radio.checked = savedAddress && address.id === savedAddress.id;
+    const text = el("span", "address-option-text");
+    const head = el("span", "address-head");
+    head.append(el("strong", "", address.label));
+    if (address.main) head.append(el("span", "badge-main", "Utama"));
+    text.append(head, el("span", "address-option-name", `${address.recipient} · ${address.phone}`),
+      el("span", "", `${address.street}, ${address.district}, ${address.city}, ${address.province} ${address.postal_code}`));
+    option.append(radio, text);
+    return option;
+  }));
+  const full = checkoutAddresses.length >= addressLimit;
+  $("address-pick-new").disabled = full;
+  $("address-pick-new").title = full ? "Sudah ada 10 alamat. Hapus salah satu di halaman Akun." : "";
+  $("address-pick-dialog").showModal();
+  const checked = list.querySelector("input:checked") || list.querySelector("input");
+  if (checked) checked.focus();
 }
 
 function zoneOf(province) {
@@ -2646,8 +2700,14 @@ async function submitVoucher(event) {
 
 async function saveAddress() {
   const address = Object.fromEntries(addressFields.map((field) => [field, $(`address-${field}`).value]));
-  // The answer is the address as stored, with the phone number in one form.
-  savedAddress = await send("PUT", "/me/address", address);
+  address.label = $("address-label").value.trim();
+  // The answer is the address as stored, with the phone number in one form, and the whole list.
+  const result = addressEditId === null
+    ? await send("POST", "/me/addresses", address)
+    : await send("PUT", `/me/addresses/${addressEditId}`, address);
+  checkoutAddresses = result.addresses;
+  savedAddress = result.address;
+  addressEditId = savedAddress.id;
 }
 
 // Answers true when the address could be saved.
@@ -2665,6 +2725,8 @@ async function trySaveAddress() {
     }
     $("address-error").textContent = error.status === 400
       ? "Periksa lagi alamatnya. Nomor HP harus nomor ponsel Indonesia dan kode pos 5 angka."
+      : error.status === 409 ? "Sudah ada 10 alamat. Hapus salah satu di halaman Akun dulu."
+      : error.status === 404 ? "Alamat ini sudah dihapus. Tutup checkout lalu buka lagi."
       : "Alamat belum bisa disimpan. Coba lagi sebentar lagi.";
     $("address-error").hidden = false;
     return false;
@@ -2691,7 +2753,7 @@ async function submitCheckout() {
   $("checkout-error").hidden = true;
   try {
     if (editing && !(await trySaveAddress())) return;
-    const order = { items: checkoutItems.map(({ variant_id, quantity }) => ({ variant_id, quantity })), shipping_address: savedAddress, shipping_option: chosenShipping };
+    const order = { items: checkoutItems.map(({ variant_id, quantity }) => ({ variant_id, quantity })), shipping_address: Object.fromEntries(addressFields.map((field) => [field, savedAddress[field]])), shipping_option: chosenShipping };
     if (appliedVoucher) order.voucher_code = appliedVoucher.code;
     await post("/orders", order);
   } catch (error) {
@@ -2777,10 +2839,30 @@ $("voucher-remove").addEventListener("click", () => {
 });
 $("address-form").addEventListener("submit", submitAddress);
 $("address-edit").addEventListener("click", () => {
+  addressEditId = savedAddress.id;
   showAddress(true);
   $("address-recipient").focus();
 });
-$("address-cancel").addEventListener("click", () => showAddress(false));
+$("address-cancel").addEventListener("click", () => {
+  addressEditId = savedAddress.id;
+  showAddress(false);
+  $("address-change").focus();
+});
+$("address-change").addEventListener("click", openAddressPicker);
+$("address-pick-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const checked = $("address-pick-list").querySelector("input:checked");
+  const address = checked && checkoutAddresses.find((a) => String(a.id) === checked.value);
+  $("address-pick-dialog").close();
+  if (address) useAddress(address);
+  $("address-change").focus();
+});
+$("address-pick-new").addEventListener("click", () => {
+  $("address-pick-dialog").close();
+  addressEditId = null;
+  showAddress(true);
+  $("address-label").focus();
+});
 $("address-province").addEventListener("change", renderShipping);
 document.addEventListener("visibilitychange", checkAccountAgain);
 // Keeps a guest's second tab showing the same cart.

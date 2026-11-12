@@ -214,7 +214,7 @@
             <hr>
             <p class="nav-group">Pengaturan akun</p>
             <a href="#akun/biodata" data-section="biodata"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M4 20c1.5-3.5 4.5-5 8-5s6.5 1.5 8 5"/></svg><span class="nav-label">Biodata diri</span></a>
-            <a href="#akun/alamat" data-section="alamat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6-5.6-6-11a6 6 0 0 1 12 0c0 5.4-6 11-6 11z M12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/></svg><span class="nav-label">Daftar alamat</span></a>
+            <a href="#akun/alamat" data-section="alamat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6-5.6-6-11a6 6 0 0 1 12 0c0 5.4-6 11-6 11z M12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/></svg><span class="nav-label">Daftar alamat</span><span class="nav-count" data-count="alamat" hidden></span></a>
             <a href="#akun/keamanan" data-section="keamanan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 11h12v9H6z M8.5 11V8a3.5 3.5 0 0 1 7 0v3"/></svg><span class="nav-label">Keamanan</span></a>
             <hr>
             <button id="akun-logout" class="nav-logout" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H5v14h5 M14 8l4 4-4 4 M18 12H9"/></svg><span class="nav-label">Keluar</span></button>
@@ -317,28 +317,11 @@
           <section id="akun-alamat" class="account-panel" aria-labelledby="akun-alamat-title" hidden>
             <div class="panel-head">
               <h2 id="akun-alamat-title" class="panel-title">Daftar alamat</h2>
-              <button id="akun-address-add" class="primary" type="button" hidden>+ Tambah alamat</button>
+              <button id="akun-address-add" class="primary small" type="button" hidden>+ Tambah alamat</button>
             </div>
+            <p id="akun-address-note" class="panel-sub" hidden></p>
             <p id="akun-address-status" class="status" role="status" aria-live="polite"></p>
-            <article id="akun-address-card" class="address-card" hidden>
-              <p class="address-card-head"><span>Alamat utama</span><span class="badge-main">Utama</span></p>
-              <p id="akun-address-text" class="address-text"></p>
-              <button id="akun-address-edit" class="link" type="button">Ubah alamat</button>
-            </article>
-            <form id="akun-address-form" class="address-form account-address-form" hidden>
-              <label class="wide">Nama penerima <input id="akun-address-recipient" type="text" maxlength="100" required autocomplete="name"></label>
-              <label class="wide">Nomor HP <input id="akun-address-phone" type="tel" maxlength="20" required autocomplete="tel" inputmode="tel" placeholder="0812 3456 7890" pattern="(\+62|62|0)[ .\-]?8[0-9 .\-]{7,17}" title="Nomor ponsel Indonesia, misalnya 0812 3456 7890"></label>
-              <label class="wide">Alamat lengkap <textarea id="akun-address-street" rows="3" maxlength="300" required autocomplete="street-address" placeholder="Nama jalan, nomor rumah, RT/RW, patokan"></textarea></label>
-              <label>Kecamatan <input id="akun-address-district" type="text" maxlength="100" required></label>
-              <label>Kota/Kabupaten <input id="akun-address-city" type="text" maxlength="100" required autocomplete="address-level2"></label>
-              <label>Provinsi <select id="akun-address-province" required autocomplete="address-level1"><option value="">Pilih provinsi</option></select></label>
-              <label>Kode pos <input id="akun-address-postal_code" type="text" maxlength="5" required autocomplete="postal-code" inputmode="numeric" pattern="[0-9]{5}" title="5 angka"></label>
-              <p id="akun-address-error" class="error wide" role="alert" hidden></p>
-              <div class="address-actions wide">
-                <button id="akun-address-save" class="secondary" type="submit">Simpan alamat</button>
-                <button id="akun-address-cancel" class="link" type="button">Batal</button>
-              </div>
-            </form>
+            <div id="akun-address-list" class="address-list"></div>
           </section>
 
           <section id="akun-keamanan" class="account-panel" aria-labelledby="akun-keamanan-title" hidden>
@@ -522,9 +505,14 @@
         <h3 id="address-title">Alamat pengiriman</h3>
         <div id="address-view" class="address-view" hidden>
           <p id="address-text" class="address-text"></p>
-          <button id="address-edit" class="link" type="button">Ubah alamat</button>
+          <div class="address-view-actions">
+            <button id="address-change" class="secondary small" type="button">Ganti alamat</button>
+            <button id="address-edit" class="link" type="button">Ubah alamat</button>
+          </div>
         </div>
         <form id="address-form" class="address-form" hidden>
+          <p id="address-form-title" class="address-form-title wide" hidden></p>
+          <label class="wide">Label alamat <input id="address-label" type="text" maxlength="30" required placeholder="Rumah, Kantor, Rumah Ibu…"></label>
           <label class="wide">Nama penerima <input id="address-recipient" type="text" maxlength="100" required autocomplete="name"></label>
           <label class="wide">Nomor HP <input id="address-phone" type="tel" maxlength="20" required autocomplete="tel" inputmode="tel" placeholder="0812 3456 7890" pattern="(\+62|62|0)[ .\-]?8[0-9 .\-]{7,17}" title="Nomor ponsel Indonesia, misalnya 0812 3456 7890"></label>
           <label class="wide">Alamat lengkap <textarea id="address-street" rows="3" maxlength="300" required autocomplete="street-address" placeholder="Nama jalan, nomor rumah, RT/RW, patokan"></textarea></label>
@@ -573,6 +561,51 @@
       <p id="checkout-error" class="error" role="alert" hidden></p>
       <button id="checkout-submit" class="primary checkout-submit" type="button">Buat pesanan</button>
     </div>
+  </dialog>
+
+  <dialog id="akun-address-dialog" class="sheet" aria-labelledby="akun-address-dialog-title">
+    <button class="close" type="button" data-close aria-label="Tutup">×</button>
+    <h2 id="akun-address-dialog-title">Tambah alamat</h2>
+    <form id="akun-address-form" class="address-form account-address-form" novalidate>
+      <fieldset class="wide address-label">
+        <legend>Label alamat</legend>
+        <div class="chips">
+          <button class="chip pick-chip" type="button" data-label="Rumah" aria-pressed="false">Rumah</button>
+          <button class="chip pick-chip" type="button" data-label="Kantor" aria-pressed="false">Kantor</button>
+          <button class="chip pick-chip" type="button" data-label="" aria-pressed="false">Lainnya</button>
+          <input id="akun-address-label" type="text" maxlength="30" required aria-label="Label alamat" placeholder="Misalnya Rumah Ibu">
+        </div>
+      </fieldset>
+      <label>Nama penerima <input id="akun-address-recipient" type="text" maxlength="100" required autocomplete="name"></label>
+      <label>Nomor HP <input id="akun-address-phone" type="tel" maxlength="20" required autocomplete="tel" inputmode="tel" placeholder="0812 3456 7890" pattern="(\+62|62|0)[ .\-]?8[0-9 .\-]{7,17}" title="Nomor ponsel Indonesia, misalnya 0812 3456 7890"></label>
+      <label class="wide">Alamat lengkap <textarea id="akun-address-street" rows="2" maxlength="300" required autocomplete="street-address" placeholder="Nama jalan, nomor rumah, RT/RW, patokan"></textarea></label>
+      <label>Kecamatan <input id="akun-address-district" type="text" maxlength="100" required></label>
+      <label>Kota/Kabupaten <input id="akun-address-city" type="text" maxlength="100" required autocomplete="address-level2"></label>
+      <label>Provinsi <select id="akun-address-province" required autocomplete="address-level1"><option value="">Pilih provinsi</option></select></label>
+      <label>Kode pos <input id="akun-address-postal_code" type="text" maxlength="5" required autocomplete="postal-code" inputmode="numeric" pattern="[0-9]{5}" title="5 angka"></label>
+      <label id="akun-address-main-row" class="wide check-row"><input id="akun-address-main" type="checkbox"> Jadikan alamat utama</label>
+      <p id="akun-address-error" class="error wide" role="alert" hidden></p>
+      <div class="address-actions wide dialog-actions">
+        <button class="link" type="button" data-close>Batal</button>
+        <button id="akun-address-save" class="primary" type="submit">Simpan alamat</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="address-pick-dialog" class="sheet" aria-labelledby="address-pick-title">
+    <button class="close" type="button" data-close aria-label="Tutup">×</button>
+    <h2 id="address-pick-title">Pilih alamat</h2>
+    <form id="address-pick-form">
+      <fieldset class="address-pick">
+        <legend class="visually-hidden">Alamat pengiriman</legend>
+        <div id="address-pick-list" class="address-pick-list"></div>
+      </fieldset>
+      <p class="hint pick-hint">Ongkir dihitung ulang sesuai provinsi alamat yang dipilih.</p>
+      <div class="address-actions dialog-actions">
+        <button id="address-pick-new" class="link" type="button">+ Tambah alamat baru</button>
+        <button class="primary" type="submit">Kirim ke alamat ini</button>
+      </div>
+    </form>
   </dialog>
 
   <dialog id="orders-dialog" class="sheet" aria-labelledby="orders-title">

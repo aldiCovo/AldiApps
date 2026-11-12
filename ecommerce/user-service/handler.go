@@ -234,6 +234,7 @@ func newHandler(store *Store, tokens *Tokens, passwords *Passwords, resets *Rese
 		writeJSON(w, http.StatusOK, profile)
 	})
 	addProfileRoutes(mux, store, passwords, tokenUser)
+	addAddressRoutes(mux, store, tokenUser)
 
 	mux.HandleFunc("GET /me/address", func(w http.ResponseWriter, r *http.Request) {
 		id, ok := tokenUser(w, r)

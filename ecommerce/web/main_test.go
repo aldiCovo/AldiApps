@@ -494,6 +494,7 @@ func TestOrdersUseTheSessionCookie(t *testing.T) {
 	cases := []struct{ method, path, want string }{
 		{"POST", "/api/orders", "order POST /orders"},
 		{"POST", "/api/vouchers/check", "order POST /vouchers/check"},
+		{"GET", "/api/vouchers/mine", "order GET /vouchers/mine"},
 		{"GET", "/api/orders?limit=5", "order GET /orders?limit=5"},
 		{"GET", "/api/orders/12", "order GET /orders/12"},
 		{"POST", "/api/orders/12/pay", "order POST /orders/12/pay"},
@@ -519,7 +520,7 @@ func TestOrdersUseTheSessionCookie(t *testing.T) {
 
 func TestOrdersWithoutValidSession(t *testing.T) {
 	server, f := newTestGateway(t)
-	for _, c := range []struct{ method, path string }{{"POST", "/api/orders"}, {"GET", "/api/orders"}, {"GET", "/api/orders/1"}, {"POST", "/api/orders/1/pay"}, {"POST", "/api/orders/1/cancel"}, {"POST", "/api/orders/1/receive"}, {"PUT", "/api/orders/1/reviews/10"}} {
+	for _, c := range []struct{ method, path string }{{"POST", "/api/orders"}, {"GET", "/api/orders"}, {"GET", "/api/vouchers/mine"}, {"GET", "/api/orders/1"}, {"POST", "/api/orders/1/pay"}, {"POST", "/api/orders/1/cancel"}, {"POST", "/api/orders/1/receive"}, {"PUT", "/api/orders/1/reviews/10"}} {
 		before := len(f.seen())
 		resp, _ := do(t, c.method, server.URL+c.path, "application/json", "{}")
 		if resp.StatusCode != http.StatusUnauthorized || len(f.seen()) != before {

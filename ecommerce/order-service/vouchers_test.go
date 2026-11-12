@@ -366,3 +366,99 @@ func TestBannerVoucher(t *testing.T) {
 		t.Fatalf("banner %q, want KEDUA once PERTAMA is used up", got)
 	}
 }
+
+func myVouchers(t *testing.T, h *harness, userID int64) map[string]MyVoucher {
+	t.Helper()
+	status, data := h.do(t, http.MethodGet, "/vouchers/mine", "", h.token(t, userID))
+	if status != http.StatusOK {
+		t.Fatalf("status %d: %s", status, data)
+	}
+	if strings.Contains(string(data), `"quota"`) || strings.Contains(string(data), `"user_id"`) {
+		t.Fatalf("the customer sees more than the terms: %s", data)
+	}
+	var body struct {
+		Vouchers []MyVoucher `json:"vouchers"`
+	}
+	if err := json.Unmarshal(data, &body); err != nil {
+		t.Fatal(err)
+	}
+	out := map[string]MyVoucher{}
+	for _, v := range body.Vouchers {
+		out[v.Code] = v
+	}
+	return out
+}
+
+func TestVoucherAudience(t *testing.T) {
+	h := newHarness(t)
+	for _, bad := range []map[string]any{
+		{"code": "A1", "audience": "user"},
+		{"code": "A2", "audience": "user", "user_id": 0},
+		{"code": "A3", "audience": "all", "user_id": 2},
+		{"code": "A4", "audience": "user", "user_id": 2, "banner": true},
+		{"code": "A5", "audience": "friends"},
+	} {
+		data, _ := json.Marshal(map[string]any{
+			"code": bad["code"], "kind": "percent", "value": 10, "per_user_limit": 1, "active": true,
+			"starts_at": time.Now().Add(-time.Hour), "ends_at": time.Now().Add(24 * time.Hour),
+			"audience": bad["audience"], "user_id": bad["user_id"], "banner": bad["banner"] == true,
+		})
+		if status, answer := h.do(t, http.MethodPost, "/internal/vouchers", string(data), testInternalToken); status != http.StatusBadRequest {
+			t.Errorf("%v: status %d, %s", bad, status, answer)
+		}
+	}
+
+	// Without an audience a voucher stays hidden, as before.
+	plain := h.makeVoucher(t, map[string]any{"code": "RAHASIA"})
+	if plain.Audience != audienceHidden || plain.UserID != nil {
+		t.Fatalf("default audience: %+v", plain)
+	}
+	h.makeVoucher(t, map[string]any{"code": "SEMUA", "audience": "all", "per_user_limit": 2, "ends_at": time.Now().Add(48 * time.Hour)})
+	mine := h.makeVoucher(t, map[string]any{"code": "UNTUKDUA", "audience": "user", "user_id": 2})
+	if mine.Audience != audienceUser || mine.UserID == nil || *mine.UserID != 2 {
+		t.Fatalf("personal voucher: %+v", mine)
+	}
+	h.makeVoucher(t, map[string]any{"code": "LAMA", "audience": "all", "starts_at": time.Now().Add(-48 * time.Hour), "ends_at": time.Now().Add(-time.Hour)})
+	h.makeVoucher(t, map[string]any{"code": "KUNO", "audience": "all", "starts_at": time.Now().Add(-90 * 24 * time.Hour), "ends_at": time.Now().Add(-40 * 24 * time.Hour)})
+	h.makeVoucher(t, map[string]any{"code": "NANTI", "audience": "all", "starts_at": time.Now().Add(time.Hour), "ends_at": time.Now().Add(2 * time.Hour)})
+	h.makeVoucher(t, map[string]any{"code": "MATI", "audience": "all", "active": false})
+	h.makeVoucher(t, map[string]any{"code": "HABIS", "audience": "all", "quota": 1})
+
+	// Someone else can't use the personal one: to them it doesn't exist.
+	status, data := h.do(t, http.MethodPost, "/orders", withVoucher(oneDress, "UNTUKDUA"), h.token(t, 3))
+	if got := refusal(t, status, data); got != refusedNotFound {
+		t.Fatalf("another customer: %q", got)
+	}
+	h.create(t, 3, withVoucher(oneDress, "HABIS"))
+	order := h.create(t, 2, withVoucher(oneDress, "UNTUKDUA"))
+
+	got := myVouchers(t, h, 2)
+	want := map[string]string{"SEMUA": myVoucherUsable, "UNTUKDUA": myVoucherUsed, "LAMA": myVoucherEnded, "HABIS": myVoucherUsedUp}
+	if len(got) != len(want) {
+		t.Fatalf("customer 2 sees %v", got)
+	}
+	for code, state := range want {
+		if got[code].State != state {
+			t.Errorf("%s: state %q, want %q", code, got[code].State, state)
+		}
+	}
+	if !got["UNTUKDUA"].ForYou || got["SEMUA"].ForYou || got["UNTUKDUA"].LastOrderID != order.ID || got["SEMUA"].UsesLeft != 2 || got["UNTUKDUA"].UsesLeft != 0 {
+		t.Fatalf("details: %+v", got)
+	}
+	// Usable vouchers come first.
+	status, data = h.do(t, http.MethodGet, "/vouchers/mine", "", h.token(t, 2))
+	if status != http.StatusOK || !strings.HasPrefix(string(data), `{"vouchers":[{"code":"SEMUA"`) {
+		t.Fatalf("order: %s", data)
+	}
+	if _, ok := myVouchers(t, h, 3)["UNTUKDUA"]; ok {
+		t.Fatal("customer 3 sees customer 2's voucher")
+	}
+	if status, _ := h.do(t, http.MethodGet, "/vouchers/mine", "", ""); status != http.StatusUnauthorized {
+		t.Fatalf("no token: status %d", status)
+	}
+	// Cancelling gives the use back.
+	h.apply(t, eventStockRejected, order.ID)
+	if v := myVouchers(t, h, 2)["UNTUKDUA"]; v.State != myVoucherUsable || v.UsesLeft != 1 {
+		t.Fatalf("after the order failed: %+v", v)
+	}
+}

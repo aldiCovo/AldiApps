@@ -14,7 +14,22 @@ const voucherMessages = {
   "another voucher has this code": "Kode ini sudah dipakai voucher lain.",
   "orders use this voucher, so it can only be turned off": "Voucher ini sudah dipakai pesanan, jadi hanya bisa dinonaktifkan.",
   "voucher not found": "Voucher itu sudah tidak ada. Daftar dimuat ulang.",
+  "no customer has this email": "Belum ada pelanggan dengan email itu. Periksa lagi ejaannya.",
+  "a voucher for one customer can't be shown in the banner": "Voucher untuk satu pelanggan tidak bisa tampil di banner toko.",
 };
+
+const voucherAudiences = {
+  hidden: ["Tidak ditampilkan", "Kode rahasia. Pelanggan harus tahu kodenya."],
+  all: ["Semua pelanggan", "Muncul di Voucher saya setiap pelanggan yang masih bisa memakainya."],
+  user: ["Pelanggan tertentu", "Hanya pelanggan ini yang melihat dan bisa memakai kodenya."],
+};
+
+function audienceText(voucher) {
+  if (voucher.audience === "user") {
+    return voucher.customer ? `Khusus ${voucher.customer.name} (${voucher.customer.email})` : "Khusus satu pelanggan (akunnya sudah dihapus)";
+  }
+  return voucher.audience === "all" ? "Tampil di Voucher saya semua pelanggan" : "";
+}
 
 function voucherError(error, fallback) {
   if (handleAuth(error)) return null;
@@ -72,6 +87,8 @@ function voucherRow(voucher) {
   who.append(el("strong", "voucher-code", voucher.code), el("span", "", voucherTerms(voucher)));
   if (voucher.description) who.append(el("span", "muted small", voucher.description));
   if (voucher.banner) who.append(el("span", "small banner-flag", "Tampil di banner toko"));
+  const audience = audienceText(voucher);
+  if (audience) who.append(el("span", "small audience-flag", audience));
   const facts = el("div", "voucher-facts");
   const [label, tone] = voucherState(voucher);
   facts.append(
@@ -160,7 +177,10 @@ function failVoucher(row, voucher, error, fallback) {
 
 function voucherBody(voucher) {
   const { code, description, kind, value, max_discount, min_subtotal, quota, per_user_limit, starts_at, ends_at, active, banner } = voucher;
-  return { code, description, kind, value, max_discount, min_subtotal, quota, per_user_limit, starts_at, ends_at, active, banner };
+  const audience = voucher.audience || "hidden";
+  const body = { code, description, kind, value, max_discount, min_subtotal, quota, per_user_limit, starts_at, ends_at, active, banner, audience };
+  if (audience === "user") body.customer_email = voucher.customer ? voucher.customer.email : "";
+  return body;
 }
 
 // The same form makes a voucher and changes one.
@@ -205,6 +225,43 @@ function voucherForm(voucher, onSaved, onCancel) {
   const bannerField = el("label", "check");
   bannerField.append(banner, document.createTextNode(" Tampilkan di banner toko"));
   const bannerHint = el("p", "muted small", "Kodenya muncul di bar atas toko selama voucher aktif, sudah mulai, dan kuotanya masih ada. Jika ada beberapa, yang terakhir diubah yang tampil.");
+
+  // Who sees the voucher on their account page.
+  const audienceBox = el("fieldset", "audience-box");
+  audienceBox.append(el("legend", "", "Siapa yang melihat voucher ini di \"Voucher saya\""));
+  const radios = {};
+  const formId = `voucher-${voucher ? voucher.id : "new"}`;
+  for (const [id, [label, hint]] of Object.entries(voucherAudiences)) {
+    const radio = el("input");
+    radio.type = "radio";
+    radio.name = `${formId}-audience`;
+    radio.value = id;
+    radio.checked = (voucher ? voucher.audience || "hidden" : "hidden") === id;
+    radios[id] = radio;
+    const option = el("label", "audience-option");
+    const text = el("span", "");
+    text.append(el("strong", "", label), el("span", "muted small", hint));
+    option.append(radio, text);
+    audienceBox.append(option);
+  }
+  const email = el("input");
+  email.type = "email";
+  email.maxLength = 254;
+  email.autocomplete = "off";
+  email.spellcheck = false;
+  email.value = voucher && voucher.customer ? voucher.customer.email : "";
+  const emailField = field("Email pelanggan", email);
+  audienceBox.append(emailField);
+  const chosenAudience = () => Object.keys(radios).find((id) => radios[id].checked) || "hidden";
+  const showEmail = () => {
+    const personal = chosenAudience() === "user";
+    emailField.hidden = !personal;
+    // A voucher for one customer can't be in the banner, which everyone sees.
+    banner.disabled = personal;
+    if (personal) banner.checked = false;
+  };
+  for (const radio of Object.values(radios)) radio.addEventListener("change", showEmail);
+  showEmail();
   const error = el("p", "error", "");
   error.setAttribute("role", "alert");
   error.hidden = true;
@@ -231,6 +288,7 @@ function voucherForm(voucher, onSaved, onCancel) {
     activeField,
     bannerField,
     bannerHint,
+    audienceBox,
     error,
     actions,
   );
@@ -253,6 +311,7 @@ function voucherForm(voucher, onSaved, onCancel) {
       : perUserNumber === null ? [perUser, "Batas per akun harus angka bulat 1 sampai 100."]
       : !startsAt || !endsAt ? [startsAt ? ends : starts, "Isi waktu mulai dan berakhir."]
       : endsAt <= startsAt ? [ends, "Waktu berakhir harus setelah waktu mulai."]
+      : chosenAudience() === "user" && !/^[^\s@]+@[^\s@]+$/.test(email.value.trim()) ? [email, "Isi email pelanggan yang akan menerima voucher ini."]
       : null;
     if (problem) {
       error.textContent = problem[1];
@@ -273,7 +332,9 @@ function voucherForm(voucher, onSaved, onCancel) {
       ends_at: endsAt.toISOString(),
       active: active.checked,
       banner: banner.checked,
+      audience: chosenAudience(),
     };
+    if (body.audience === "user") body.customer_email = email.value.trim();
     error.hidden = true;
     setBusy(form, true);
     try {

@@ -201,6 +201,13 @@ select:focus, textarea:focus { border-color: var(--accent); outline: none; box-s
 .look-number { width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 50%; background: var(--card); font-weight: 700; }
 .look-number[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: #fff; }
 .banner-flag { color: var(--accent); font-weight: 600; }
+.audience-flag { color: var(--muted); font-weight: 600; }
+.audience-box { display: grid; gap: 8px; margin: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); }
+.audience-box legend { padding: 0 4px; font-weight: 600; }
+.audience-option { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
+.audience-option input { margin-top: 3px; }
+.audience-option > span { display: grid; gap: 2px; }
+.audience-option .muted { font-weight: 400; }
 .check { display: flex; align-items: center; gap: 8px; font-weight: 600; }
 .user-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.4fr); align-items: center; gap: 8px 18px; padding: 14px 18px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); }
 .user-who { display: grid; gap: 2px; overflow-wrap: anywhere; }

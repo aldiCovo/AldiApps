@@ -100,7 +100,7 @@ func newTestGateway(t *testing.T) (*httptest.Server, *fakeServices) {
 		}
 		io.WriteString(w, `{"ok":true}`)
 	}
-	server := httptest.NewServer(newHandler(f.start(t, "catalog", ok), f.start(t, "search", ok), f.start(t, "user", users), f.start(t, "order", orders), f.start(t, "realtime", ok), f.start(t, "cart", orders), f.start(t, "chat", orders), t.TempDir()))
+	server := httptest.NewServer(newHandler(f.start(t, "catalog", ok), f.start(t, "search", ok), f.start(t, "user", users), f.start(t, "order", orders), f.start(t, "realtime", ok), f.start(t, "cart", orders), f.start(t, "chat", orders), t.TempDir(), googleConfig{}))
 	t.Cleanup(server.Close)
 	return server, f
 }
@@ -363,7 +363,7 @@ func TestDownServiceAnswers502WithoutDetails(t *testing.T) {
 	down := httptest.NewServer(http.NotFoundHandler())
 	url := down.URL
 	down.Close()
-	server := httptest.NewServer(newHandler(url, url, url, url, url, url, url, t.TempDir()))
+	server := httptest.NewServer(newHandler(url, url, url, url, url, url, url, t.TempDir(), googleConfig{}))
 	defer server.Close()
 	for _, c := range []struct{ method, path string }{{"GET", "/api/search"}, {"POST", "/api/login"}} {
 		resp, body := do(t, c.method, server.URL+c.path, "application/json", "{}")
@@ -457,7 +457,7 @@ func TestCategoryPhotos(t *testing.T) {
 	if err := os.Symlink(filepath.Join(photos, "secret.jpg"), filepath.Join(dir, "link.jpg")); err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewServer(newHandler("http://127.0.0.1:1", "", "", "", "http://127.0.0.1:1", "", "", photos))
+	server := httptest.NewServer(newHandler("http://127.0.0.1:1", "", "", "", "http://127.0.0.1:1", "", "", photos, googleConfig{}))
 	t.Cleanup(server.Close)
 
 	resp, body := do(t, "GET", server.URL+"/api/category-photos", "", "")
@@ -481,7 +481,7 @@ func TestCategoryPhotos(t *testing.T) {
 			t.Fatalf("%s: status %d, body %q", path, resp.StatusCode, body)
 		}
 	}
-	empty := httptest.NewServer(newHandler("http://127.0.0.1:1", "", "", "", "http://127.0.0.1:1", "", "", t.TempDir()))
+	empty := httptest.NewServer(newHandler("http://127.0.0.1:1", "", "", "", "http://127.0.0.1:1", "", "", t.TempDir(), googleConfig{}))
 	t.Cleanup(empty.Close)
 	if resp, body := do(t, "GET", empty.URL+"/api/category-photos", "", ""); resp.StatusCode != http.StatusOK || strings.TrimSpace(body) != "{}" {
 		t.Fatalf("no folder: status %d, body %q", resp.StatusCode, body)
@@ -593,7 +593,7 @@ func TestProductPhotos(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(photos, "products", "7"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewServer(newHandler("http://127.0.0.1:1", "", "", "", "http://127.0.0.1:1", "", "", photos))
+	server := httptest.NewServer(newHandler("http://127.0.0.1:1", "", "", "", "http://127.0.0.1:1", "", "", photos, googleConfig{}))
 	t.Cleanup(server.Close)
 
 	resp, body := do(t, "GET", server.URL+"/api/product-photos", "", "")
@@ -625,7 +625,7 @@ func TestProductPhotos(t *testing.T) {
 			t.Fatalf("%s: status %d, body %q", path, resp.StatusCode, body)
 		}
 	}
-	empty := httptest.NewServer(newHandler("http://127.0.0.1:1", "", "", "", "http://127.0.0.1:1", "", "", t.TempDir()))
+	empty := httptest.NewServer(newHandler("http://127.0.0.1:1", "", "", "", "http://127.0.0.1:1", "", "", t.TempDir(), googleConfig{}))
 	t.Cleanup(empty.Close)
 	if resp, body := do(t, "GET", empty.URL+"/api/product-photos", "", ""); resp.StatusCode != http.StatusOK || strings.TrimSpace(body) != "{}" {
 		t.Fatalf("no folder: status %d, body %q", resp.StatusCode, body)
@@ -743,6 +743,26 @@ func TestAddressListRequests(t *testing.T) {
 		before := len(f.seen())
 		if resp, _ := do(t, "DELETE", server.URL+path, "", "", session); resp.StatusCode != http.StatusNotFound || len(f.seen()) != before {
 			t.Fatalf("%s: status %d", path, resp.StatusCode)
+		}
+	}
+}
+
+func TestLegalPages(t *testing.T) {
+	server := httptest.NewServer(newHandler("http://127.0.0.1:1", "", "", "", "http://127.0.0.1:1", "", "", t.TempDir(), googleConfig{}))
+	t.Cleanup(server.Close)
+	for path, title := range map[string]string{"/privasi": "Kebijakan Privasi", "/syarat": "Syarat &amp; Ketentuan"} {
+		resp, err := http.Get(server.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK || !strings.HasPrefix(resp.Header.Get("Content-Type"), "text/html") ||
+			!strings.Contains(string(body), "<h1>"+title+"</h1>") {
+			t.Errorf("%s: status %d, type %q", path, resp.StatusCode, resp.Header.Get("Content-Type"))
+		}
+		if !strings.Contains(resp.Header.Get("Content-Security-Policy"), "default-src 'none'") {
+			t.Errorf("%s: no CSP", path)
 		}
 	}
 }

@@ -33,6 +33,12 @@ func (m *fakeMailer) emails() []Email {
 	return append([]Email(nil), m.sent...)
 }
 
+func (m *fakeMailer) clear() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.sent = nil
+}
+
 var resetLink = regexp.MustCompile(`https://shop\.test/#reset=([A-Za-z0-9_-]+)`)
 
 // forgot asks for a link and waits until it would have been sent.

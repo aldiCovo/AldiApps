@@ -87,7 +87,7 @@ type loginResponse struct {
 	User      Profile `json:"user"`
 }
 
-func newHandler(store *Store, tokens *Tokens, passwords *Passwords, resets *Resets, internalToken, adminToken string) http.Handler {
+func newHandler(store *Store, tokens *Tokens, passwords *Passwords, resets *Resets, codes *Codes, google *Google, internalToken, adminToken string) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -131,6 +131,8 @@ func newHandler(store *Store, tokens *Tokens, passwords *Passwords, resets *Rese
 			writeFailure(w, err)
 			return
 		}
+		// The account can log in once the code from this email comes back to /email/verify.
+		codes.RequestEmail(user.Email)
 		writeJSON(w, http.StatusCreated, user)
 	})
 
@@ -152,24 +154,18 @@ func newHandler(store *Store, tokens *Tokens, passwords *Passwords, resets *Rese
 			writeUnauthorized(w, "wrong email or password")
 			return
 		}
-		token, err := tokens.Issue(user)
+		// Only someone who knows the password learns this, so it gives no account away.
+		_, verified, err := store.EmailStatus(r.Context(), user.Email)
 		if err != nil {
 			writeFailure(w, err)
 			return
 		}
-		// The shop shows the photo and profile right away, without asking again.
-		profile, err := store.Profile(r.Context(), user.ID)
-		if err != nil {
-			writeFailure(w, err)
+		if !verified {
+			codes.RequestEmail(user.Email)
+			writeError(w, http.StatusForbidden, errNotVerified.Error())
 			return
 		}
-		w.Header().Set("Cache-Control", "no-store")
-		writeJSON(w, http.StatusOK, loginResponse{
-			Token:     token,
-			TokenType: "Bearer",
-			ExpiresIn: int(tokens.lifetime.Seconds()),
-			User:      profile,
-		})
+		writeLogin(w, r, store, tokens, user)
 	})
 
 	// web has no route to this. The token keeps emails from other Pods in the cluster too.
@@ -199,6 +195,7 @@ func newHandler(store *Store, tokens *Tokens, passwords *Passwords, resets *Rese
 
 	addAdminRoutes(mux, store, adminToken)
 	addResetRoutes(mux, resets)
+	addGoogleRoutes(mux, store, tokens, google)
 
 	// tokenUser answers 401 itself when the request has no valid token.
 	tokenUser := func(w http.ResponseWriter, r *http.Request) (int64, bool) {
@@ -234,6 +231,7 @@ func newHandler(store *Store, tokens *Tokens, passwords *Passwords, resets *Rese
 		writeJSON(w, http.StatusOK, profile)
 	})
 	addProfileRoutes(mux, store, passwords, tokenUser)
+	addCodeRoutes(mux, store, tokens, codes, tokenUser)
 	addAddressRoutes(mux, store, tokenUser)
 
 	mux.HandleFunc("GET /me/address", func(w http.ResponseWriter, r *http.Request) {
@@ -300,8 +298,33 @@ func authenticate(ctx context.Context, store *Store, passwords *Passwords, in lo
 	if err != nil {
 		return User{}, false, err
 	}
+	// An account made with Google has no password until a reset link sets one.
+	if hash == "" {
+		return User{}, false, passwords.WasteTime(waitCtx, in.Password)
+	}
 	ok, err := passwords.Verify(waitCtx, hash, in.Password)
 	return user, ok, err
+}
+
+// writeLogin answers with a new token for the user, and the profile the shop shows at once.
+func writeLogin(w http.ResponseWriter, r *http.Request, store *Store, tokens *Tokens, user User) {
+	token, err := tokens.Issue(user)
+	if err != nil {
+		writeFailure(w, err)
+		return
+	}
+	profile, err := store.Profile(r.Context(), user.ID)
+	if err != nil {
+		writeFailure(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, loginResponse{
+		Token:     token,
+		TokenType: "Bearer",
+		ExpiresIn: int(tokens.lifetime.Seconds()),
+		User:      profile,
+	})
 }
 
 func readJSON(w http.ResponseWriter, r *http.Request, dst any) bool {

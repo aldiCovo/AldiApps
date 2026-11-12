@@ -378,6 +378,94 @@ function fillProfile() {
   $("akun-bio-since").textContent = since ? `Member sejak ${monthYear.format(since)}` : "";
   $("akun-since").textContent = since ? `Member sejak ${monthYear.format(since)}` : "";
   $("akun-security-text").textContent = `Kami akan mengirim link ke ${user.email}. Buka link itu untuk membuat password baru.`;
+  // An account made with Google has no password to change yet.
+  $("akun-password-form").hidden = !user.has_password;
+  $("akun-password-sub").hidden = !user.has_password;
+  $("akun-google-note").hidden = user.has_password;
+  fillPhoneStatus();
+}
+
+// The saved phone's state. Editing the field changes nothing here until it is saved.
+function fillPhoneStatus() {
+  const user = currentUser;
+  const status = $("akun-phone-status");
+  status.className = "";
+  if (!user.phone) status.textContent = "Boleh dikosongkan.";
+  else if (user.phone_verified) {
+    status.textContent = "✓ WhatsApp terverifikasi";
+    status.className = "verified";
+  } else status.textContent = "Belum diverifikasi.";
+  $("akun-phone-verify").hidden = !user.phone || user.phone_verified;
+}
+
+function phoneMessage(error) {
+  switch (error.status) {
+    case 409: return "Nomor ini sudah terverifikasi, atau belum ada nomor yang disimpan.";
+    case 429: return "Terlalu banyak kode diminta. Coba lagi dalam satu jam.";
+    case 502: return "Pesan WhatsApp tidak bisa dikirim. Pastikan nomor itu memakai WhatsApp.";
+    case 503: return "Verifikasi WhatsApp belum tersedia.";
+    default: return codeMessage(error);
+  }
+}
+
+// Sends a code to the saved phone. Answers whether it went out.
+async function sendPhoneCode() {
+  $("phone-error").hidden = true;
+  $("phone-note").hidden = true;
+  holdResend($("phone-resend"));
+  try {
+    await post("/me/phone/code", {});
+    return true;
+  } catch (error) {
+    if (error.status === 401) {
+      $("phone-dialog").close();
+      renderAccount(null);
+      return false;
+    }
+    $("phone-error").textContent = phoneMessage(error);
+    $("phone-error").hidden = false;
+    return false;
+  }
+}
+
+async function openPhoneVerify() {
+  const button = $("akun-phone-verify");
+  button.disabled = true;
+  $("phone-form").reset();
+  $("phone-text").textContent = `Kami mengirim 6 angka lewat WhatsApp ke ${currentUser.phone}. Masukkan di sini.`;
+  $("phone-dialog").showModal();
+  await sendPhoneCode();
+  button.disabled = false;
+  $("phone-code").focus();
+}
+
+async function resendPhoneCode() {
+  if (await sendPhoneCode()) {
+    $("phone-note").textContent = "Kode baru sudah dikirim. Kode yang lama tidak berlaku lagi.";
+    $("phone-note").hidden = false;
+  }
+}
+
+async function submitPhoneCode(event) {
+  event.preventDefault();
+  $("phone-error").hidden = true;
+  $("phone-note").hidden = true;
+  $("phone-submit").disabled = true;
+  try {
+    profileChanged(await post("/me/phone/verify", { code: $("phone-code").value.trim() }));
+    $("phone-dialog").close();
+    $("akun-bio-status").textContent = "Nomor WhatsApp sudah terverifikasi.";
+  } catch (error) {
+    if (error.status === 401) {
+      $("phone-dialog").close();
+      renderAccount(null);
+      return;
+    }
+    $("phone-error").textContent = phoneMessage(error);
+    $("phone-error").hidden = false;
+  } finally {
+    $("phone-submit").disabled = false;
+  }
 }
 
 function setNavCount(name, value, accent = false) {
@@ -1160,6 +1248,9 @@ for (const chip of document.querySelectorAll(".bio-gender [data-gender]")) {
   chip.addEventListener("click", () => setGender(chip.getAttribute("aria-pressed") === "true" ? "" : chip.dataset.gender));
 }
 $("akun-bio-form").addEventListener("submit", submitBio);
+$("akun-phone-verify").addEventListener("click", openPhoneVerify);
+$("phone-form").addEventListener("submit", submitPhoneCode);
+$("phone-resend").addEventListener("click", resendPhoneCode);
 $("akun-photo-pick").addEventListener("click", () => $("akun-photo-input").click());
 $("akun-photo-input").addEventListener("change", uploadPhoto);
 $("akun-photo-remove").addEventListener("click", removePhoto);

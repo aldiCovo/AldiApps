@@ -1167,6 +1167,7 @@ function setAuthMode(mode) {
   $("auth-title").textContent = registering ? "Daftar" : "Masuk";
   $("auth-submit").textContent = registering ? "Daftar" : "Masuk";
   $("auth-switch-text").textContent = registering ? "Sudah punya akun?" : "Belum punya akun?";
+  $("google-text").textContent = registering ? "Daftar dengan Google" : "Masuk dengan Google";
   $("auth-switch").textContent = registering ? "Masuk" : "Daftar";
   $("name-field").hidden = !registering;
   $("auth-name").required = registering;
@@ -1254,6 +1255,99 @@ async function submitReset(event) {
   }
 }
 
+// The email waiting for its code, after signing up or logging in before verifying.
+let verifyEmail = "";
+// When "Kirim ulang" may be pressed again, so a tap doesn't send a burst of codes.
+const resendWait = 60;
+
+function holdResend(button) {
+  let left = resendWait;
+  button.disabled = true;
+  const label = button.dataset.label || (button.dataset.label = button.textContent);
+  button.textContent = `${label} (${left})`;
+  const timer = setInterval(() => {
+    left -= 1;
+    if (left > 0 && button.isConnected) {
+      button.textContent = `${label} (${left})`;
+      return;
+    }
+    clearInterval(timer);
+    button.textContent = label;
+    button.disabled = false;
+  }, 1000);
+}
+
+function openVerify(email, note = "") {
+  verifyEmail = email;
+  $("auth-dialog").close();
+  $("verify-form").reset();
+  $("verify-text").textContent = `Kami mengirim 6 angka ke ${email}. Masukkan di sini untuk memastikan email itu milikmu. Cek juga folder spam.`;
+  $("verify-note").textContent = note;
+  $("verify-note").hidden = !note;
+  $("verify-error").hidden = true;
+  holdResend($("verify-resend"));
+  $("verify-dialog").showModal();
+  $("verify-code").focus();
+}
+
+function codeMessage(error) {
+  switch (error.status) {
+    case 400:
+    case 422: return "Kodenya salah atau sudah tidak berlaku. Periksa lagi, atau minta kode baru.";
+    case 429: return "Terlalu banyak kode diminta. Coba lagi nanti.";
+    default: return "Layanan belum tersedia. Coba lagi sebentar lagi.";
+  }
+}
+
+async function submitVerify(event) {
+  event.preventDefault();
+  const code = $("verify-code").value.trim();
+  $("verify-error").hidden = true;
+  $("verify-note").hidden = true;
+  $("verify-submit").disabled = true;
+  try {
+    renderAccount(await post("/email/verify", { email: verifyEmail, code }));
+    $("verify-dialog").close();
+  } catch (error) {
+    $("verify-error").textContent = codeMessage(error);
+    $("verify-error").hidden = false;
+  } finally {
+    $("verify-submit").disabled = false;
+  }
+}
+
+async function resendVerify() {
+  $("verify-error").hidden = true;
+  holdResend($("verify-resend"));
+  try {
+    await post("/email/code", { email: verifyEmail });
+    $("verify-note").textContent = "Kode baru sudah dikirim. Kode yang lama tidak berlaku lagi.";
+    $("verify-note").hidden = false;
+  } catch (error) {
+    $("verify-error").textContent = codeMessage(error);
+    $("verify-error").hidden = false;
+  }
+}
+
+// Google is offered only when the shop has it set up.
+async function loadAuthOptions() {
+  try {
+    const options = await api("/auth/options");
+    $("google-login").hidden = !options.google;
+  } catch {
+    $("google-login").hidden = true;
+  }
+}
+
+// web sends a failed Google login back here, with #login=google-failed.
+function openGoogleFailure() {
+  if (location.hash !== "#login=google-failed") return;
+  history.replaceState(null, "", location.pathname + location.search);
+  openAuth();
+  $("auth-error").textContent = "Masuk dengan Google belum berhasil. Coba lagi, atau masuk dengan email dan password.";
+  $("auth-error").hidden = false;
+}
+
 function authMessage(error) {
   switch (error.status) {
     case 400: return "Periksa kembali data yang kamu isi.";
@@ -1273,11 +1367,19 @@ async function submitAuth(event) {
   try {
     if (authMode === "register") {
       await post("/register", { email, name: $("auth-name").value.trim(), password });
+      // The account can log in once the code from the email comes back.
+      openVerify(email);
+      return;
     }
     renderAccount(await post("/login", { email, password }));
     $("auth-form").reset();
     $("auth-dialog").close();
   } catch (error) {
+    // The password was right, and user-service just sent a code to the email.
+    if (error.status === 403) {
+      openVerify(email, "Email ini belum diverifikasi. Kami baru saja mengirim kodenya.");
+      return;
+    }
     $("auth-error").textContent = authMessage(error);
     $("auth-error").hidden = false;
   } finally {
@@ -2963,6 +3065,8 @@ $("forgot-back").addEventListener("click", () => {
   openAuth();
 });
 $("reset-form").addEventListener("submit", submitReset);
+$("verify-form").addEventListener("submit", submitVerify);
+$("verify-resend").addEventListener("click", resendVerify);
 window.addEventListener("hashchange", openResetFromLink);
 for (const button of document.querySelectorAll("[data-close]")) {
   button.addEventListener("click", () => button.closest("dialog").close());
@@ -2977,7 +3081,9 @@ showCartCount();
 markFavorites();
 renderCategories();
 loadAccount();
+loadAuthOptions();
 openResetFromLink();
+openGoogleFailure();
 loadFilterChoices();
 loadPromo();
 // Category names appear on the cards, so the list loads after them.

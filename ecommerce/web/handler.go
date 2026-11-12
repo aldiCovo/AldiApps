@@ -47,7 +47,7 @@ type gateway struct {
 	events                                                     http.Handler
 }
 
-func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, chatURL, photosDir string) http.Handler {
+func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, chatURL, photosDir string, google googleConfig) http.Handler {
 	g := &gateway{
 		catalogURL: catalogURL,
 		searchURL:  searchURL,
@@ -92,7 +92,14 @@ func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, 
 			g.pass(w, r, g.userURL+"/register", body, "")
 		}
 	})
-	mux.HandleFunc("POST /api/login", g.login)
+	mux.HandleFunc("POST /api/login", g.login("/login"))
+	mux.HandleFunc("POST /api/email/verify", g.login("/email/verify"))
+	mux.HandleFunc("POST /api/email/code", func(w http.ResponseWriter, r *http.Request) {
+		if body, ok := readBody(w, r); ok {
+			g.pass(w, r, g.userURL+"/email/code", body, "")
+		}
+	})
+	addGoogleRoutes(mux, g, google)
 	mux.HandleFunc("POST /api/password/forgot", func(w http.ResponseWriter, r *http.Request) {
 		if body, ok := readBody(w, r); ok {
 			g.pass(w, r, g.userURL+"/password/forgot", body, "")
@@ -122,6 +129,13 @@ func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, 
 		g.withSession(w, r, g.userURL+"/me/photo", nil)
 	})
 	mux.HandleFunc("GET /api/me/photo", g.mePhoto)
+	for _, path := range []string{"/me/phone/code", "/me/phone/verify"} {
+		mux.HandleFunc("POST /api"+path, func(w http.ResponseWriter, r *http.Request) {
+			if body, ok := readBody(w, r); ok {
+				g.withSession(w, r, g.userURL+path, body)
+			}
+		})
+	}
 	mux.HandleFunc("GET /api/me/addresses", func(w http.ResponseWriter, r *http.Request) {
 		g.withSession(w, r, g.userURL+"/me/addresses", nil)
 	})
@@ -374,6 +388,11 @@ func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, 
 			http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(page))
 			return
 		}
+		// Google's login screen links these, so they need addresses of their own.
+		if r.URL.Path == "/privasi" || r.URL.Path == "/syarat" {
+			http.ServeFileFS(w, r, files, r.URL.Path[1:]+".html")
+			return
+		}
 		// During a rollout, another version's page can reach this Pod. Answering
 		// with this version's file would let the browser keep it under that URL.
 		if version := r.URL.Query().Get("v"); version != "" && version != assets[r.URL.Path] {
@@ -590,36 +609,35 @@ func (g *gateway) pass(w http.ResponseWriter, r *http.Request, url string, body 
 }
 
 // login keeps the token in a cookie that page scripts can't read, so injected script can't steal it.
-func (g *gateway) login(w http.ResponseWriter, r *http.Request) {
-	body, ok := readBody(w, r)
-	if !ok {
-		return
-	}
-	resp, data, err := g.call(r, g.userURL+"/login", body, "")
-	if err != nil {
-		writeUpstreamError(w, err)
-		return
-	}
-	if resp.StatusCode != http.StatusOK {
-		writeRaw(w, resp, data)
-		return
-	}
-	var login struct {
-		Token     string          `json:"token"`
-		ExpiresIn int             `json:"expires_in"`
-		User      json.RawMessage `json:"user"`
-	}
-	if err := json.Unmarshal(data, &login); err != nil || login.Token == "" {
-		slog.Error("user-service sent an unexpected login response")
-		writeError(w, http.StatusBadGateway, "login is not available")
-		return
-	}
-	setSession(w, login.Token, login.ExpiresIn)
-	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write(login.User); err != nil {
-		slog.Error("writing response failed", "error", err)
+// path is a user-service route that answers with a token: a password or an email code.
+func (g *gateway) login(path string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		body, ok := readBody(w, r)
+		if !ok {
+			return
+		}
+		resp, data, err := g.call(r, g.userURL+path, body, "")
+		if err != nil {
+			writeUpstreamError(w, err)
+			return
+		}
+		if resp.StatusCode != http.StatusOK {
+			writeRaw(w, resp, data)
+			return
+		}
+		var login session
+		if err := json.Unmarshal(data, &login); err != nil || login.Token == "" {
+			slog.Error("user-service sent an unexpected login response")
+			writeError(w, http.StatusBadGateway, "login is not available")
+			return
+		}
+		setSession(w, login.Token, login.ExpiresIn)
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write(login.User); err != nil {
+			slog.Error("writing response failed", "error", err)
+		}
 	}
 }
 

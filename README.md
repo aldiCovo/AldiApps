@@ -137,8 +137,13 @@ TEST_RABBITMQ_URL='amqp://guest:guest@127.0.0.1:5672/' go test -race ./...
 
 | Request | Does |
 |---|---|
-| `POST /register` | Creates a customer from `{"email", "name", "password"}`. The password has 8 to 128 characters. Answers 409 if the email exists, ignoring case |
-| `POST /login` | Checks `{"email", "password"}` and answers `{"token", "token_type", "expires_in", "user"}`, or 401 |
+| `POST /register` | Creates a customer from `{"email", "name", "password"}`, and emails a 6-digit code. The password has 8 to 128 characters. Answers 409 if the email exists, ignoring case |
+| `POST /login` | Checks `{"email", "password"}` and answers `{"token", "token_type", "expires_in", "user"}`, or 401. A right password for an email not verified yet answers 403 and emails a new code |
+| `POST /email/code` | Emails a new code to `{"email"}`, if it has an account that isn't verified. Always answers 204, before looking the email up |
+| `POST /email/verify` | Checks `{"email", "code"}`, marks the email verified and answers like `/login`. Answers 422 for a wrong, used or expired code |
+| `POST /google` | Trades `{"code", "code_verifier", "redirect_uri"}` from Google for the account and answers like `/login`. Answers 401 if Google refuses, 409 if the email's account is linked to another Google account, 404 without `GOOGLE_CLIENT_ID` |
+| `POST /me/phone/code` | Sends a code to the saved phone by WhatsApp. Answers 409 with no phone or one already verified, 429 past the limit, 502 if the message can't be sent, 503 without `FONNTE_TOKEN` |
+| `POST /me/phone/verify` | Checks `{"code"}`, marks the phone verified and answers with the profile, or 422 |
 | `GET /me` | Returns the user that the `Authorization: Bearer <token>` header belongs to |
 | `POST /password/forgot` | Emails a link for setting a new password to `{"email"}`, if it has an account. Always answers 204, before looking the email up, so it can't tell anyone which emails have accounts |
 | `POST /password/reset` | Sets `{"password"}` with the `{"token"}` from a link, and answers 204. Answers 410 if the link is unknown, used or expired |
@@ -150,6 +155,10 @@ TEST_RABBITMQ_URL='amqp://guest:guest@127.0.0.1:5672/' go test -race ./...
 `ADMIN_INTERNAL_TOKEN` is only admin-service's, and must differ from `INTERNAL_TOKEN`, so a service that looks up customers can't make anyone an admin. A role change locks every admin's row first, so two admins taking each other's role at once still leave one.
 
 A reset link is `SHOP_URL/#reset=<token>`. The token is after `#`, so the browser never sends it to a server or a log. Only its SHA-256 is stored. A link lasts 30 minutes and works once, and using one ends the account's other links. An account gets at most 3 links an hour, so the form can't fill someone's inbox. The email goes out after the answer, through `SMTP_ADDR` as `MAIL_FROM`, which is Mailpit for now. A new password doesn't end tokens already issued, which still last up to an hour.
+
+A code has 6 digits and lasts 10 minutes. Only a hash is stored. A code takes 5 tries, and a new one ends the older ones, so a stranger gets at most 25 guesses an hour, because an account gets 5 codes an hour on each channel. A code stops working when the email or phone it went to changes, and saving a new phone makes it unverified. Accounts from before codes count as verified, and a reset link verifies the email too. WhatsApp codes go through [Fonnte](https://fonnte.com) with `FONNTE_TOKEN`, from the shop's number linked there.
+
+Google login is on with `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. user-service trades the code for the ID token straight from Google over TLS, so it checks the token's `aud`, `iss` and `exp` but not its signature, as OpenID Connect allows. The login goes to the account linked to that Google account, else to the account with the same email, which Google has verified, else to a new account. A new one has no password until a reset link sets one.
 
 Passwords are stored as Argon2id hashes. Only 3 are computed at once, which keeps a burst of logins inside the memory limit, and a request that waits over 5 seconds gets 503.
 
@@ -414,7 +423,10 @@ Serves the pages in `static/`, and passes on only these requests:
 |---|---|
 | `GET /api/categories`, `GET /api/products/{id}` | catalog-service |
 | `GET /api/search` | search-service |
-| `POST /api/register`, `POST /api/login`, `GET /api/me`, `POST /api/password/forgot`, `POST /api/password/reset` | user-service |
+| `POST /api/register`, `POST /api/login`, `GET /api/me`, `POST /api/password/forgot`, `POST /api/password/reset`, `POST /api/email/code`, `POST /api/email/verify` | user-service |
+| `POST /api/me/phone/code`, `POST /api/me/phone/verify` | user-service, with the token from the cookie |
+| `GET /api/auth/options` | Handled here. Says whether Google login is on |
+| `GET /api/auth/google`, `GET /api/auth/google/callback` | Handled here. Sends the browser to Google with a state and a PKCE challenge in a short-lived `HttpOnly` cookie, and on the way back has user-service trade the code for a session. A failed login lands on `/#login=google-failed` |
 | `POST /api/logout` | Handled here. It only clears the cookie |
 | `GET /api/events` | realtime-service, as a WebSocket with the token from the cookie. Answers 403 if `Origin` isn't this site |
 | `POST /api/orders`, `GET /api/orders`, `GET /api/orders/{id}`, `POST /api/orders/{id}/pay` | order-service, with the token from the cookie |
@@ -428,9 +440,11 @@ Login keeps the token in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie, so page
 
 A guest's cart lives in the browser's `localStorage`, so it needs no account. A customer's lives in cart-service, so it follows them to any browser and leaves the browser when they log out. Logging in moves a guest's cart to the account. The browser's copy stays until the account has it. Either way the cart holds only ids and quantities, and reads names, prices and stock again each time it opens. Checkout sends one `POST /api/orders`, which holds at most 20 different variants, up to 20 of each. An order is all or nothing: if one item is short, the whole order is rejected, and the customer can put it back in the cart. At checkout a voucher code is checked with `/api/vouchers/check`, and the discount follows the chosen courier; order-service checks it again when the order is made, and if it stopped being usable meanwhile, nothing is ordered and the checkout says why.
 
+`/privasi` and `/syarat` are the privacy policy and terms, which Google's login screen links. Update them when the shop starts storing or sharing new data.
+
 Photos come from `PHOTOS_DIR`, which the admin pages fill. A product without photos shows its category's photo, and a category without one gets a drawn garment for Dress, Blouse, Rok and Hijab, or the first letter of its name. The heading font is Cormorant Garamond, served from `static/fonts/` under its [license](ecommerce/web/static/fonts/OFL.txt), because the Content-Security-Policy only allows this site's own files.
 
-It needs `CATALOG_URL`, `SEARCH_URL`, `USER_URL`, `ORDER_URL`, `REALTIME_URL` and `CART_URL`, and won't start without them.
+It needs `CATALOG_URL`, `SEARCH_URL`, `USER_URL`, `ORDER_URL`, `REALTIME_URL` and `CART_URL`, and won't start without them. Google login needs `GOOGLE_CLIENT_ID` and `SHOP_URL`, the address customers use; the callback registered in Google Cloud is `SHOP_URL/api/auth/google/callback`.
 
 The tests use fake services, so they need nothing running:
 

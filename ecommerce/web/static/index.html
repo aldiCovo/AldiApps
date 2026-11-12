@@ -322,7 +322,7 @@
                     <button class="chip pick-chip" type="button" data-gender="male" aria-pressed="false">Laki-laki</button>
                   </div>
                 </fieldset>
-                <label>Nomor HP <input id="akun-bio-phone" type="tel" maxlength="20" autocomplete="tel" inputmode="tel" placeholder="0812 3456 7890"><span class="hint">Boleh dikosongkan.</span></label>
+                <label>Nomor HP <input id="akun-bio-phone" type="tel" maxlength="20" autocomplete="tel" inputmode="tel" placeholder="0812 3456 7890"><span class="hint phone-check"><span id="akun-phone-status">Boleh dikosongkan.</span> <button id="akun-phone-verify" class="link" type="button" hidden>Verifikasi lewat WhatsApp</button></span></label>
                 <label>Email <input id="akun-bio-email" type="email" readonly><span class="hint">Email dipakai untuk masuk dan belum bisa diganti di sini.</span></label>
                 <p id="akun-bio-error" class="error wide" role="alert" hidden></p>
                 <div class="address-actions wide">
@@ -346,7 +346,8 @@
 
           <section id="akun-keamanan" class="account-panel" aria-labelledby="akun-keamanan-title" hidden>
             <h2 id="akun-keamanan-title" class="panel-title">Keamanan</h2>
-            <p class="panel-sub">Ganti password tanpa keluar dari akun.</p>
+            <p id="akun-password-sub" class="panel-sub">Ganti password tanpa keluar dari akun.</p>
+            <p id="akun-google-note" class="good-note" hidden>Akunmu masuk lewat Google dan belum punya password. Kalau ingin juga bisa masuk dengan email dan password, buat password lewat "Kirim link" di bawah.</p>
             <form id="akun-password-form" class="address-form password-form" novalidate>
                 <label class="wide">Password sekarang
                   <span class="password-field"><input id="akun-password-current" type="password" maxlength="128" required autocomplete="current-password"><button class="password-toggle" type="button" aria-controls="akun-password-current" aria-pressed="false" aria-label="Tampilkan password"></button></span>
@@ -471,7 +472,7 @@
       </nav>
     </div>
     <p class="footer-note">Pembayaran masih simulasi. Tidak ada uang yang ditarik dan tidak ada barang yang dikirim.</p>
-    <p class="footer-copy">© 2026 Prastika</p>
+    <p class="footer-copy">© 2026 Prastika · <a href="/privasi">Kebijakan Privasi</a> · <a href="/syarat">Syarat &amp; Ketentuan</a></p>
   </footer>
 
   <dialog id="product-dialog" class="sheet product-sheet" aria-labelledby="product-title">
@@ -703,6 +704,13 @@
   <dialog id="auth-dialog" class="sheet narrow" aria-labelledby="auth-title">
     <button class="close" type="button" data-close aria-label="Tutup">×</button>
     <h2 id="auth-title">Masuk</h2>
+    <div id="google-login" class="google-login" hidden>
+      <a class="google-button" href="/api/auth/google">
+        <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        <span id="google-text">Masuk dengan Google</span>
+      </a>
+      <p class="or"><span>atau</span></p>
+    </div>
     <form id="auth-form">
       <label id="name-field" hidden>Nama <input id="auth-name" type="text" maxlength="200" autocomplete="name"></label>
       <label>Email <input id="auth-email" type="email" maxlength="254" required autocomplete="email"></label>
@@ -714,6 +722,32 @@
       <button id="auth-submit" type="submit">Masuk</button>
     </form>
     <p class="switch"><span id="auth-switch-text">Belum punya akun?</span> <button id="auth-switch" class="link" type="button">Daftar</button></p>
+  </dialog>
+
+  <dialog id="verify-dialog" class="sheet narrow" aria-labelledby="verify-title">
+    <button class="close" type="button" data-close aria-label="Tutup">×</button>
+    <h2 id="verify-title">Cek email kamu</h2>
+    <form id="verify-form" class="code-form">
+      <p id="verify-text" class="hint-text"></p>
+      <label>Kode verifikasi <input id="verify-code" class="code-input" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" required></label>
+      <p id="verify-note" class="good-note" role="status" hidden></p>
+      <p id="verify-error" class="error" role="alert" hidden></p>
+      <button id="verify-submit" class="primary" type="submit">Verifikasi</button>
+    </form>
+    <p class="switch">Belum menerima kode? <button id="verify-resend" class="link" type="button">Kirim ulang</button></p>
+  </dialog>
+
+  <dialog id="phone-dialog" class="sheet narrow" aria-labelledby="phone-title">
+    <button class="close" type="button" data-close aria-label="Tutup">×</button>
+    <h2 id="phone-title">Verifikasi WhatsApp</h2>
+    <form id="phone-form" class="code-form">
+      <p id="phone-text" class="hint-text"></p>
+      <label>Kode verifikasi <input id="phone-code" class="code-input" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" required></label>
+      <p id="phone-note" class="good-note" role="status" hidden></p>
+      <p id="phone-error" class="error" role="alert" hidden></p>
+      <button id="phone-submit" class="primary" type="submit">Verifikasi</button>
+    </form>
+    <p class="switch">Belum menerima kode? <button id="phone-resend" class="link" type="button">Kirim ulang</button></p>
   </dialog>
 
   <dialog id="forgot-dialog" class="sheet narrow" aria-labelledby="forgot-title">

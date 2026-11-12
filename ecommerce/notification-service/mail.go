@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"mime/quotedprintable"
@@ -23,6 +24,8 @@ type Email struct {
 	Kind    string
 	Subject string
 	Body    string
+	// Set for emails that aren't about an order.
+	MessageID string
 }
 
 // mailer is what the notifier needs for sending.
@@ -30,10 +33,19 @@ type mailer interface {
 	Send(email Email) error
 }
 
-// SMTPMailer sends through a server that needs no login, which here is Mailpit.
+// SMTPMailer sends through Mailpit, which needs no login, or through a relay such as Brevo,
+// which needs STARTTLS and a login.
 type SMTPMailer struct {
 	addr string
 	from mail.Address
+	// Empty for Mailpit.
+	username, password string
+}
+
+// withLogin makes the mailer switch to TLS and log in before sending.
+func (m *SMTPMailer) withLogin(username, password string) *SMTPMailer {
+	m.username, m.password = username, password
+	return m
 }
 
 func newSMTPMailer(addr, from string) (*SMTPMailer, error) {
@@ -73,6 +85,14 @@ func (m *SMTPMailer) Send(email Email) error {
 		return err
 	}
 	defer client.Close()
+	if m.username != "" {
+		if err := client.StartTLS(&tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}); err != nil {
+			return fmt.Errorf("starting TLS: %w", err)
+		}
+		if err := client.Auth(smtp.PlainAuth("", m.username, m.password, host)); err != nil {
+			return fmt.Errorf("logging in to the mail server: %w", err)
+		}
+	}
 	if err := client.Mail(m.from.Address); err != nil {
 		return err
 	}
@@ -104,7 +124,7 @@ func (m *SMTPMailer) render(email Email) ([]byte, error) {
 		{"Subject", encodeSubject(email.Subject)},
 		{"Date", time.Now().Format(time.RFC1123Z)},
 		// The same order and kind get the same id, so a mail client can hide a rare repeat.
-		{"Message-ID", "<order-" + strconv.FormatInt(email.OrderID, 10) + "-" + email.Kind + "@" + domain + ">"},
+		{"Message-ID", messageID(email, domain)},
 		{"MIME-Version", "1.0"},
 		{"Content-Type", `text/plain; charset="utf-8"`},
 		{"Content-Transfer-Encoding", "quoted-printable"},
@@ -120,4 +140,11 @@ func (m *SMTPMailer) render(email Email) ([]byte, error) {
 		return nil, err
 	}
 	return message.Bytes(), nil
+}
+
+func messageID(email Email, domain string) string {
+	if email.MessageID != "" {
+		return "<" + email.MessageID + "@" + domain + ">"
+	}
+	return "<order-" + strconv.FormatInt(email.OrderID, 10) + "-" + email.Kind + "@" + domain + ">"
 }

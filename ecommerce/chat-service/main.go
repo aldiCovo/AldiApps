@@ -88,6 +88,20 @@ func run() error {
 	lookup := newLookup(values["CATALOG_URL"], values["ORDER_URL"])
 	assistant := newAssistant(store, notifier, lookup, bot)
 	defer assistant.Wait()
+	// Emails about unread admin answers, through notification-service; off without these.
+	if notifyURL, notifyToken := os.Getenv("NOTIFY_URL"), os.Getenv("NOTIFY_TOKEN"); notifyURL != "" && notifyToken != "" {
+		emailer := newReplyEmailer(store, notifyURL, notifyToken)
+		emailsDone := make(chan struct{})
+		go func() {
+			defer close(emailsDone)
+			emailer.Run(ctx)
+		}()
+		defer func() {
+			stop()
+			<-emailsDone
+		}()
+		slog.Info("reply emails on")
+	}
 	slog.Info("bot", "gemini", assistant.gemini != nil, "claude", assistant.claude != nil, "telegram", assistant.telegram != nil)
 
 	server := &http.Server{

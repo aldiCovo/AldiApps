@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/tls"
 	"encoding/hex"
 	"fmt"
 	"mime"
@@ -28,10 +29,19 @@ type mailer interface {
 	Send(email Email) error
 }
 
-// SMTPMailer sends through a server that needs no login, which here is Mailpit.
+// SMTPMailer sends through Mailpit, which needs no login, or through a relay such as Brevo,
+// which needs STARTTLS and a login.
 type SMTPMailer struct {
 	addr string
 	from mail.Address
+	// Empty for Mailpit.
+	username, password string
+}
+
+// withLogin makes the mailer switch to TLS and log in before sending.
+func (m *SMTPMailer) withLogin(username, password string) *SMTPMailer {
+	m.username, m.password = username, password
+	return m
 }
 
 func newSMTPMailer(addr, from string) (*SMTPMailer, error) {
@@ -64,6 +74,14 @@ func (m *SMTPMailer) Send(email Email) error {
 		return err
 	}
 	defer client.Close()
+	if m.username != "" {
+		if err := client.StartTLS(&tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}); err != nil {
+			return fmt.Errorf("starting TLS: %w", err)
+		}
+		if err := client.Auth(smtp.PlainAuth("", m.username, m.password, host)); err != nil {
+			return fmt.Errorf("logging in to the mail server: %w", err)
+		}
+	}
 	if err := client.Mail(m.from.Address); err != nil {
 		return err
 	}

@@ -35,6 +35,9 @@ const chatState = {
   menuAll: false,
 };
 const chatRecentMax = 5;
+// The reply email links to /#chat: the chat opens once the session is known, or asks to log in.
+let chatFromLink = location.hash === "#chat";
+if (chatFromLink) history.replaceState(null, "", location.pathname + location.search);
 
 try {
   const saved = JSON.parse(sessionStorage.getItem("chat-recent") || "[]");
@@ -410,6 +413,7 @@ function chatUserChanged(user) {
   if (!user) {
     setChatPending(null);
     if (chatOpen()) closeChat();
+    openChatFromLink();
     return;
   }
   checkChatUnread();
@@ -418,6 +422,13 @@ function chatUserChanged(user) {
     chatState.openAfterLogin = false;
     openChat();
   }
+  openChatFromLink();
+}
+
+function openChatFromLink() {
+  if (!chatFromLink) return;
+  chatFromLink = false;
+  openChat();
 }
 
 function checkChatUnread() {

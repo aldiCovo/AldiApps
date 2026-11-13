@@ -211,8 +211,13 @@ func (s *Store) UseReset(ctx context.Context, tokenHash []byte, passwordHash str
 			 WHERE id = $1`, userID, passwordHash); err != nil {
 			return err
 		}
+		if _, err := tx.Exec(ctx,
+			"UPDATE password_resets SET used_at = now() WHERE user_id = $1 AND used_at IS NULL", userID); err != nil {
+			return err
+		}
+		// Someone else guessing the password must not keep the owner out after a new one.
 		_, err = tx.Exec(ctx,
-			"UPDATE password_resets SET used_at = now() WHERE user_id = $1 AND used_at IS NULL", userID)
+			"DELETE FROM login_failures WHERE email = (SELECT email FROM users WHERE id = $1)", userID)
 		return err
 	})
 }

@@ -330,6 +330,22 @@ func (s *Store) featuredVoucher(ctx context.Context, column string) (*Voucher, e
 	return &v, nil
 }
 
+// The hours a browser rests from the sign-up popup after closing it, as admins may choose:
+// from 2 hours to 365 days.
+const minSignupRestHours, maxSignupRestHours = 2, 365 * 24
+
+// SignupRestHours is how many hours the same browser waits before it sees the popup again.
+func (s *Store) SignupRestHours(ctx context.Context) (int, error) {
+	var hours int
+	err := s.pool.QueryRow(ctx, `SELECT rest_hours FROM signup_popup WHERE id = 1`).Scan(&hours)
+	return hours, err
+}
+
+func (s *Store) SaveSignupRestHours(ctx context.Context, hours int) error {
+	_, err := s.pool.Exec(ctx, `UPDATE signup_popup SET rest_hours = $1, updated_at = now() WHERE id = 1`, hours)
+	return err
+}
+
 // DeleteVoucher removes a voucher no order has used. One that was used can only be turned off.
 func (s *Store) DeleteVoucher(ctx context.Context, id int64) error {
 	tag, err := s.pool.Exec(ctx, `DELETE FROM vouchers WHERE id = $1`, id)

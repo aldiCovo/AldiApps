@@ -371,7 +371,7 @@ func TestSignupVoucher(t *testing.T) {
 	h := newHarness(t)
 	offered := func() string {
 		t.Helper()
-		status, data := h.do(t, http.MethodGet, "/vouchers/signup", "", "")
+		status, data := h.do(t, http.MethodGet, "/signup-popup", "", "")
 		if status != http.StatusOK {
 			t.Fatalf("status %d: %s", status, data)
 		}
@@ -411,6 +411,46 @@ func TestSignupVoucher(t *testing.T) {
 	})
 	if status, answer := h.do(t, http.MethodPost, "/internal/vouchers", string(data), testInternalToken); status != http.StatusBadRequest {
 		t.Fatalf("status %d: %s", status, answer)
+	}
+}
+
+func TestSignupRestHours(t *testing.T) {
+	h := newHarness(t)
+	restHours := func() int {
+		t.Helper()
+		status, data := h.do(t, http.MethodGet, "/signup-popup", "", "")
+		if status != http.StatusOK {
+			t.Fatalf("status %d: %s", status, data)
+		}
+		var body struct {
+			RestHours int `json:"rest_hours"`
+		}
+		if err := json.Unmarshal(data, &body); err != nil {
+			t.Fatal(err)
+		}
+		return body.RestHours
+	}
+	if got := restHours(); got != 168 {
+		t.Fatalf("rest_hours %d, want a week at first", got)
+	}
+	// Only with the internal token.
+	if status, _ := h.do(t, http.MethodPut, "/internal/signup-popup", `{"rest_hours":3}`, ""); status != http.StatusUnauthorized {
+		t.Fatalf("without token: %d", status)
+	}
+	for _, body := range []string{`{"rest_hours":1}`, `{"rest_hours":8761}`, `{"rest_hours":3,"other":1}`} {
+		if status, data := h.do(t, http.MethodPut, "/internal/signup-popup", body, testInternalToken); status != http.StatusBadRequest {
+			t.Fatalf("%s: status %d: %s", body, status, data)
+		}
+	}
+	// Two hours is the shortest rest.
+	if status, data := h.do(t, http.MethodPut, "/internal/signup-popup", `{"rest_hours":2}`, testInternalToken); status != http.StatusOK {
+		t.Fatalf("save: %d %s", status, data)
+	}
+	if got := restHours(); got != 2 {
+		t.Fatalf("rest_hours %d, want 2", got)
+	}
+	if status, data := h.do(t, http.MethodGet, "/internal/signup-popup", "", testInternalToken); status != http.StatusOK || string(data) != `{"rest_hours":2}`+"\n" {
+		t.Fatalf("internal: %d %q", status, data)
 	}
 }
 

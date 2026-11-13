@@ -49,3 +49,31 @@ func TestVoucherForOneCustomer(t *testing.T) {
 		t.Fatalf("list: %d %s", status, body)
 	}
 }
+
+func TestSignupPopupSettings(t *testing.T) {
+	server, f := newTestServer(t)
+	for _, token := range []string{"", "customer-token"} {
+		if status, _ := do(t, server, http.MethodGet, "/signup-popup", token, ""); status != http.StatusUnauthorized && status != http.StatusForbidden {
+			t.Fatalf("token %q: status %d", token, status)
+		}
+	}
+	if status, body := do(t, server, http.MethodGet, "/signup-popup", "admin-token", ""); status != http.StatusOK || body != `{"rest_hours":168}` {
+		t.Fatalf("read: %d %s", status, body)
+	}
+	if status, body := do(t, server, http.MethodPut, "/signup-popup", "admin-token", `{"rest_hours":3}`); status != http.StatusOK || body != `{"rest_hours":3}` {
+		t.Fatalf("save: %d %s", status, body)
+	}
+	f.mu.Lock()
+	last := f.orderHits[len(f.orderHits)-1]
+	f.mu.Unlock()
+	if last != `PUT /internal/signup-popup {"rest_hours":3}` {
+		t.Fatalf("forwarded %q", last)
+	}
+	// order-service's refusal reaches the admin; an unknown field stops here.
+	if status, body := do(t, server, http.MethodPut, "/signup-popup", "admin-token", `{"rest_hours":1}`); status != http.StatusBadRequest || !strings.Contains(body, "between 2 and 8760") {
+		t.Fatalf("refused: %d %s", status, body)
+	}
+	if status, _ := do(t, server, http.MethodPut, "/signup-popup", "admin-token", `{"rest_hours":3,"other":1}`); status != http.StatusBadRequest {
+		t.Fatalf("unknown field: %d", status)
+	}
+}

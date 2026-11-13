@@ -90,7 +90,7 @@ func newTestGateway(t *testing.T) (*httptest.Server, *fakeServices) {
 			io.WriteString(w, `{"provinces":[],"options":[]}`)
 			return
 		}
-		if r.URL.Path == "/vouchers/banner" || r.URL.Path == "/ratings" || strings.HasPrefix(r.URL.Path, "/products/") {
+		if r.URL.Path == "/vouchers/banner" || r.URL.Path == "/signup-popup" || r.URL.Path == "/ratings" || strings.HasPrefix(r.URL.Path, "/products/") {
 			io.WriteString(w, `{"voucher":null}`)
 			return
 		}
@@ -143,6 +143,7 @@ func TestAllowedRequestsReachTheRightService(t *testing.T) {
 		{"POST", "/api/password/reset", `{"token":"t","password":"p"}`, "user POST /password/reset"},
 		{"GET", "/api/shipping?x=1", "", "order GET /shipping"},
 		{"GET", "/api/vouchers/banner", "", "order GET /vouchers/banner"},
+		{"GET", "/api/signup-popup", "", "order GET /signup-popup"},
 		{"GET", "/api/ratings", "", "order GET /ratings"},
 		{"GET", "/api/products/12/reviews?rating=5&limit=5&offset=10&other=x", "", "order GET /products/12/reviews?limit=5&offset=10&rating=5"},
 	}

@@ -147,4 +147,40 @@ func (a *admin) addVoucherRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /vouchers", forward(http.MethodPost, false, true))
 	mux.HandleFunc("PUT /vouchers/{id}", forward(http.MethodPut, true, true))
 	mux.HandleFunc("DELETE /vouchers/{id}", forward(http.MethodDelete, true, false))
+
+	// How many hours a browser rests from the shop's sign-up popup. order-service checks it.
+	popup := func(method string) http.HandlerFunc {
+		return a.onlyAdmins(func(w http.ResponseWriter, r *http.Request, me User) {
+			var body []byte
+			if method == http.MethodPut {
+				var in struct {
+					RestHours int `json:"rest_hours"`
+				}
+				if !readJSON(w, r, &in) {
+					return
+				}
+				body, _ = json.Marshal(in)
+			}
+			status, data, err := a.raw(r.Context(), method, a.orderURL+"/internal/signup-popup", a.orderInternalToken, body)
+			if err != nil {
+				a.fail(w, err)
+				return
+			}
+			if method == http.MethodPut {
+				slog.Info("signup popup changed", "admin_id", me.ID, "body", string(body), "status", status)
+			}
+			if status != http.StatusOK {
+				if status == http.StatusUnauthorized {
+					status = http.StatusBadGateway
+				}
+				a.fail(w, &upstreamError{status: status, body: data})
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Cache-Control", "no-store")
+			w.Write(data)
+		})
+	}
+	mux.HandleFunc("GET /signup-popup", popup(http.MethodGet))
+	mux.HandleFunc("PUT /signup-popup", popup(http.MethodPut))
 }

@@ -387,6 +387,33 @@ func addInternalRoutes(mux *http.ServeMux, store *Store, internalToken string) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
+	mux.HandleFunc("GET /internal/signup-popup", internal(func(w http.ResponseWriter, r *http.Request) {
+		hours, err := store.SignupRestHours(r.Context())
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"rest_hours": hours})
+	}))
+
+	mux.HandleFunc("PUT /internal/signup-popup", internal(func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			RestHours int `json:"rest_hours"`
+		}
+		if !readJSON(w, r, &in) {
+			return
+		}
+		if in.RestHours < minSignupRestHours || in.RestHours > maxSignupRestHours {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("rest_hours must be between %d and %d", minSignupRestHours, maxSignupRestHours))
+			return
+		}
+		if err := store.SaveSignupRestHours(r.Context(), in.RestHours); err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"rest_hours": in.RestHours})
+	}))
+
 	mux.HandleFunc("POST /internal/orders/{id}/status", internal(func(w http.ResponseWriter, r *http.Request) {
 		id, ok := pathID(w, r)
 		if !ok {

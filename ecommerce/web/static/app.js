@@ -1453,11 +1453,16 @@ function startHeroVideo() {
 
 const signupPopKey = "prastika-signup-pop";
 const signupPopDelay = 5000;
-const signupPopRest = 7 * 24 * 60 * 60 * 1000;
+const hourMs = 60 * 60 * 1000;
+// Admins choose the rest in web-admin, from two hours up. A week is used when the shop can't ask.
+const signupPopMinRestHours = 2;
+const signupPopDefaultRestHours = 7 * 24;
 
-function signupPopRecent() {
+// Whether this browser closed the popup less than this many hours ago. Without storage it
+// answers yes, so a visitor whose browser can't remember isn't asked on every page.
+function signupPopRecent(restHours) {
   try {
-    return Date.now() - Number(localStorage.getItem(signupPopKey) || 0) < signupPopRest;
+    return Date.now() - Number(localStorage.getItem(signupPopKey) || 0) < restHours * hourMs;
   } catch {
     return true;
   }
@@ -1471,8 +1476,9 @@ function rememberSignupPop() {
   }
 }
 
-// After a few seconds on the shop, a visitor without an account sees the sign-up popup, at
-// most once a week. Its form carries the name and email over to the usual sign-up.
+// After a few seconds on the shop, a visitor without an account sees the sign-up popup, and
+// after closing it rests from it for as many hours as admins chose. Its form carries the name
+// and email over to the usual sign-up.
 function offerSignup() {
   const pop = $("signup-pop");
   pop.addEventListener("close", rememberSignupPop);
@@ -1496,13 +1502,22 @@ function offerSignup() {
     $("auth-email").value = email.value.trim();
     (name ? $("auth-password") : $("auth-name")).focus();
   });
-  if (signupPopRecent()) return;
+  // The rest is at least two hours, so a popup closed since then needs no question to the shop.
+  if (signupPopRecent(signupPopMinRestHours)) return;
   setTimeout(async () => {
-    const ready = () => accountKnown && !currentUser && !signupPopRecent()
+    let restHours = signupPopMinRestHours;
+    const ready = () => accountKnown && !currentUser && !signupPopRecent(restHours)
       && !document.querySelector("dialog[open]") && !location.hash.startsWith("#akun");
     if (!ready()) return;
-    await offerSignupVoucher();
+    let popup = { rest_hours: signupPopDefaultRestHours, voucher: null };
+    try {
+      popup = await api("/signup-popup");
+    } catch {
+      // The plain invitation, resting the usual week.
+    }
+    restHours = popup.rest_hours || signupPopDefaultRestHours;
     if (!ready()) return;
+    if (popup.voucher) offerSignupVoucher(popup.voucher);
     $("signup-pop-form").reset();
     $("signup-pop-error").hidden = true;
     pop.showModal();
@@ -1510,14 +1525,7 @@ function offerSignup() {
 }
 
 // The voucher admins chose for the popup, if one can be used now, replaces the plain invitation.
-async function offerSignupVoucher() {
-  let voucher;
-  try {
-    ({ voucher } = await api("/vouchers/signup"));
-  } catch {
-    return;
-  }
-  if (!voucher) return;
+function offerSignupVoucher(voucher) {
   const most = voucher.max_discount ? ` (maks. ${rupiah.format(voucher.max_discount)})` : "";
   const headline = voucher.kind === "percent" ? `Diskon ${voucher.value}%`
     : voucher.kind === "amount" ? `Potongan ${rupiah.format(voucher.value)}`

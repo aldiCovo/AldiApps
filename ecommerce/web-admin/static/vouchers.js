@@ -67,7 +67,64 @@ function localInput(value) {
   return input;
 }
 
+// How long a browser rests from the shop's sign-up popup after closing it. order-service keeps
+// hours; the form shows whole days when it can.
+const minSignupRestHours = 2;
+const maxSignupRestHours = 365 * 24;
+let signupPopupToken = 0;
+
+function restText(hours) {
+  return hours % 24 === 0 ? `${hours / 24} hari` : `${hours} jam`;
+}
+
+function showSignupRest(hours) {
+  const days = hours % 24 === 0;
+  $("signup-popup-amount").value = days ? hours / 24 : hours;
+  $("signup-popup-unit").value = days ? "24" : "1";
+}
+
+async function loadSignupPopup() {
+  const token = ++signupPopupToken;
+  const form = $("signup-popup-form");
+  setBusy(form, true);
+  $("signup-popup-status").textContent = "Memuat pengaturan popup…";
+  try {
+    const answer = await api("/signup-popup");
+    if (token !== signupPopupToken) return;
+    showSignupRest(answer.rest_hours);
+    $("signup-popup-status").textContent = "";
+    setBusy(form, false);
+  } catch (error) {
+    if (token !== signupPopupToken || handleAuth(error)) return;
+    $("signup-popup-status").textContent = "Pengaturan popup belum bisa dimuat. Coba lagi sebentar lagi.";
+  }
+}
+
+$("signup-popup-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = $("signup-popup-form");
+  const amount = Number($("signup-popup-amount").value);
+  const hours = amount * Number($("signup-popup-unit").value);
+  if (!Number.isInteger(amount) || hours < minSignupRestHours || hours > maxSignupRestHours) {
+    $("signup-popup-status").textContent = "Isi paling cepat 2 jam, paling lama 365 hari.";
+    $("signup-popup-amount").focus();
+    return;
+  }
+  setBusy(form, true);
+  try {
+    const saved = await send("PUT", "/signup-popup", { rest_hours: hours });
+    showSignupRest(saved.rest_hours);
+    $("signup-popup-status").textContent = `Disimpan. Popup muncul lagi ${restText(saved.rest_hours)} setelah ditutup.`;
+  } catch (error) {
+    if (handleAuth(error)) return;
+    $("signup-popup-status").textContent = error.status === 400
+      ? "Isi paling cepat 2 jam, paling lama 365 hari." : "Pengaturan belum bisa disimpan. Coba lagi sebentar lagi.";
+  }
+  setBusy(form, false);
+});
+
 async function loadVouchers() {
+  loadSignupPopup();
   const token = ++vouchersToken;
   $("vouchers-status").textContent = "Memuat voucher…";
   try {

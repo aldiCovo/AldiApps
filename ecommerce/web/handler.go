@@ -384,6 +384,11 @@ func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, 
 			return
 		}
 		w.Header().Set("Cache-Control", "no-cache")
+		// The hero video and its pictures carry a hash of their content in their names, so a
+		// browser may keep them; a new file gets a new name.
+		if strings.HasPrefix(r.URL.Path, "/media/") {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		}
 		if r.URL.Path == "/" {
 			http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(page))
 			return
@@ -536,7 +541,7 @@ func versionedPage(files fs.FS) ([]byte, map[string]string) {
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := w.Header()
-		header.Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+		header.Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; media-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 		header.Set("X-Content-Type-Options", "nosniff")
 		header.Set("Referrer-Policy", "same-origin")
 		next.ServeHTTP(w, r)

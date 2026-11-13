@@ -1425,6 +1425,87 @@ function renderAccount(user) {
   if (typeof accountMenu === "function") account.replaceChildren(accountMenu(user));
 }
 
+// The hero video: the wide cut on wide screens, the tall one on phones. It waits for the
+// visitor's say when they prefer less motion, and its button pauses and plays it.
+function startHeroVideo() {
+  const video = $("hero-video");
+  const toggle = $("hero-video-toggle");
+  const tall = window.matchMedia("(max-width: 820px)").matches;
+  video.poster = tall ? video.dataset.tallPoster : video.dataset.widePoster;
+  video.src = tall ? video.dataset.tall : video.dataset.wide;
+  const show = () => {
+    toggle.classList.toggle("paused", video.paused);
+    toggle.setAttribute("aria-label", video.paused ? "Putar video" : "Jeda video");
+  };
+  video.addEventListener("play", show);
+  video.addEventListener("pause", show);
+  toggle.addEventListener("click", () => {
+    if (video.paused) video.play().catch(() => {});
+    else video.pause();
+  });
+  toggle.hidden = false;
+  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    // A browser that refuses autoplay, such as one saving data, just keeps the poster.
+    video.play().catch(show);
+  }
+  show();
+}
+
+const signupPopKey = "prastika-signup-pop";
+const signupPopDelay = 5000;
+const signupPopRest = 7 * 24 * 60 * 60 * 1000;
+
+function signupPopRecent() {
+  try {
+    return Date.now() - Number(localStorage.getItem(signupPopKey) || 0) < signupPopRest;
+  } catch {
+    return true;
+  }
+}
+
+function rememberSignupPop() {
+  try {
+    localStorage.setItem(signupPopKey, String(Date.now()));
+  } catch {
+    // Without storage it may show again next time, which is all.
+  }
+}
+
+// After a few seconds on the shop, a visitor without an account sees the sign-up popup, at
+// most once a week. Its form carries the name and email over to the usual sign-up.
+function offerSignup() {
+  const pop = $("signup-pop");
+  pop.addEventListener("close", rememberSignupPop);
+  pop.addEventListener("click", (event) => {
+    if (event.target === pop) pop.close();
+  });
+  $("signup-pop-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const email = $("signup-pop-email");
+    if (!email.value.trim() || !email.checkValidity()) {
+      $("signup-pop-error").hidden = false;
+      email.focus();
+      return;
+    }
+    $("signup-pop-error").hidden = true;
+    const name = $("signup-pop-name").value.trim();
+    pop.close();
+    openAuth();
+    setAuthMode("register");
+    $("auth-name").value = name;
+    $("auth-email").value = email.value.trim();
+    (name ? $("auth-password") : $("auth-name")).focus();
+  });
+  if (signupPopRecent()) return;
+  setTimeout(() => {
+    const busy = document.querySelector("dialog[open]") || location.hash.startsWith("#akun");
+    if (!accountKnown || currentUser || busy || signupPopRecent()) return;
+    $("signup-pop-form").reset();
+    $("signup-pop-error").hidden = true;
+    pop.showModal();
+  }, signupPopDelay);
+}
+
 async function loadAccount() {
   try {
     renderAccount(await api("/me"));
@@ -3095,6 +3176,8 @@ const shopReady = loadCategories().then(() => {
   return loadRatings();
 });
 shopReady.then(() => homePicks.load());
+startHeroVideo();
+offerSignup();
 $("product-rating").addEventListener("click", () => {
   $("product-reviews").scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
 });

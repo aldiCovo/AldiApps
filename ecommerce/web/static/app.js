@@ -1353,7 +1353,7 @@ function authMessage(error) {
     case 400: return "Periksa kembali data yang kamu isi.";
     case 401: return "Email atau password salah.";
     case 409: return "Email ini sudah terdaftar. Silakan masuk.";
-    case 429: return "Terlalu banyak percobaan. Tunggu sebentar lalu coba lagi.";
+    case 429: return "Terlalu banyak password salah. Tunggu 15 menit, atau pakai \"Lupa password?\" untuk membuat password baru.";
     default: return "Layanan belum tersedia. Coba lagi sebentar lagi.";
   }
 }

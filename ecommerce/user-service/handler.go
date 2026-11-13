@@ -146,6 +146,11 @@ func newHandler(store *Store, tokens *Tokens, passwords *Passwords, resets *Rese
 			return
 		}
 		user, ok, err := authenticate(r.Context(), store, passwords, in)
+		if limit, limited := isTooManyLogins(err); limited {
+			w.Header().Set("Retry-After", strconv.Itoa(int(limit.retryAfter.Seconds()+0.999)))
+			writeError(w, http.StatusTooManyRequests, limit.Error())
+			return
+		}
 		if err != nil {
 			writeFailure(w, err)
 			return
@@ -283,26 +288,44 @@ func newHandler(store *Store, tokens *Tokens, passwords *Passwords, resets *Rese
 }
 
 // authenticate always does one password check, so a login takes as long whether or not the
-// email has an account.
-func authenticate(ctx context.Context, store *Store, passwords *Passwords, in loginInput) (User, bool, error) {
+// email has an account. An email with too many wrong passwords lately gets errTooManyLogins
+// before any check, whether or not it has an account.
+func authenticate(ctx context.Context, store *Store, passwords *Passwords, in loginInput) (user User, ok bool, err error) {
 	waitCtx, cancel := context.WithTimeout(ctx, passwordWait)
 	defer cancel()
 	email, err := cleanEmail(in.Email)
 	if err != nil {
 		return User{}, false, passwords.WasteTime(waitCtx, in.Password)
 	}
+	try, err := store.StartLogin(ctx, email)
+	if err != nil {
+		return User{}, false, err
+	}
+	defer func() {
+		// A wrong password stays counted; anything else takes the try back.
+		if !ok && err == nil {
+			return
+		}
+		if finishErr := store.FinishLogin(context.WithoutCancel(ctx), email, try, ok); finishErr != nil {
+			slog.Error("settling a login try failed", "error", finishErr)
+		}
+	}()
+	return verifyLogin(ctx, waitCtx, store, passwords, email, in.Password)
+}
+
+func verifyLogin(ctx, waitCtx context.Context, store *Store, passwords *Passwords, email, password string) (User, bool, error) {
 	user, hash, err := store.ByEmail(ctx, email)
 	if errors.Is(err, errNotFound) {
-		return User{}, false, passwords.WasteTime(waitCtx, in.Password)
+		return User{}, false, passwords.WasteTime(waitCtx, password)
 	}
 	if err != nil {
 		return User{}, false, err
 	}
 	// An account made with Google has no password until a reset link sets one.
 	if hash == "" {
-		return User{}, false, passwords.WasteTime(waitCtx, in.Password)
+		return User{}, false, passwords.WasteTime(waitCtx, password)
 	}
-	ok, err := passwords.Verify(waitCtx, hash, in.Password)
+	ok, err := passwords.Verify(waitCtx, hash, password)
 	return user, ok, err
 }
 

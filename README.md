@@ -138,7 +138,7 @@ TEST_RABBITMQ_URL='amqp://guest:guest@127.0.0.1:5672/' go test -race ./...
 | Request | Does |
 |---|---|
 | `POST /register` | Creates a customer from `{"email", "name", "password"}`, and emails a 6-digit code. The password has 8 to 128 characters. Answers 409 if the email exists, ignoring case |
-| `POST /login` | Checks `{"email", "password"}` and answers `{"token", "token_type", "expires_in", "user"}`, or 401. A right password for an email not verified yet answers 403 and emails a new code |
+| `POST /login` | Checks `{"email", "password"}` and answers `{"token", "token_type", "expires_in", "user"}`, or 401. A right password for an email not verified yet answers 403 and emails a new code. After 10 wrong passwords for an email in 15 minutes, it answers 429 with `Retry-After` without checking the password, whether or not the email has an account; a right password or a reset link clears the count |
 | `POST /email/code` | Emails a new code to `{"email"}`, if it has an account that isn't verified. Always answers 204, before looking the email up |
 | `POST /email/verify` | Checks `{"email", "code"}`, marks the email verified and answers like `/login`. Answers 422 for a wrong, used or expired code |
 | `POST /google` | Trades `{"code", "code_verifier", "redirect_uri"}` from Google for the account and answers like `/login`. Answers 401 if Google refuses, 409 if the email's account is linked to another Google account, 404 without `GOOGLE_CLIENT_ID` |

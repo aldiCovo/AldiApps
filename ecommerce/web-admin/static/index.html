@@ -230,6 +230,16 @@
         <button id="new-voucher" class="primary" type="button">Buat voucher</button>
       </div>
       <p class="muted small intro">Pembeli mengetik kodenya saat checkout. Potongan dihitung dari harga barang, kecuali voucher gratis ongkir yang memotong ongkos kirim. Pesanan yang batal atau gagal mengembalikan kuotanya. Voucher yang sudah dipakai pesanan tidak bisa dihapus, hanya dinonaktifkan.</p>
+      <section class="panel" aria-labelledby="signup-popup-title">
+        <h2 id="signup-popup-title">Popup daftar di toko</h2>
+        <p class="muted small">Pengunjung yang belum login melihat popup ajakan daftar. Setelah ditutup, popup tidak muncul lagi di browser yang sama selama waktu ini: paling cepat 2 jam, paling lama 365 hari. Voucher yang ditandai "Tampilkan di popup daftar" ikut tampil di popup.</p>
+        <form id="signup-popup-form" class="inline-form" novalidate>
+          <label>Tampilkan lagi setelah <input id="signup-popup-amount" type="number" min="1" step="1" inputmode="numeric" required disabled></label>
+          <label>Satuan <select id="signup-popup-unit" disabled><option value="1">jam</option><option value="24">hari</option></select></label>
+          <button class="primary" type="submit" disabled>Simpan</button>
+        </form>
+        <p id="signup-popup-status" class="status" role="status" aria-live="polite"></p>
+      </section>
       <p id="vouchers-status" class="status" role="status" aria-live="polite"></p>
       <div id="voucher-list" class="user-list"></div>
     </section>

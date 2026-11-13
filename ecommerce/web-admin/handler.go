@@ -113,6 +113,8 @@ func newHandler(adminURL string) http.Handler {
 		{http.MethodPost, "/vouchers", true},
 		{http.MethodPut, "/vouchers/{id}", true},
 		{http.MethodDelete, "/vouchers/{id}", false},
+		{http.MethodGet, "/signup-popup", false},
+		{http.MethodPut, "/signup-popup", true},
 		{http.MethodGet, "/looks", false},
 		{http.MethodPost, "/looks", true},
 		{http.MethodPut, "/looks/{id}", true},

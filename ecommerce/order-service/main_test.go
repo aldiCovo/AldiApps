@@ -53,6 +53,9 @@ func newHarness(t *testing.T) *harness {
 	if _, err := pool.Exec(ctx, "TRUNCATE orders, order_items, outbox_events, vouchers RESTART IDENTITY CASCADE"); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := pool.Exec(ctx, "UPDATE signup_popup SET rest_hours = 168"); err != nil {
+		t.Fatal(err)
+	}
 	public, private, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)

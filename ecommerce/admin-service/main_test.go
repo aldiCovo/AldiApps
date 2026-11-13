@@ -115,6 +115,15 @@ func newTestServer(t *testing.T) (*httptest.Server, *fakes) {
 			io.WriteString(w, `{"id":2,"code":"BARU"}`)
 		case r.URL.Path == "/internal/vouchers/1" && r.Method == http.MethodPut:
 			io.WriteString(w, `{"id":1,"code":"HEMAT20"}`)
+		case r.URL.Path == "/internal/signup-popup" && r.Method == http.MethodGet:
+			io.WriteString(w, `{"rest_hours":168}`)
+		case r.URL.Path == "/internal/signup-popup" && r.Method == http.MethodPut:
+			if strings.Contains(string(body), `"rest_hours":1`) {
+				w.WriteHeader(http.StatusBadRequest)
+				io.WriteString(w, `{"error":"rest_hours must be between 2 and 8760"}`)
+				return
+			}
+			w.Write(body)
 		case r.URL.Path == "/internal/vouchers/1" && r.Method == http.MethodDelete:
 			w.WriteHeader(http.StatusNoContent)
 		case r.URL.Path == "/internal/orders":

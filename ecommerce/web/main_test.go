@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -380,6 +381,35 @@ func TestTheFontIsServedFromThisSite(t *testing.T) {
 		t.Fatalf("status %d, type %q", resp.StatusCode, resp.Header.Get("Content-Type"))
 	}
 	if !strings.Contains(resp.Header.Get("Content-Security-Policy"), "font-src 'self'") {
+		t.Fatalf("CSP %q", resp.Header.Get("Content-Security-Policy"))
+	}
+}
+
+func TestHeroVideoIsServedAndKept(t *testing.T) {
+	server, _ := newTestGateway(t)
+	_, page := do(t, "GET", server.URL+"/", "", "")
+	match := regexp.MustCompile(`data-wide="(/media/hero-wide-[0-9a-f]+\.mp4)"`).FindStringSubmatch(page)
+	if match == nil {
+		t.Fatal("the page names no wide hero video")
+	}
+	req, err := http.NewRequest("GET", server.URL+match[1], nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Browsers fetch video in ranges.
+	req.Header.Set("Range", "bytes=0-99")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusPartialContent || resp.Header.Get("Content-Type") != "video/mp4" {
+		t.Fatalf("status %d, type %q", resp.StatusCode, resp.Header.Get("Content-Type"))
+	}
+	if !strings.Contains(resp.Header.Get("Cache-Control"), "immutable") {
+		t.Fatalf("Cache-Control %q", resp.Header.Get("Cache-Control"))
+	}
+	if !strings.Contains(resp.Header.Get("Content-Security-Policy"), "media-src 'self'") {
 		t.Fatalf("CSP %q", resp.Header.Get("Content-Security-Policy"))
 	}
 }

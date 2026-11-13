@@ -77,6 +77,17 @@
 
   <main>
     <section class="hero">
+      <!-- A slow pan along a clothes rail plays behind the hero, under a light veil. app.js
+           picks the wide or the tall cut by the screen. -->
+      <div class="hero-media" aria-hidden="true">
+        <video id="hero-video" class="hero-video" muted loop playsinline preload="metadata"
+               data-wide="/media/hero-wide-60d9da7c.mp4" data-wide-poster="/media/hero-wide-68e78896.jpg"
+               data-tall="/media/hero-tall-e4ce7dfa.mp4" data-tall-poster="/media/hero-tall-6de0e6af.jpg"></video>
+      </div>
+      <button id="hero-video-toggle" class="hero-video-toggle" type="button" aria-label="Jeda video" hidden>
+        <svg class="icon-pause" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+        <svg class="icon-play" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+      </button>
       <div>
         <p class="eyebrow">Fashion wanita</p>
         <h1>Anggun, <em>setiap hari</em></h1>
@@ -699,6 +710,29 @@
     <p class="demo-note">Pembayaran masih simulasi. Tidak ada uang yang ditarik dan tidak ada barang yang dikirim.</p>
     <p id="orders-status" class="status" role="status" aria-live="polite"></p>
     <div id="orders-list" class="orders"></div>
+  </dialog>
+
+  <!-- Asks a visitor without an account to sign up, once a week at most. -->
+  <dialog id="signup-pop" class="signup-pop" aria-labelledby="signup-pop-title">
+    <div class="signup-pop-form">
+      <p class="signup-pop-brand">Prastika</p>
+      <p class="signup-pop-eyebrow">Gratis untuk semua</p>
+      <h2 id="signup-pop-title">Jadi member <em>Prastika</em></h2>
+      <p class="signup-pop-text">Daftar sekarang, dan jadi yang pertama tahu koleksi baru, restock, dan flash sale.</p>
+      <form id="signup-pop-form" novalidate>
+        <label class="visually-hidden" for="signup-pop-name">Nama</label>
+        <input id="signup-pop-name" type="text" maxlength="200" placeholder="Nama depanmu" autocomplete="given-name">
+        <label class="visually-hidden" for="signup-pop-email">Email</label>
+        <input id="signup-pop-email" type="email" maxlength="254" placeholder="Emailmu" autocomplete="email">
+        <p id="signup-pop-error" class="error" role="alert" hidden>Isi email yang benar, misalnya nama@gmail.com.</p>
+        <button class="signup-pop-submit" type="submit">Daftar sekarang <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+      </form>
+      <p class="signup-pop-fine">Dengan mendaftar, kamu setuju menerima email promo dari Prastika.</p>
+    </div>
+    <div class="signup-pop-photo"><img src="/media/popup-b2ef9c6b.jpg" alt="" loading="lazy" decoding="async"></div>
+    <button class="signup-pop-close" type="button" data-close aria-label="Tutup">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </button>
   </dialog>
 
   <dialog id="auth-dialog" class="sheet narrow" aria-labelledby="auth-title">

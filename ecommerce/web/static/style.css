@@ -104,6 +104,41 @@ main { max-width: 1320px; margin: 0 auto; padding: 0 var(--gutter); }
 .hero-art.has-photos { grid-template-columns: repeat(5, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); align-items: stretch; height: clamp(360px, 44vw, 576px); gap: clamp(10px, 1.2vw, 16px); }
 .hero-photo { width: 100%; height: 100%; min-height: 0; object-fit: cover; object-position: center top; border-radius: var(--radius); grid-column: span 2; }
 .hero-photo-0 { grid-column: span 3; grid-row: span 2; }
+/* The video spans the whole width behind the hero; the veil keeps the copy and photos in front. */
+.hero { position: relative; isolation: isolate; }
+.hero-media { position: absolute; inset: 0 calc(50% - 50vw); z-index: -1; overflow: hidden; background: var(--sand); }
+.hero-media::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgb(251 248 244 / .9) 0%, rgb(251 248 244 / .84) 45%, rgb(251 248 244 / .7) 100%); }
+.hero-video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.hero-video-toggle { position: absolute; top: 14px; right: 0; z-index: 1; display: grid; place-items: center; width: 38px; height: 38px; padding: 0; border: 1px solid var(--accent); border-radius: 50%; background: rgb(251 248 244 / .85); color: var(--accent-dark); }
+.hero-video-toggle svg { width: 15px; height: 15px; }
+.hero-video-toggle .icon-play, .hero-video-toggle.paused .icon-pause { display: none; }
+.hero-video-toggle.paused .icon-play { display: block; }
+
+/* The sign-up popup: form left, photo right, at the bottom right of the screen. */
+.signup-pop { position: fixed; inset: auto 20px 20px auto; width: min(760px, calc(100vw - 40px)); max-height: calc(100dvh - 40px); margin: 0; padding: 10px; border: 0; border-radius: 28px; background: var(--paper); color: var(--ink); overflow: hidden; box-shadow: 0 40px 90px -30px rgb(43 36 32 / .55), 0 0 0 1px rgb(164 90 102 / .08); }
+.signup-pop[open] { display: grid; grid-template-columns: 1.05fr 1fr; animation: rise .5s cubic-bezier(.2, .8, .2, 1); }
+.signup-pop::backdrop { background: rgb(43 36 32 / .22); backdrop-filter: blur(3px); }
+.signup-pop-form { display: grid; align-content: center; gap: 14px; padding: 30px 30px 22px; text-align: center; }
+.signup-pop-form form { display: grid; gap: 12px; }
+.signup-pop-brand { display: grid; justify-items: center; gap: 10px; font-family: var(--serif); font-size: 26px; letter-spacing: .04em; line-height: 1; }
+.signup-pop-brand::after { content: ""; width: 36px; height: 1px; background: var(--accent); opacity: .6; }
+.signup-pop-eyebrow { font-size: 11.5px; font-weight: 600; letter-spacing: .22em; text-transform: uppercase; color: var(--accent-dark); }
+.signup-pop h2 { font-size: clamp(1.9rem, 3.4vw, 2.35rem); line-height: 1.08; text-wrap: balance; }
+.signup-pop h2 em { color: var(--accent); font-style: italic; }
+.signup-pop-text { color: var(--muted); font-size: 15px; line-height: 1.6; }
+.signup-pop input { width: 100%; height: 50px; padding: 0 22px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--ink); transition: border-color .2s, box-shadow .2s; }
+.signup-pop input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px rgb(164 90 102 / .12); }
+.signup-pop .error { font-size: .85rem; }
+.signup-pop-submit { display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 52px; padding: 0 32px; border: 0; border-radius: 999px; background: var(--accent); color: #fff; font-size: 15px; font-weight: 500; letter-spacing: .04em; box-shadow: 0 12px 24px -14px rgb(135 70 83 / .8); transition: background-color .2s, transform .2s; }
+.signup-pop-submit svg { width: 18px; height: 18px; }
+.signup-pop-submit:hover { background: var(--accent-dark); transform: translateY(-1px); }
+.signup-pop-fine { color: var(--muted); font-size: 12px; line-height: 1.6; opacity: .85; }
+.signup-pop-photo { position: relative; min-height: 100%; overflow: hidden; border-radius: 20px; }
+.signup-pop-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 20%; }
+.signup-pop-photo::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 60%, rgb(43 36 32 / .35)); }
+.signup-pop-close { position: absolute; top: 22px; right: 22px; z-index: 1; display: grid; place-items: center; width: 38px; height: 38px; padding: 0; border: 0; border-radius: 50%; background: rgb(251 248 244 / .85); backdrop-filter: blur(6px); color: var(--ink); box-shadow: 0 6px 16px -6px rgb(43 36 32 / .4); transition: background-color .2s; }
+.signup-pop-close:hover { background: #fff; }
+.signup-pop-close svg { width: 16px; height: 16px; }
 .arch { display: grid; place-items: center; aspect-ratio: 3 / 5; border-radius: 999px 999px 10px 10px; }
 .arch svg { width: 68%; }
 .arch:nth-child(2) { aspect-ratio: 3 / 5.8; }
@@ -606,6 +641,7 @@ legend { margin-bottom: 10px; padding: 0; font-size: .92rem; font-weight: 600; }
 }
 @media (max-width: 820px) {
   .hero { grid-template-columns: minmax(0, 1fr); padding-top: 28px; }
+  .hero-media::after { background: linear-gradient(180deg, rgb(251 248 244 / .9) 0%, rgb(251 248 244 / .7) 100%); }
   .hero-art { max-width: 460px; }
   .hero-art.has-photos { max-width: none; height: clamp(320px, 92vw, 520px); }
   .product-sheet { overflow-y: auto; }
@@ -972,3 +1008,9 @@ button.chat-card:hover { border-color: var(--accent); }
 .legal code { font-size: .9em; }
 .legal-links { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--line); font-size: .92rem; }
 .footer-copy a { color: inherit; }
+@media (max-width: 640px) {
+  .signup-pop { inset: auto 12px 12px 12px; width: auto; max-height: calc(100dvh - 24px); overflow-y: auto; border-radius: 24px; }
+  .signup-pop[open] { grid-template-columns: minmax(0, 1fr); }
+  .signup-pop-photo { order: -1; height: 150px; min-height: 0; }
+  .signup-pop-form { gap: 11px; padding: 20px 20px 18px; }
+}

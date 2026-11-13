@@ -58,6 +58,8 @@ type Voucher struct {
 	Active       bool      `json:"active"`
 	// Shown in the shop's bar above the header while it can be used.
 	Banner bool `json:"banner"`
+	// Offered in the shop's sign-up popup while it can be used.
+	Signup bool `json:"signup"`
 	// Who sees it on their account page: hidden, all, or user (only UserID, who alone can use it).
 	Audience  string    `json:"audience"`
 	UserID    *int64    `json:"user_id"`
@@ -80,6 +82,7 @@ type voucherInput struct {
 	EndsAt       time.Time `json:"ends_at"`
 	Active       bool      `json:"active"`
 	Banner       bool      `json:"banner"`
+	Signup       bool      `json:"signup"`
 	Audience     string    `json:"audience"`
 	UserID       *int64    `json:"user_id"`
 }
@@ -122,6 +125,9 @@ func (in *voucherInput) validate() error {
 		}
 		if in.Banner {
 			return errors.New("a voucher for one customer can't be shown in the banner")
+		}
+		if in.Signup {
+			return errors.New("a voucher for one customer can't be offered in the sign-up popup")
 		}
 	default:
 		return errors.New("audience must be hidden, all or user")
@@ -186,12 +192,12 @@ type voucherRefusal struct {
 
 func (e *voucherRefusal) Error() string { return "the voucher can't be used: " + e.Reason }
 
-const voucherColumns = "id, code, description, kind, value, max_discount, min_subtotal, quota, per_user_limit, starts_at, ends_at, active, banner, created_at, updated_at, audience, user_id"
+const voucherColumns = "id, code, description, kind, value, max_discount, min_subtotal, quota, per_user_limit, starts_at, ends_at, active, banner, created_at, updated_at, audience, user_id, signup"
 
 func scanVoucher(row pgx.Row) (Voucher, error) {
 	var v Voucher
 	err := row.Scan(&v.ID, &v.Code, &v.Description, &v.Kind, &v.Value, &v.MaxDiscount, &v.MinSubtotal, &v.Quota,
-		&v.PerUserLimit, &v.StartsAt, &v.EndsAt, &v.Active, &v.Banner, &v.CreatedAt, &v.UpdatedAt, &v.Audience, &v.UserID)
+		&v.PerUserLimit, &v.StartsAt, &v.EndsAt, &v.Active, &v.Banner, &v.CreatedAt, &v.UpdatedAt, &v.Audience, &v.UserID, &v.Signup)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Voucher{}, errVoucherNotFound
 	}
@@ -215,7 +221,7 @@ func applyVoucher(ctx context.Context, tx pgx.Tx, lock bool, userID int64, code 
 	var notStarted, expired bool
 	err := tx.QueryRow(ctx, query, normalizeCode(code), userID).Scan(&v.ID, &v.Code, &v.Description, &v.Kind, &v.Value, &v.MaxDiscount,
 		&v.MinSubtotal, &v.Quota, &v.PerUserLimit, &v.StartsAt, &v.EndsAt, &v.Active, &v.Banner, &v.CreatedAt, &v.UpdatedAt,
-		&v.Audience, &v.UserID, &notStarted, &expired)
+		&v.Audience, &v.UserID, &v.Signup, &notStarted, &expired)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return Voucher{}, 0, &voucherRefusal{Reason: refusedNotFound}
@@ -265,16 +271,16 @@ func (s *Store) ListVouchers(ctx context.Context) ([]Voucher, error) {
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (Voucher, error) {
 		var v Voucher
 		err := row.Scan(&v.ID, &v.Code, &v.Description, &v.Kind, &v.Value, &v.MaxDiscount, &v.MinSubtotal, &v.Quota,
-			&v.PerUserLimit, &v.StartsAt, &v.EndsAt, &v.Active, &v.Banner, &v.CreatedAt, &v.UpdatedAt, &v.Audience, &v.UserID, &v.Used)
+			&v.PerUserLimit, &v.StartsAt, &v.EndsAt, &v.Active, &v.Banner, &v.CreatedAt, &v.UpdatedAt, &v.Audience, &v.UserID, &v.Signup, &v.Used)
 		return v, err
 	})
 }
 
 func (s *Store) CreateVoucher(ctx context.Context, in voucherInput) (Voucher, error) {
 	v, err := scanVoucher(s.pool.QueryRow(ctx,
-		`INSERT INTO vouchers (code, description, kind, value, max_discount, min_subtotal, quota, per_user_limit, starts_at, ends_at, active, banner, audience, user_id)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING `+voucherColumns,
-		in.Code, in.Description, in.Kind, in.Value, in.MaxDiscount, in.MinSubtotal, in.Quota, in.PerUserLimit, in.StartsAt, in.EndsAt, in.Active, in.Banner, in.Audience, in.UserID))
+		`INSERT INTO vouchers (code, description, kind, value, max_discount, min_subtotal, quota, per_user_limit, starts_at, ends_at, active, banner, audience, user_id, signup)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING `+voucherColumns,
+		in.Code, in.Description, in.Kind, in.Value, in.MaxDiscount, in.MinSubtotal, in.Quota, in.PerUserLimit, in.StartsAt, in.EndsAt, in.Active, in.Banner, in.Audience, in.UserID, in.Signup))
 	return v, voucherError(err)
 }
 
@@ -283,9 +289,9 @@ func (s *Store) UpdateVoucher(ctx context.Context, id int64, in voucherInput) (V
 	v, err := scanVoucher(s.pool.QueryRow(ctx,
 		`UPDATE vouchers SET code = $2, description = $3, kind = $4, value = $5, max_discount = $6, min_subtotal = $7,
 			quota = $8, per_user_limit = $9, starts_at = $10, ends_at = $11, active = $12, banner = $13,
-			audience = $14, user_id = $15, updated_at = now()
+			audience = $14, user_id = $15, signup = $16, updated_at = now()
 		 WHERE id = $1 RETURNING `+voucherColumns,
-		id, in.Code, in.Description, in.Kind, in.Value, in.MaxDiscount, in.MinSubtotal, in.Quota, in.PerUserLimit, in.StartsAt, in.EndsAt, in.Active, in.Banner, in.Audience, in.UserID))
+		id, in.Code, in.Description, in.Kind, in.Value, in.MaxDiscount, in.MinSubtotal, in.Quota, in.PerUserLimit, in.StartsAt, in.EndsAt, in.Active, in.Banner, in.Audience, in.UserID, in.Signup))
 	if err != nil {
 		return Voucher{}, voucherError(err)
 	}
@@ -299,9 +305,19 @@ func (s *Store) UpdateVoucher(ctx context.Context, id int64, in voucherInput) (V
 // turned on, running now and not used up, the most recently changed first. It answers nil
 // when there is none.
 func (s *Store) BannerVoucher(ctx context.Context) (*Voucher, error) {
+	return s.featuredVoucher(ctx, "banner")
+}
+
+// SignupVoucher is the voucher the shop offers in its sign-up popup, chosen like BannerVoucher.
+func (s *Store) SignupVoucher(ctx context.Context) (*Voucher, error) {
+	return s.featuredVoucher(ctx, "signup")
+}
+
+// featuredVoucher picks by column, which is only ever "banner" or "signup".
+func (s *Store) featuredVoucher(ctx context.Context, column string) (*Voucher, error) {
 	v, err := scanVoucher(s.pool.QueryRow(ctx,
 		`SELECT `+voucherColumns+` FROM vouchers
-		 WHERE banner AND audience <> 'user' AND active AND starts_at <= now() AND now() < ends_at
+		 WHERE `+column+` AND audience <> 'user' AND active AND starts_at <= now() AND now() < ends_at
 		   AND (quota IS NULL OR quota > (SELECT count(*) FROM orders
 		        WHERE voucher_id = vouchers.id AND status NOT IN ('rejected', 'cancelled')))
 		 ORDER BY updated_at DESC, id DESC LIMIT 1`))

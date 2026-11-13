@@ -367,6 +367,53 @@ func TestBannerVoucher(t *testing.T) {
 	}
 }
 
+func TestSignupVoucher(t *testing.T) {
+	h := newHarness(t)
+	offered := func() string {
+		t.Helper()
+		status, data := h.do(t, http.MethodGet, "/vouchers/signup", "", "")
+		if status != http.StatusOK {
+			t.Fatalf("status %d: %s", status, data)
+		}
+		var body struct {
+			Voucher *struct {
+				Code string `json:"code"`
+			} `json:"voucher"`
+		}
+		if err := json.Unmarshal(data, &body); err != nil {
+			t.Fatal(err)
+		}
+		if body.Voucher == nil {
+			return ""
+		}
+		return body.Voucher.Code
+	}
+	if got := offered(); got != "" {
+		t.Fatalf("no vouchers, popup %q", got)
+	}
+	// The banner's voucher isn't the popup's, and a turned off one isn't offered.
+	h.makeVoucher(t, map[string]any{"code": "BANNER", "banner": true})
+	h.makeVoucher(t, map[string]any{"code": "OFF", "signup": true, "active": false})
+	if got := offered(); got != "" {
+		t.Fatalf("popup %q, want none", got)
+	}
+	welcome := h.makeVoucher(t, map[string]any{"code": "HALO10", "signup": true, "per_user_limit": 1})
+	if !welcome.Signup || welcome.Banner {
+		t.Fatalf("voucher %+v", welcome)
+	}
+	if got := offered(); got != "HALO10" {
+		t.Fatalf("popup %q, want HALO10", got)
+	}
+	// One customer's own voucher can't be offered to everyone.
+	data, _ := json.Marshal(map[string]any{
+		"code": "PRIBADI", "kind": "percent", "value": 10, "per_user_limit": 1, "active": true, "signup": true,
+		"audience": "user", "user_id": 7, "starts_at": welcome.StartsAt, "ends_at": welcome.EndsAt,
+	})
+	if status, answer := h.do(t, http.MethodPost, "/internal/vouchers", string(data), testInternalToken); status != http.StatusBadRequest {
+		t.Fatalf("status %d: %s", status, answer)
+	}
+}
+
 func myVouchers(t *testing.T, h *harness, userID int64) map[string]MyVoucher {
 	t.Helper()
 	status, data := h.do(t, http.MethodGet, "/vouchers/mine", "", h.token(t, userID))

@@ -16,6 +16,7 @@ const voucherMessages = {
   "voucher not found": "Voucher itu sudah tidak ada. Daftar dimuat ulang.",
   "no customer has this email": "Belum ada pelanggan dengan email itu. Periksa lagi ejaannya.",
   "a voucher for one customer can't be shown in the banner": "Voucher untuk satu pelanggan tidak bisa tampil di banner toko.",
+  "a voucher for one customer can't be offered in the sign-up popup": "Voucher untuk satu pelanggan tidak bisa tampil di popup daftar.",
 };
 
 const voucherAudiences = {
@@ -87,6 +88,7 @@ function voucherRow(voucher) {
   who.append(el("strong", "voucher-code", voucher.code), el("span", "", voucherTerms(voucher)));
   if (voucher.description) who.append(el("span", "muted small", voucher.description));
   if (voucher.banner) who.append(el("span", "small banner-flag", "Tampil di banner toko"));
+  if (voucher.signup) who.append(el("span", "small banner-flag", "Tampil di popup daftar"));
   const audience = audienceText(voucher);
   if (audience) who.append(el("span", "small audience-flag", audience));
   const facts = el("div", "voucher-facts");
@@ -176,9 +178,9 @@ function failVoucher(row, voucher, error, fallback) {
 }
 
 function voucherBody(voucher) {
-  const { code, description, kind, value, max_discount, min_subtotal, quota, per_user_limit, starts_at, ends_at, active, banner } = voucher;
+  const { code, description, kind, value, max_discount, min_subtotal, quota, per_user_limit, starts_at, ends_at, active, banner, signup } = voucher;
   const audience = voucher.audience || "hidden";
-  const body = { code, description, kind, value, max_discount, min_subtotal, quota, per_user_limit, starts_at, ends_at, active, banner, audience };
+  const body = { code, description, kind, value, max_discount, min_subtotal, quota, per_user_limit, starts_at, ends_at, active, banner, signup, audience };
   if (audience === "user") body.customer_email = voucher.customer ? voucher.customer.email : "";
   return body;
 }
@@ -207,6 +209,9 @@ function voucherForm(voucher, onSaved, onCancel) {
   const banner = el("input");
   banner.type = "checkbox";
   banner.checked = voucher ? voucher.banner : false;
+  const signup = el("input");
+  signup.type = "checkbox";
+  signup.checked = voucher ? Boolean(voucher.signup) : false;
 
   // The label's own text node changes with the kind, so it must exist from the start.
   const valueField = field("Diskon (%)", value);
@@ -225,6 +230,9 @@ function voucherForm(voucher, onSaved, onCancel) {
   const bannerField = el("label", "check");
   bannerField.append(banner, document.createTextNode(" Tampilkan di banner toko"));
   const bannerHint = el("p", "muted small", "Kodenya muncul di bar atas toko selama voucher aktif, sudah mulai, dan kuotanya masih ada. Jika ada beberapa, yang terakhir diubah yang tampil.");
+  const signupField = el("label", "check");
+  signupField.append(signup, document.createTextNode(" Tampilkan di popup daftar"));
+  const signupHint = el("p", "muted small", "Pengunjung yang belum punya akun melihat voucher ini di popup daftar, dengan kodenya. Supaya hanya untuk pesanan pertama, isi batas per akun 1. Jika ada beberapa, yang terakhir diubah yang tampil.");
 
   // Who sees the voucher on their account page.
   const audienceBox = el("fieldset", "audience-box");
@@ -259,6 +267,8 @@ function voucherForm(voucher, onSaved, onCancel) {
     // A voucher for one customer can't be in the banner, which everyone sees.
     banner.disabled = personal;
     if (personal) banner.checked = false;
+    signup.disabled = personal;
+    if (personal) signup.checked = false;
   };
   for (const radio of Object.values(radios)) radio.addEventListener("change", showEmail);
   showEmail();
@@ -288,6 +298,8 @@ function voucherForm(voucher, onSaved, onCancel) {
     activeField,
     bannerField,
     bannerHint,
+    signupField,
+    signupHint,
     audienceBox,
     error,
     actions,
@@ -332,6 +344,7 @@ function voucherForm(voucher, onSaved, onCancel) {
       ends_at: endsAt.toISOString(),
       active: active.checked,
       banner: banner.checked,
+      signup: signup.checked,
       audience: chosenAudience(),
     };
     if (body.audience === "user") body.customer_email = email.value.trim();

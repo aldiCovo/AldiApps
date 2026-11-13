@@ -1497,13 +1497,37 @@ function offerSignup() {
     (name ? $("auth-password") : $("auth-name")).focus();
   });
   if (signupPopRecent()) return;
-  setTimeout(() => {
-    const busy = document.querySelector("dialog[open]") || location.hash.startsWith("#akun");
-    if (!accountKnown || currentUser || busy || signupPopRecent()) return;
+  setTimeout(async () => {
+    const ready = () => accountKnown && !currentUser && !signupPopRecent()
+      && !document.querySelector("dialog[open]") && !location.hash.startsWith("#akun");
+    if (!ready()) return;
+    await offerSignupVoucher();
+    if (!ready()) return;
     $("signup-pop-form").reset();
     $("signup-pop-error").hidden = true;
     pop.showModal();
   }, signupPopDelay);
+}
+
+// The voucher admins chose for the popup, if one can be used now, replaces the plain invitation.
+async function offerSignupVoucher() {
+  let voucher;
+  try {
+    ({ voucher } = await api("/vouchers/signup"));
+  } catch {
+    return;
+  }
+  if (!voucher) return;
+  const most = voucher.max_discount ? ` (maks. ${rupiah.format(voucher.max_discount)})` : "";
+  const headline = voucher.kind === "percent" ? `Diskon ${voucher.value}%`
+    : voucher.kind === "amount" ? `Potongan ${rupiah.format(voucher.value)}`
+    : "Gratis ongkir";
+  $("signup-pop-eyebrow").textContent = "Khusus member baru";
+  $("signup-pop-title").replaceChildren(`${headline} `, el("em", "", "untuk member baru"));
+  const text = [`Daftar sekarang, lalu pakai kode `, el("strong", "", voucher.code), ` saat checkout${most}.`];
+  if (voucher.min_subtotal > 0) text.push(` Minimal belanja ${rupiah.format(voucher.min_subtotal)}.`);
+  if (voucher.description) text.push(` ${voucher.description}`);
+  $("signup-pop-text").replaceChildren(...text);
 }
 
 async function loadAccount() {

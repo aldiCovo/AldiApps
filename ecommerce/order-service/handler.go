@@ -111,24 +111,28 @@ func newHandler(store *Store, verifier *Verifier, catalog *Catalog, internalToke
 		writeJSON(w, http.StatusOK, shippingTable())
 	})
 
-	// The voucher the shop shows above its header, the same for everyone. Only what a
-	// customer needs to use it: how many are left stays with the admins.
-	mux.HandleFunc("GET /vouchers/banner", func(w http.ResponseWriter, r *http.Request) {
-		v, err := store.BannerVoucher(r.Context())
-		if err != nil {
-			writeStoreError(w, err)
-			return
+	// The vouchers the shop shows above its header and in its sign-up popup, the same for
+	// everyone. Only what a customer needs to use one: how many are left stays with the admins.
+	featured := func(pick func(context.Context) (*Voucher, error)) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			v, err := pick(r.Context())
+			if err != nil {
+				writeStoreError(w, err)
+				return
+			}
+			w.Header().Set("Cache-Control", "public, max-age=60")
+			if v == nil {
+				writeJSON(w, http.StatusOK, map[string]any{"voucher": nil})
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"voucher": map[string]any{
+				"code": v.Code, "description": v.Description, "kind": v.Kind, "value": v.Value,
+				"max_discount": v.MaxDiscount, "min_subtotal": v.MinSubtotal, "ends_at": v.EndsAt,
+			}})
 		}
-		w.Header().Set("Cache-Control", "public, max-age=60")
-		if v == nil {
-			writeJSON(w, http.StatusOK, map[string]any{"voucher": nil})
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"voucher": map[string]any{
-			"code": v.Code, "description": v.Description, "kind": v.Kind, "value": v.Value,
-			"max_discount": v.MaxDiscount, "min_subtotal": v.MinSubtotal, "ends_at": v.EndsAt,
-		}})
-	})
+	}
+	mux.HandleFunc("GET /vouchers/banner", featured(store.BannerVoucher))
+	mux.HandleFunc("GET /vouchers/signup", featured(store.SignupVoucher))
 
 	mux.HandleFunc("POST /orders", authenticated(func(w http.ResponseWriter, r *http.Request, userID int64) {
 		var in orderInput

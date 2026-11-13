@@ -177,6 +177,9 @@ func newHandler(catalogURL, searchURL, userURL, orderURL, realtimeURL, cartURL, 
 	mux.HandleFunc("GET /api/vouchers/banner", func(w http.ResponseWriter, r *http.Request) {
 		g.pass(w, r, g.orderURL+"/vouchers/banner", nil, "")
 	})
+	mux.HandleFunc("GET /api/vouchers/signup", func(w http.ResponseWriter, r *http.Request) {
+		g.pass(w, r, g.orderURL+"/vouchers/signup", nil, "")
+	})
 	// The customer's conversation with the shop's admins.
 	mux.HandleFunc("GET /api/chat", func(w http.ResponseWriter, r *http.Request) {
 		g.withSession(w, r, g.chatURL+"/chat?"+r.URL.RawQuery, nil)

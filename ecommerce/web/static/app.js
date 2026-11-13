@@ -1160,6 +1160,11 @@ let loggedIn = false;
 let currentUser = null;
 // Whether /me has answered, so the account page knows to ask for a login.
 let accountKnown = false;
+// Settles the first time /me answers, for what must wait to know who is visiting.
+let settleAccountKnown;
+const accountKnownOnce = new Promise((resolve) => {
+  settleAccountKnown = resolve;
+});
 
 function setAuthMode(mode) {
   authMode = mode;
@@ -1410,6 +1415,7 @@ function renderAccount(user) {
     }
   }
   accountKnown = true;
+  settleAccountKnown();
   // account.js runs after this file. Should the answer come first, it draws these itself.
   if (typeof accountChanged === "function") accountChanged(user);
   if (typeof chatUserChanged === "function") chatUserChanged(user);
@@ -1452,7 +1458,7 @@ function startHeroVideo() {
 }
 
 const signupPopKey = "prastika-signup-pop";
-const signupPopDelay = 5000;
+const signupPopDelay = 3000;
 const hourMs = 60 * 60 * 1000;
 // Admins choose the rest in web-admin, from two hours up. A week is used when the shop can't ask.
 const signupPopMinRestHours = 2;
@@ -1505,6 +1511,9 @@ function offerSignup() {
   // The rest is at least two hours, so a popup closed since then needs no question to the shop.
   if (signupPopRecent(signupPopMinRestHours)) return;
   setTimeout(async () => {
+    // On a slow connection the account check may still be going: wait for it rather than miss
+    // the visit.
+    await accountKnownOnce;
     let restHours = signupPopMinRestHours;
     const ready = () => accountKnown && !currentUser && !signupPopRecent(restHours)
       && !document.querySelector("dialog[open]") && !location.hash.startsWith("#akun");

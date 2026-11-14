@@ -4,7 +4,12 @@
 // admin.js, and field, textInput, numberInput, wholeNumber and setBusy from products.js.
 // order-service checks every value again.
 
+// The same limits as order-service's.
 const maxVoucherRupiah = 100000000;
+// No limit of the shop's own: only the most order-service's quota column holds.
+const maxVoucherQuota = 2147483647;
+const maxRupiahText = rupiah.format(maxVoucherRupiah);
+const maxQuotaText = maxVoucherQuota.toLocaleString("id-ID");
 let vouchers = [];
 let vouchersToken = 0;
 
@@ -256,7 +261,7 @@ function voucherForm(voucher, onSaved, onCancel) {
   const value = numberInput(voucher && voucher.kind !== "free_shipping" ? voucher.value : "", 1, maxVoucherRupiah);
   const most = numberInput(voucher && voucher.max_discount ? voucher.max_discount : "", 1, maxVoucherRupiah);
   const minimum = numberInput(voucher ? voucher.min_subtotal : 0, 0, maxVoucherRupiah);
-  const quota = numberInput(voucher && voucher.quota ? voucher.quota : "", 1, 1000000);
+  const quota = numberInput(voucher && voucher.quota ? voucher.quota : "", 1, maxVoucherQuota);
   const perUser = numberInput(voucher ? voucher.per_user_limit : 1, 1, 100);
   const starts = localInput(voucher ? voucher.starts_at : new Date().toISOString());
   const ends = localInput(voucher ? voucher.ends_at : new Date(Date.now() + 7 * 86400000).toISOString());
@@ -368,15 +373,15 @@ function voucherForm(voucher, onSaved, onCancel) {
     const valueNumber = kind.value === "free_shipping" ? 0 : wholeNumber(value, 1, isPercent ? 100 : maxVoucherRupiah);
     const mostNumber = most.value.trim() === "" || kind.value === "amount" ? null : wholeNumber(most, 1, maxVoucherRupiah);
     const minimumNumber = wholeNumber(minimum, 0, maxVoucherRupiah);
-    const quotaNumber = quota.value.trim() === "" ? null : wholeNumber(quota, 1, 1000000);
+    const quotaNumber = quota.value.trim() === "" ? null : wholeNumber(quota, 1, maxVoucherQuota);
     const perUserNumber = wholeNumber(perUser, 1, 100);
     const startsAt = starts.value ? new Date(starts.value) : null;
     const endsAt = ends.value ? new Date(ends.value) : null;
     const problem = !/^[A-Za-z0-9]{3,20}$/.test(code.value.trim()) ? [code, "Kode harus 3 sampai 20 huruf atau angka, tanpa spasi."]
-      : valueNumber === null ? [value, isPercent ? "Diskon harus angka bulat 1 sampai 100." : "Potongan harus angka bulat dari Rp 1."]
-      : mostNumber === null && most.value.trim() !== "" && kind.value !== "amount" ? [most, "Potongan maksimal harus angka bulat dari Rp 1, atau kosong."]
-      : minimumNumber === null ? [minimum, "Minimal belanja harus angka bulat, boleh 0."]
-      : quotaNumber === null && quota.value.trim() !== "" ? [quota, "Kuota harus angka bulat dari 1, atau kosong."]
+      : valueNumber === null ? [value, isPercent ? "Diskon harus angka bulat 1 sampai 100." : `Potongan harus angka bulat dari Rp 1 sampai ${maxRupiahText}.`]
+      : mostNumber === null && most.value.trim() !== "" && kind.value !== "amount" ? [most, `Potongan maksimal harus angka bulat dari Rp 1 sampai ${maxRupiahText}, atau kosong.`]
+      : minimumNumber === null ? [minimum, `Minimal belanja harus angka bulat dari 0 sampai ${maxRupiahText}.`]
+      : quotaNumber === null && quota.value.trim() !== "" ? [quota, `Kuota harus angka bulat mulai 1 (paling besar ${maxQuotaText}), atau kosong untuk tanpa batas.`]
       : perUserNumber === null ? [perUser, "Batas per akun harus angka bulat 1 sampai 100."]
       : !startsAt || !endsAt ? [startsAt ? ends : starts, "Isi waktu mulai dan berakhir."]
       : endsAt <= startsAt ? [ends, "Waktu berakhir harus setelah waktu mulai."]

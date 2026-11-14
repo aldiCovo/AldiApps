@@ -21,9 +21,10 @@ const (
 
 	maxVoucherDescription = 200
 	maxVoucherRupiah      = 100_000_000
-	maxVoucherQuota       = 1_000_000
-	maxVoucherPerUser     = 100
-	maxVouchersListed     = 200
+	// No limit of the shop's own: only the most the quota column, an INTEGER, holds.
+	maxVoucherQuota   = 2_147_483_647
+	maxVoucherPerUser = 100
+	maxVouchersListed = 200
 
 	audienceHidden = "hidden"
 	audienceAll    = "all"

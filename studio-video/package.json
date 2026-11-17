@@ -1,0 +1,37 @@
+{
+  "name": "video-animasi",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Video animasi dari code dengan Remotion",
+  "scripts": {
+    "dev": "remotion studio",
+    "render": "remotion render src/index.ts Intro out/intro.mp4",
+    "render:gpu": "remotion render src/index.ts Intro out/intro-gpu.mp4 --hardware-acceleration=if-possible --codec=h264",
+    "upgrade": "remotion upgrade",
+    "buat": "tsx automation/cli.ts buat",
+    "ulang": "tsx automation/cli.ts ulang",
+    "studio": "tsx automation/server.ts",
+    "worker": "tsx automation/worker.ts",
+    "upload": "tsx automation/cli.ts upload",
+    "auth:youtube": "tsx automation/auth-youtube.ts",
+    "auth:tiktok": "tsx automation/auth-tiktok.ts",
+    "cek": "tsc --noEmit -p automation/tsconfig.json && tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.9.0",
+    "@remotion/cli": "4.0.544",
+    "dotenv": "^18.0.10",
+    "googleapis": "^190.0.0",
+    "msedge-tts": "^2.1.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "4.0.544",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "@types/react": "18.3.12",
+    "tsx": "^4.23.15",
+    "typescript": "5.6.3"
+  }
+}

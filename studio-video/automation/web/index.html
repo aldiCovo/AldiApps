@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Studio Video</title>
+<style>
+  :root {
+    --bg: #f3f0ea; --panel: #ffffff; --ink: #16151b; --muted: #77736b; --line: rgba(0,0,0,0.08);
+    --accent: #ff5a36; --accent-soft: #ffe7df; --ok: #1f9d55; --ok-soft: #e3f5ea; --warn: #b7791f; --warn-soft: #fdf3dc;
+    --side: #16151b; --side-ink: #ececf1; --side-muted: #8d8b99; --radius: 16px;
+    --mono: "Cascadia Mono", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 "Segoe UI", system-ui, sans-serif; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  .app { display: grid; grid-template-columns: 300px 1fr; min-height: 100vh; }
+  aside { background: var(--side); color: var(--side-ink); padding: 22px 16px; position: sticky; top: 0; height: 100vh; overflow: auto; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 18px; margin: 0 6px 22px; }
+  .brand .dot { width: 30px; height: 30px; border-radius: 9px; background: var(--accent); display: grid; place-items: center; }
+  .side-title { color: var(--side-muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; margin: 18px 8px 8px; }
+  .new-btn { width: 100%; background: var(--accent); color: #fff; border: 0; border-radius: 12px; padding: 11px; font-weight: 700; cursor: pointer; }
+  .job { display: block; width: 100%; text-align: left; background: transparent; border: 0; color: var(--side-ink); padding: 10px; border-radius: 10px; cursor: pointer; }
+  .job:hover, .job.active { background: rgba(255,255,255,0.08); }
+  .job .t { font-weight: 600; font-size: 14px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .job .s { color: var(--side-muted); font-size: 12px; margin-top: 2px; }
+  main { padding: 26px 34px 80px; max-width: 1080px; width: 100%; }
+  header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 22px; }
+  header h1 { font-size: 26px; margin: 0 auto 0 0; letter-spacing: -0.02em; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; font-size: 12.5px; font-weight: 600; background: var(--panel); border: 1px solid var(--line); }
+  .chip.ok { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+  .chip.off { color: var(--muted); }
+  .step { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px 24px; margin-bottom: 16px; box-shadow: 0 6px 24px rgba(60,40,20,0.05); }
+  .step.locked { opacity: .45; pointer-events: none; }
+  .step h2 { display: flex; align-items: center; gap: 12px; font-size: 18px; margin: 0 0 4px; }
+  .num { width: 28px; height: 28px; border-radius: 50%; background: var(--ink); color: #fff; display: grid; place-items: center; font-size: 14px; flex: none; }
+  .step.done .num { background: var(--ok); }
+  .hint { color: var(--muted); margin: 0 0 16px 40px; font-size: 14px; }
+  label { display: block; font-weight: 600; font-size: 13.5px; margin-bottom: 6px; }
+  .opt { color: var(--muted); font-weight: 400; }
+  input[type=text], select, textarea { width: 100%; border: 1px solid rgba(0,0,0,0.14); border-radius: 10px; padding: 10px 12px; background: #fff; }
+  textarea { resize: vertical; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 14px; }
+  .grid .wide { grid-column: span 3; }
+  .seg { display: flex; gap: 8px; }
+  .seg button { flex: 1; border: 1px solid rgba(0,0,0,0.14); background: #fff; border-radius: 10px; padding: 9px; cursor: pointer; font-weight: 600; }
+  .seg button.on { border-color: var(--accent); background: var(--accent-soft); color: #b8371a; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 16px; }
+  .btn { border: 0; border-radius: 11px; padding: 11px 18px; font-weight: 700; cursor: pointer; background: var(--ink); color: #fff; }
+  .btn.primary { background: var(--accent); }
+  .btn.ghost { background: transparent; border: 1px solid rgba(0,0,0,0.16); color: var(--ink); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .link { background: none; border: 0; color: var(--muted); text-decoration: underline; cursor: pointer; padding: 0; }
+  .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: r .8s linear infinite; vertical-align: -2px; }
+  @keyframes r { to { transform: rotate(360deg); } }
+  .prompt-box { min-height: 340px; font-family: var(--mono); font-size: 13px; line-height: 1.55; }
+  .scene { border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-top: 12px; background: #fcfbf9; }
+  .scene-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-weight: 700; }
+  .scene-head .tools { margin-left: auto; display: flex; gap: 4px; }
+  .icon-btn { border: 1px solid var(--line); background: #fff; border-radius: 8px; width: 30px; height: 30px; cursor: pointer; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .meter { font-size: 13px; color: var(--muted); }
+  .meter.over { color: #c53030; font-weight: 700; }
+  .stages { display: flex; gap: 6px; margin: 4px 0 14px; flex-wrap: wrap; }
+  .stage { padding: 6px 12px; border-radius: 999px; background: #f1eee8; color: var(--muted); font-size: 13px; font-weight: 600; }
+  .stage.active { background: var(--accent); color: #fff; }
+  .stage.past { background: var(--ok-soft); color: var(--ok); }
+  .bar { height: 10px; background: #eee9e1; border-radius: 10px; overflow: hidden; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+  .log { margin-top: 12px; background: #16151b; color: #d8d6e0; font-family: var(--mono); font-size: 12.5px; border-radius: 12px; padding: 12px 14px; height: 210px; overflow: auto; white-space: pre-wrap; }
+  .result { display: grid; grid-template-columns: minmax(240px, 360px) 1fr; gap: 22px; align-items: start; }
+  .result.landscape { grid-template-columns: 1fr; }
+  video { width: 100%; border-radius: 14px; background: #000; display: block; }
+  .box { border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+  .box h3 { margin: 0 0 10px; font-size: 15px; }
+  .plat { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+  .plat small { color: var(--muted); }
+  .uplog { font-size: 13px; word-break: break-all; }
+  .banner { padding: 12px 14px; border-radius: 12px; margin-bottom: 14px; font-size: 14px; }
+  .banner.err { background: #fde8e8; color: #9b2c2c; }
+  .banner.info { background: var(--warn-soft); color: #7b5410; }
+  .hidden { display: none !important; }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; } aside { position: static; height: auto; }
+    main { padding: 18px 16px 60px; } .grid { grid-template-columns: 1fr; } .grid .wide { grid-column: auto; }
+    .two, .result { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div class="brand"><span class="dot">▶</span> Studio Video</div>
+    <button class="new-btn" id="newBtn">+ Video baru</button>
+    <div class="side-title">Riwayat</div>
+    <div id="jobs"></div>
+  </aside>
+
+  <main>
+    <header>
+      <h1>Gagasan → Video</h1>
+      <span class="chip" id="modeChip">…</span>
+      <span class="chip" id="renderChip">…</span>
+      <span id="platChips"></span>
+    </header>
+    <div id="banner" class="banner err hidden"></div>
+
+    <!-- 1. Gagasan -->
+    <section class="step" id="s1">
+      <h2><span class="num">1</span> Gagasan</h2>
+      <p class="hint">Tulis ide Anda sebebasnya. AI akan mengubahnya menjadi master prompt yang lengkap.</p>
+      <label for="topik">Gagasan / ide video</label>
+      <textarea id="topik" rows="4" placeholder="Contoh: kenapa kucing suka tidur di kotak kardus, jelaskan dengan fakta ilmiah yang lucu"></textarea>
+      <div class="grid">
+        <div class="wide"><label for="judul">Judul <span class="opt">(opsional, kosongkan agar dibuat AI)</span></label><input type="text" id="judul" /></div>
+        <div>
+          <label>Rasio</label>
+          <div class="seg" id="rasio"><button data-v="9:16" class="on">9:16 Shorts/TikTok</button><button data-v="16:9">16:9 YouTube</button></div>
+        </div>
+        <div>
+          <label for="durasi">Durasi target</label>
+          <select id="durasi"><option value="30">30 detik</option><option value="45" selected>45 detik</option><option value="60">60 detik</option><option value="90">90 detik</option><option value="120">2 menit</option><option value="180">3 menit</option></select>
+        </div>
+        <div><label for="suara">Suara narator</label><select id="suara"></select></div>
+        <div class="wide"><label for="gaya">Gaya animasi</label><select id="gaya"></select></div>
+        <div><label for="audiens">Target penonton</label><input type="text" id="audiens" /></div>
+        <div class="wide" style="grid-column: span 2"><label for="gayaNarasi">Gaya narasi</label><input type="text" id="gayaNarasi" /></div>
+        <div class="wide"><label for="catatan">Catatan tambahan <span class="opt">(opsional)</span></label><input type="text" id="catatan" placeholder="Contoh: sebutkan 3 fakta, akhiri dengan pertanyaan ke penonton" /></div>
+      </div>
+      <div class="row">
+        <button class="btn primary" id="toPrompt">Susun master prompt →</button>
+        <button class="link" id="skipPrompt">atau tulis prompt sendiri</button>
+      </div>
+    </section>
+
+    <!-- 2. Master prompt -->
+    <section class="step locked" id="s2">
+      <h2><span class="num">2</span> Master prompt</h2>
+      <p class="hint">Periksa dan edit sesuka Anda. Prompt inilah yang dijalankan AI untuk membuat storyboard.</p>
+      <textarea id="prompt" class="prompt-box"></textarea>
+      <div class="row">
+        <button class="btn primary" id="toPlan">Buat storyboard →</button>
+        <button class="btn ghost" id="copyPrompt">Salin prompt</button>
+        <button class="btn ghost" id="rePrompt">Susun ulang</button>
+      </div>
+    </section>
+
+    <!-- 3. Storyboard -->
+    <section class="step locked" id="s3">
+      <h2><span class="num">3</span> Storyboard</h2>
+      <p class="hint">Edit narasi (dibacakan suara AI) dan arahan visual per scene. Setelah itu AI menulis kode animasi lalu dirender di laptop.</p>
+      <div class="two">
+        <div><label for="pJudul">Judul</label><input type="text" id="pJudul" /></div>
+        <div><label for="pTags">Tag <span class="opt">(pisahkan koma)</span></label><input type="text" id="pTags" /></div>
+      </div>
+      <div class="two" style="margin-top:12px">
+        <div><label for="pCaption">Caption TikTok/IG/FB</label><textarea id="pCaption" rows="3"></textarea></div>
+        <div><label for="pDesk">Deskripsi YouTube</label><textarea id="pDesk" rows="3"></textarea></div>
+      </div>
+      <div class="row" style="margin-top:14px"><strong>Scene</strong><span class="meter" id="meter"></span></div>
+      <div id="scenes"></div>
+      <div class="row">
+        <button class="btn ghost" id="addScene">+ Tambah scene</button>
+        <span style="flex:1"></span>
+        <button class="btn primary" id="toProduce">Produksi video →</button>
+      </div>
+    </section>
+
+    <!-- 4. Produksi -->
+    <section class="step locked" id="s4">
+      <h2><span class="num">4</span> Produksi di laptop</h2>
+      <p class="hint">Suara → kode animasi oleh AI → cek kode → render. Kalau kode error, AI memperbaikinya sendiri (maks 4×).</p>
+      <div class="stages" id="stages"></div>
+      <div class="bar"><div id="barFill"></div></div>
+      <div class="meter" id="barText" style="margin-top:6px"></div>
+      <div class="log" id="log"></div>
+    </section>
+
+    <!-- 5. Hasil -->
+    <section class="step locked" id="s5">
+      <h2><span class="num">5</span> Hasil</h2>
+      <p class="hint" id="resTitle"></p>
+      <div class="result" id="result">
+        <video id="video" controls playsinline></video>
+        <div>
+          <div class="box">
+            <h3>File</h3>
+            <div class="row" style="margin-top:0">
+              <a class="btn ghost" id="dlVideo">Unduh MP4</a>
+              <a class="btn ghost" id="dlSrt">Subtitle .srt</a>
+              <a class="btn ghost" id="dlSb">storyboard.json</a>
+              <button class="btn ghost" id="openFolder">Buka folder</button>
+              <button class="btn ghost" id="rerenderBtn" title="Render ulang dari kode tersimpan, tanpa memanggil AI">Render ulang</button>
+            </div>
+          </div>
+          <div class="box">
+            <h3>Revisi animasi</h3>
+            <textarea id="feedback" rows="3" placeholder="Contoh: scene 2 terlalu ramai, buat teksnya lebih besar dan latarnya oranye"></textarea>
+            <div class="row"><button class="btn" id="reviseBtn">Revisi & render ulang</button></div>
+          </div>
+          <div class="box">
+            <h3>Upload</h3>
+            <div id="plats"></div>
+            <div class="row"><button class="btn primary" id="uploadBtn">Upload</button></div>
+            <div class="uplog" id="uplog"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const STAGES = [["suara","Suara"],["kode","Kode AI"],["cek","Cek kode"],["render","Render"],["selesai","Selesai"]];
+let status = null, currentJob = null, cfgRasio = "9:16";
+const store = { get(k){ try { return JSON.parse(localStorage.getItem("studio."+k)); } catch { return null; } }, set(k,v){ try { localStorage.setItem("studio."+k, JSON.stringify(v)); } catch {} } };
+
+function showError(msg) { const b = $("#banner"); b.textContent = msg; b.className = "banner err"; if (!msg) b.classList.add("hidden"); window.scrollTo({ top: 0, behavior: "smooth" }); }
+function info(msg) { const b = $("#banner"); b.textContent = msg; b.className = "banner info"; }
+function clearBanner() { $("#banner").classList.add("hidden"); }
+function unlock(n) { for (let i = 1; i <= 5; i++) $("#s"+i).classList.toggle("locked", i > n); }
+function markDone(n) { for (let i = 1; i <= 5; i++) $("#s"+i).classList.toggle("done", i <= n); }
+async function api(path, body) {
+  const r = await fetch(path, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  // /api/prompt dan /api/plan menjawab 200 lebih dulu (keepalive), lalu { error } jika gagal.
+  if (!r.ok || j.error) throw new Error(j.error || ("HTTP " + r.status));
+  return j;
+}
+async function busyBtn(btn, label, fn) {
+  const old = btn.innerHTML; btn.disabled = true; btn.innerHTML = `<span class="spin"></span> ${label}`;
+  try { return await fn(); } catch (e) { showError(e.message); } finally { btn.disabled = false; btn.innerHTML = old; }
+}
+
+/* ---------- konfigurasi ---------- */
+function getConfig() {
+  return { topik: $("#topik").value, judul: $("#judul").value, durasi: Number($("#durasi").value), rasio: cfgRasio,
+    gaya: $("#gaya").value, audiens: $("#audiens").value, gayaNarasi: $("#gayaNarasi").value, suara: $("#suara").value, catatan: $("#catatan").value };
+}
+function setConfig(c) {
+  if (!c) return;
+  for (const k of ["topik","judul","audiens","gayaNarasi","catatan"]) if (c[k] !== undefined) $("#"+k).value = c[k] || "";
+  if (c.durasi) { const sel = $("#durasi"); if (![...sel.options].some(o => o.value == c.durasi)) sel.add(new Option(c.durasi + " detik", c.durasi)); sel.value = c.durasi; }
+  if (c.gaya) $("#gaya").value = c.gaya;
+  if (c.suara) $("#suara").value = c.suara;
+  if (c.rasio) setRasio(c.rasio);
+}
+function setRasio(v) { cfgRasio = v; document.querySelectorAll("#rasio button").forEach(b => b.classList.toggle("on", b.dataset.v === v)); }
+document.querySelectorAll("#rasio button").forEach(b => b.onclick = () => { setRasio(b.dataset.v); saveDraft(); });
+
+/* ---------- storyboard editor ---------- */
+let plan = null;
+const WPS = 1.6; // kata per detik (sama dengan automation/config.ts)
+function maxWords() { return Math.round(Math.max(15, Number($("#durasi").value)) * WPS); }
+function renderScenes() {
+  const wrap = $("#scenes"); wrap.innerHTML = "";
+  plan.scenes.forEach((s, i) => {
+    const el = document.createElement("div"); el.className = "scene";
+    el.innerHTML = `<div class="scene-head">Scene ${i+1}<span class="tools">
+      <button class="icon-btn" title="Naik" data-a="up">↑</button><button class="icon-btn" title="Turun" data-a="down">↓</button><button class="icon-btn" title="Hapus" data-a="del">✕</button></span></div>
+      <div class="two"><div><label>Narasi</label><textarea rows="4" data-f="narasi"></textarea></div>
+      <div><label>Arahan visual</label><textarea rows="4" data-f="visual"></textarea></div></div>`;
+    el.querySelector('[data-f=narasi]').value = s.narasi;
+    el.querySelector('[data-f=visual]').value = s.visual;
+    el.querySelectorAll("textarea").forEach(t => t.oninput = () => { s[t.dataset.f] = t.value; updateMeter(); saveDraft(); });
+    el.querySelectorAll("[data-a]").forEach(b => b.onclick = () => {
+      const a = b.dataset.a;
+      if (a === "del" && plan.scenes.length > 1) plan.scenes.splice(i, 1);
+      if (a === "up" && i > 0) [plan.scenes[i-1], plan.scenes[i]] = [plan.scenes[i], plan.scenes[i-1]];
+      if (a === "down" && i < plan.scenes.length - 1) [plan.scenes[i+1], plan.scenes[i]] = [plan.scenes[i], plan.scenes[i+1]];
+      renderScenes(); saveDraft();
+    });
+    wrap.appendChild(el);
+  });
+  updateMeter();
+}
+function updateMeter() {
+  const words = plan.scenes.reduce((n, s) => n + s.narasi.trim().split(/\s+/).filter(Boolean).length, 0);
+  const max = maxWords(); const m = $("#meter");
+  m.textContent = `${plan.scenes.length} scene · ${words} kata narasi (≈ ${Math.round(words / WPS)} detik, batas ${max} kata)`;
+  m.classList.toggle("over", words > max * 1.15);
+}
+function fillPlan(p) {
+  plan = JSON.parse(JSON.stringify(p));
+  $("#pJudul").value = plan.judul || ""; $("#pCaption").value = plan.caption || ""; $("#pDesk").value = plan.deskripsi || "";
+  $("#pTags").value = (plan.tags || []).join(", ");
+  renderScenes();
+}
+function readPlan() {
+  return { judul: $("#pJudul").value.trim(), caption: $("#pCaption").value.trim(), deskripsi: $("#pDesk").value.trim(),
+    tags: $("#pTags").value.split(",").map(s => s.trim()).filter(Boolean),
+    scenes: plan.scenes.map(s => ({ narasi: s.narasi.trim(), visual: s.visual.trim() })).filter(s => s.narasi) };
+}
+for (const id of ["pJudul","pCaption","pDesk","pTags"]) $("#"+id).oninput = () => { if (plan) { Object.assign(plan, readPlan(), { scenes: plan.scenes }); saveDraft(); } };
+$("#addScene").onclick = () => { plan.scenes.push({ narasi: "", visual: "" }); renderScenes(); };
+
+/* ---------- draft ---------- */
+function saveDraft() { store.set("draft", { config: getConfig(), prompt: $("#prompt").value, plan }); }
+["topik","judul","durasi","gaya","audiens","gayaNarasi","suara","catatan","prompt"].forEach(id => $("#"+id).addEventListener("input", saveDraft));
+
+/* ---------- langkah ---------- */
+$("#toPrompt").onclick = (e) => busyBtn(e.currentTarget, "AI menyusun prompt…", async () => {
+  if (!$("#topik").value.trim()) throw new Error("Tulis gagasan Anda dulu.");
+  clearBanner();
+  const r = await api("/api/prompt", getConfig());
+  $("#prompt").value = r.prompt; unlock(2); markDone(1); saveDraft();
+  $("#s2").scrollIntoView({ behavior: "smooth" });
+});
+$("#rePrompt").onclick = () => $("#toPrompt").click();
+$("#skipPrompt").onclick = () => { if (!$("#prompt").value) $("#prompt").value = $("#topik").value; unlock(2); markDone(1); $("#s2").scrollIntoView({ behavior: "smooth" }); };
+$("#copyPrompt").onclick = async (e) => { try { await navigator.clipboard.writeText($("#prompt").value); e.currentTarget.textContent = "Tersalin ✓"; } catch { $("#prompt").select(); } };
+$("#toPlan").onclick = (e) => busyBtn(e.currentTarget, "AI membuat storyboard…", async () => {
+  if (!$("#prompt").value.trim()) throw new Error("Prompt masih kosong.");
+  clearBanner();
+  const r = await api("/api/plan", { prompt: $("#prompt").value, config: getConfig() });
+  fillPlan(r.plan); unlock(3); markDone(2); saveDraft();
+  $("#s3").scrollIntoView({ behavior: "smooth" });
+});
+$("#toProduce").onclick = (e) => busyBtn(e.currentTarget, "Memulai…", async () => {
+  const p = readPlan();
+  if (!p.scenes.length) throw new Error("Storyboard belum punya scene dengan narasi.");
+  if (!p.judul) throw new Error("Judul masih kosong.");
+  clearBanner(); resetProgress();
+  await api("/api/produce", { plan: p, prompt: $("#prompt").value, config: getConfig() });
+  unlock(4); markDone(3); $("#s4").scrollIntoView({ behavior: "smooth" });
+});
+
+/* ---------- progres ---------- */
+function resetProgress() { $("#log").textContent = ""; setStage(null); setBar(null); }
+function setStage(st) {
+  const order = STAGES.map(s => s[0]); const idx = st === "perbaikan" ? order.indexOf("kode") : order.indexOf(st);
+  $("#stages").innerHTML = STAGES.map(([k, l], i) => `<span class="stage ${i < idx || st === "selesai" ? "past" : i === idx ? "active" : ""}">${st === "perbaikan" && k === "kode" ? "AI memperbaiki" : l}</span>`).join("");
+}
+function setBar(p) {
+  if (!p) { $("#barFill").style.width = "0"; $("#barText").textContent = ""; return; }
+  const pct = Math.round(p.done / p.total * 100);
+  $("#barFill").style.width = (p.stage === "encode" ? 100 : pct) + "%";
+  $("#barText").textContent = p.stage === "render" ? `Render frame ${p.done.toLocaleString("id-ID")} / ${p.total.toLocaleString("id-ID")} (${pct}%)` : `Encoding ${pct}%`;
+}
+function appendLog(line) { const l = $("#log"); l.textContent += line + "\n"; l.scrollTop = l.scrollHeight; }
+function lockActions(on) { ["#toProduce","#reviseBtn","#uploadBtn","#rerenderBtn"].forEach(s => $(s).disabled = on); }
+
+/* ---------- status laptop render ---------- */
+async function refreshRender() {
+  try {
+    const s = await api("/api/status"); const r = s.render; const chip = $("#renderChip");
+    if (r.mode !== "remote") { chip.className = "chip"; chip.textContent = "Render: komputer ini"; return; }
+    const on = r.workers.filter(w => w.online).map(w => w.name);
+    chip.className = "chip " + (on.length ? "ok" : "off");
+    chip.textContent = on.length ? `✓ Laptop render: ${on.join(", ")}` : "○ Laptop render offline";
+    chip.title = r.queue.length ? `${r.queue.length} pekerjaan di antrean` : "";
+  } catch {}
+}
+
+function connect() {
+  const es = new EventSource("/api/events");
+  es.onmessage = (ev) => {
+    const e = JSON.parse(ev.data);
+    if (e.type === "log") appendLog(e.line);
+    if (e.type === "stage") { setStage(e.stage); lockActions(true); }
+    if (e.type === "progress") setBar(e);
+    if (e.type === "done") { lockActions(false); loadJobs(); if (e.jobId) openJob(e.jobId, true); }
+    if (e.type === "error") { lockActions(false); showError("Gagal: " + e.message); loadJobs(); }
+  };
+  es.onerror = () => { es.close(); setTimeout(connect, 2000); };
+}
+
+/* ---------- hasil ---------- */
+async function openJob(id, scroll) {
+  const j = await api("/api/jobs/" + encodeURIComponent(id));
+  currentJob = j;
+  document.querySelectorAll(".job").forEach(b => b.classList.toggle("active", b.dataset.id === id));
+  if (j.config && j.config.topik !== undefined) setConfig(j.config);
+  if (j.prompt) $("#prompt").value = j.prompt;
+  if (j.plan) fillPlan(j.plan);
+  unlock(5); markDone(j.hasVideo ? 5 : 3);
+  const base = "/media/" + encodeURIComponent(id) + "/";
+  $("#resTitle").textContent = j.plan ? j.plan.judul : id;
+  $("#result").classList.toggle("landscape", (j.config && j.config.rasio) === "16:9");
+  if (j.hasVideo) { $("#video").src = base + "video.mp4?t=" + Date.now(); }
+  else { $("#video").removeAttribute("src"); $("#video").load(); }
+  $("#dlVideo").href = base + "video.mp4?download"; $("#dlSrt").href = base + "subtitles.srt?download"; $("#dlSb").href = base + "storyboard.json?download";
+  $("#dlSrt").classList.toggle("hidden", !j.hasSrt); $("#dlSb").classList.toggle("hidden", !j.hasSrt);
+  $("#rerenderBtn").classList.toggle("hidden", !j.canRerender);
+  $("#reviseBtn").disabled = !j.canRevise;
+  $("#reviseBtn").title = j.canRevise ? "" : "Video lama tanpa sesi AI tersimpan tidak bisa direvisi";
+  $("#uplog").innerHTML = Object.entries(j.uploads || {}).map(([k, v]) => `<div><b>${k}:</b> ${/^https?:/.test(v) ? `<a href="${v}" target="_blank" rel="noopener">${v}</a>` : v.replace(/</g, "&lt;")}</div>`).join("");
+  if (scroll) $("#s5").scrollIntoView({ behavior: "smooth" });
+}
+$("#openFolder").onclick = () => currentJob && api("/api/open/" + encodeURIComponent(currentJob.id), {}).catch(e => info(e.message));
+$("#rerenderBtn").onclick = (e) => busyBtn(e.currentTarget, "Memulai…", async () => {
+  clearBanner(); resetProgress(); await api("/api/rerender", { jobId: currentJob.id });
+  $("#s4").classList.remove("locked"); $("#s4").scrollIntoView({ behavior: "smooth" });
+});
+$("#reviseBtn").onclick = (e) => busyBtn(e.currentTarget, "Memulai…", async () => {
+  const fb = $("#feedback").value.trim(); if (!fb) throw new Error("Tulis apa yang perlu diubah.");
+  clearBanner(); resetProgress(); await api("/api/revise", { jobId: currentJob.id, feedback: fb });
+  unlock(5); $("#s4").classList.remove("locked"); $("#s4").scrollIntoView({ behavior: "smooth" }); $("#feedback").value = "";
+});
+$("#uploadBtn").onclick = (e) => busyBtn(e.currentTarget, "Memulai…", async () => {
+  const names = [...document.querySelectorAll("#plats input:checked")].map(i => i.value);
+  if (!names.length) throw new Error("Pilih platform yang sudah disetel.");
+  clearBanner(); resetProgress(); await api("/api/upload", { jobId: currentJob.id, platforms: names });
+  $("#s4").classList.remove("locked"); $("#s4").scrollIntoView({ behavior: "smooth" });
+});
+
+async function loadJobs() {
+  const jobs = await api("/api/jobs");
+  $("#jobs").innerHTML = jobs.map(j => `<button class="job" data-id="${j.id}"><div class="t">${j.judul.replace(/</g,"&lt;")}</div>
+    <div class="s">${new Date(j.created).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })} · ${j.rasio}${j.hasVideo ? "" : " · tanpa video"}${Object.keys(j.uploads).length ? " · terupload" : ""}</div></button>`).join("") || `<div class="job s">Belum ada video.</div>`;
+  document.querySelectorAll(".job[data-id]").forEach(b => b.onclick = () => openJob(b.dataset.id, true).catch(e => showError(e.message)));
+}
+
+$("#newBtn").onclick = () => {
+  currentJob = null; plan = null; $("#prompt").value = ""; $("#scenes").innerHTML = ""; setConfig({ ...status.defaults, topik: "", judul: "", catatan: "" });
+  for (const id of ["pJudul","pCaption","pDesk","pTags"]) $("#"+id).value = "";
+  unlock(1); markDone(0); clearBanner(); store.set("draft", null); document.querySelectorAll(".job").forEach(b => b.classList.remove("active"));
+  window.scrollTo({ top: 0, behavior: "smooth" }); $("#topik").focus();
+};
+
+/* ---------- mulai ---------- */
+(async function init() {
+  try {
+    status = await api("/api/status");
+    $("#modeChip").textContent = "AI: " + status.mode;
+    $("#platChips").innerHTML = status.platforms.map(p => `<span class="chip ${p.ready ? "ok" : "off"}">${p.ready ? "✓" : "○"} ${p.name}</span>`).join(" ");
+    $("#plats").innerHTML = status.platforms.map(p => `<label class="plat"><input type="checkbox" value="${p.name}" ${p.ready ? "" : "disabled"}> ${p.name} ${p.ready ? "" : "<small>— belum disetel (lihat README)</small>"}</label>`).join("");
+    $("#gaya").innerHTML = Object.entries(status.gaya).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
+    $("#suara").innerHTML = status.suara.map(s => `<option value="${s.id}">${s.label}</option>`).join("");
+    setConfig(status.defaults);
+    const d = store.get("draft");
+    if (d) { setConfig(d.config); if (d.prompt) { $("#prompt").value = d.prompt; unlock(2); markDone(1); } if (d.plan) { fillPlan(d.plan); unlock(3); markDone(2); } }
+    await loadJobs();
+    if (status.task) {
+      status.task.logs.forEach(appendLog); setStage(status.task.stage); setBar(status.task.progress);
+      if (!status.task.done) { unlock(4); lockActions(true); info("Ada proses yang sedang berjalan. Progresnya tampil di langkah 4."); }
+    }
+    connect();
+    refreshRender(); setInterval(refreshRender, 10000);
+  } catch (e) { showError("Tidak bisa terhubung ke server Studio: " + e.message); }
+})();
+</script>
+</body>
+</html>

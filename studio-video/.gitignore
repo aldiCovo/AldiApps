@@ -1,0 +1,7 @@
+node_modules
+out
+jobs
+public/jobs
+.env
+.DS_Store
+.worker

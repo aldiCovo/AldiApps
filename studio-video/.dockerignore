@@ -1,0 +1,11 @@
+node_modules
+out
+jobs
+public/jobs
+.worker
+.env
+.env.*
+!.env.example
+.DS_Store
+Dockerfile
+.dockerignore

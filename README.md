@@ -18,6 +18,7 @@ Application source code, one folder per application. Each folder has its own `Do
 | [`ecommerce/admin-service/`](ecommerce/admin-service/) | Go API for the admin pages. It lets in admins only and calls the other services' internal routes. Only reachable through `web-admin` |
 | [`ecommerce/web-admin/`](ecommerce/web-admin/) | The admin pages, with their own login, at **https://prastika.aldiab.ai.id/admin** |
 | [`saham/signal-service/`](saham/signal-service/) | Go service that sends a daily LQ45 market brief to Telegram after the close, with a screener and forward paper trading of its rules, using its own PostgreSQL, and its web pages at **https://saham.aldiab.ai.id** behind a password. `signal-service backtest` replays the rules on past prices. Not investment advice |
+| [`studio-video/`](studio-video/) | Studio Video (Node + TypeScript): an idea becomes an AI storyboard, narration and Remotion code, rendered by a worker on another computer and uploaded to YouTube, TikTok, Instagram and Facebook. At **https://studio.aldiab.ai.id**, behind Cloudflare Access |
 
 ## Deploy
 

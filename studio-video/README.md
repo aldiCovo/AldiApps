@@ -59,16 +59,19 @@ Buat API key di https://platform.claude.com, lalu isi `ANTHROPIC_API_KEY`.
 
 > Catatan: video dari app Google yang belum diverifikasi (audit) bisa dikunci menjadi *private* oleh YouTube. Ajukan audit API YouTube agar bisa upload publik.
 
-### 3. TikTok
-1. Daftar di https://developers.tiktok.com, buat app, lalu tambahkan produk **Login Kit** dan **Content Posting API** (aktifkan *Direct Post*). Scope yang dipakai: `user.info.basic`, `video.publish`, `video.upload`.
-2. Di Login Kit, isi Redirect URI:
-   - Studio di server: `https://studio.aldiab.ai.id/api/tiktok/callback`
-   - Studio di laptop: halaman `https://` mana saja di domain Anda (lalu pakai `npm run auth:tiktok`)
-3. Salin Client Key dan Client Secret ke `.env` (`TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`), lalu restart Studio.
-4. Di Studio, klik **Hubungkan TikTok** di bagian atas, login, lalu izinkan. Refresh token tersimpan otomatis ke `.env`.
-   Di laptop tanpa domain sendiri: isi juga `TIKTOK_REDIRECT_URI`, jalankan `npm run auth:tiktok`, dan tempel URL hasil redirect.
+### 3. TikTok (login dan posting)
+Di server, kreator masuk ke Studio dengan akun TikTok. Kreator baru wajib memakai link undangan.
+1. Di https://developers.tiktok.com, buat app dengan produk **Login Kit** dan **Content Posting API** (*Direct Post*), scope `user.info.basic` dan `video.publish`.
+2. Redirect URI: `https://studio.aldiab.ai.id/api/tiktok/callback`. Domain `aldiab.ai.id` diverifikasi lewat DNS TXT.
+3. Isi `TIKTOK_CLIENT_KEY` dan `TIKTOK_CLIENT_SECRET` di `.env` server, lalu restart Studio.
+4. Pemilik membuka `https://studio.aldiab.ai.id/admin/klaim` (dikunci Cloudflare Access) dan login TikTok. Akun itu menjadi pemilik Studio.
+5. Kreator mendaftar lewat link `https://studio.aldiab.ai.id/masuk?undangan=KODE`.
 
-> Sebelum app lolos audit TikTok, video hanya bisa diposting **private (SELF_ONLY)**. Pakai mode **Sandbox** dan tambahkan akun TikTok Anda sebagai *Target user* agar bisa mencoba tanpa menunggu review. Setelah lolos audit, ubah `TIKTOK_PRIVACY=PUBLIC_TO_EVERYONE`.
+Data user dan undangan ada di `jobs/_data/`. Setiap job menyimpan pemiliknya di `owner.json`; job tanpa file itu milik pemilik Studio.
+
+Di laptop (`STUDIO_HOST` kosong), Studio tidak memakai login: siapa pun yang membuka `localhost` adalah pemilik. Isi `STUDIO_LOGIN=1` untuk mencoba login TikTok di laptop. Untuk upload TikTok dari CLI di laptop, isi juga `TIKTOK_REDIRECT_URI` dan jalankan `npm run auth:tiktok`.
+
+> Sebelum app lolos audit TikTok, video hanya bisa diposting **private (SELF_ONLY)**.
 
 ### 4. Instagram & Facebook
 Syarat: **Facebook Page** dan akun **Instagram Business/Creator** yang terhubung ke Page tersebut.

@@ -6,6 +6,7 @@ import { z } from "zod";
 import type { SceneWord } from "../src/auto/types";
 import { DEFAULT_CONFIG, GAYA_LABEL, maxWords, sceneRange, size, SUARA, type VideoConfig } from "./config";
 import { env, ROOT } from "./env";
+import { priceUsd, type Langkah, type OnUsage, type UsageEntry } from "./usage";
 
 // Dua cara memanggil Claude:
 // - ANTHROPIC_API_KEY diisi  -> Claude API (bayar per pemakaian)
@@ -15,7 +16,45 @@ const MODEL = env("CLAUDE_MODEL", "claude-opus-5-5");
 let _client: Anthropic | null = null;
 const api = () => (_client ??= new Anthropic());
 
-type CliResult = { is_error?: boolean; subtype?: string; result?: string; structured_output?: unknown; session_id?: string };
+type CliUsage = { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number };
+type CliResult = {
+  is_error?: boolean;
+  subtype?: string;
+  result?: string;
+  structured_output?: unknown;
+  session_id?: string;
+  usage?: CliUsage; // hanya panggilan ini
+  total_cost_usd?: number; // kumulatif untuk sesi (termasuk panggilan sebelumnya bila --resume)
+  modelUsage?: Record<string, unknown>;
+};
+
+const tokensOf = (u: CliUsage | Anthropic.Usage | Anthropic.Beta.BetaUsage | undefined) => ({
+  input: u?.input_tokens ?? 0,
+  output: u?.output_tokens ?? 0,
+  cacheRead: u?.cache_read_input_tokens ?? 0,
+  cacheWrite: u?.cache_creation_input_tokens ?? 0,
+});
+
+/**
+ * Catatan biaya dari jawaban Claude Code. total_cost_usd dihitung Claude Code dengan harga API, tetapi
+ * kumulatif per sesi: untuk sesi yang dilanjutkan, `prevCost` (total sebelumnya) dikurangkan.
+ * Tanpa `prevCost` pada sesi lanjutan, biaya dihitung dari token panggilan ini.
+ */
+function cliEntry(res: CliResult, langkah: Langkah, resumed: boolean, prevCost?: number): UsageEntry {
+  const t = tokensOf(res.usage);
+  const model = Object.keys(res.modelUsage ?? {})[0] ?? env("CLAUDE_CLI_MODEL", "opus");
+  const total = typeof res.total_cost_usd === "number" ? res.total_cost_usd : null;
+  let usd: number | null;
+  if (total !== null && !resumed) usd = total;
+  else if (total !== null && prevCost !== undefined) usd = Math.max(0, total - prevCost);
+  else usd = priceUsd(model, t);
+  return { langkah, model, ...t, usd, at: new Date().toISOString() };
+}
+
+function apiEntry(usage: Anthropic.Usage | Anthropic.Beta.BetaUsage, model: string, langkah: Langkah): UsageEntry {
+  const t = tokensOf(usage);
+  return { langkah, model, ...t, usd: priceUsd(model, t), at: new Date().toISOString() };
+}
 
 /** Jalankan Claude Code tanpa tampilan interaktif dan tanpa tools (hanya menjawab teks). */
 function runClaudeCli(args: string[], prompt: string): Promise<CliResult> {
@@ -64,11 +103,12 @@ Bagian wajib:
 7. BATASAN: durasi, jumlah kata narasi maksimal, hal yang harus dihindari (misinformasi, istilah sulit tanpa penjelasan, dll.).
 Jika gagasan ambigu, pilih tafsiran paling menarik dan masuk akal; jangan bertanya balik.`;
 
-export async function makeMasterPrompt(cfg: VideoConfig): Promise<string> {
+export async function makeMasterPrompt(cfg: VideoConfig, onUsage?: OnUsage): Promise<string> {
   const { width, height } = size(cfg.rasio);
   const input = `GAGASAN:\n${cfg.topik}\n\nKONFIGURASI:\n- Judul: ${cfg.judul ?? "(buatkan)"}\n- Durasi target: ${cfg.durasi} detik (maks ${maxWords(cfg.durasi)} kata narasi)\n- Rasio: ${cfg.rasio} (${width}x${height}, 30 fps, MP4 H.264 + AAC)\n- Gaya animasi: ${GAYA_LABEL[cfg.gaya]}\n- Target penonton: ${cfg.audiens}\n- Gaya narasi: ${cfg.gayaNarasi}\n- Suara: ${SUARA.find((s) => s.id === cfg.suara)?.label ?? cfg.suara}\n${cfg.catatan ? `- Catatan tambahan: ${cfg.catatan}\n` : ""}`;
   if (!USE_API) {
     const res = await runClaudeCli(["--effort", "low", "--no-session-persistence", "--system-prompt", MASTER_SYSTEM], input);
+    onUsage?.(cliEntry(res, "prompt", false));
     return String(res.result ?? "").trim();
   }
   const res = await api().messages.create({
@@ -78,6 +118,7 @@ export async function makeMasterPrompt(cfg: VideoConfig): Promise<string> {
     system: MASTER_SYSTEM,
     messages: [{ role: "user", content: input }],
   });
+  onUsage?.(apiEntry(res.usage, res.model, "prompt"));
   if (res.stop_reason === "refusal") throw new Error("Claude menolak permintaan ini.");
   return res.content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
@@ -132,7 +173,7 @@ VISUAL (gaya kinetic explainer)
 - Sebutkan kata narasi yang memicu tiap pergantian shot (contoh: "potong di kata 'tapi'").
 - Jangan meminta foto, video asli, atau gambar orang realistis.`;
 
-export async function makePlan(prompt: string, cfg: VideoConfig = DEFAULT_CONFIG): Promise<Plan> {
+export async function makePlan(prompt: string, cfg: VideoConfig = DEFAULT_CONFIG, onUsage?: OnUsage): Promise<Plan> {
   const kartun =
     cfg.gaya === "kartun"
       ? `\n\nGAYA KARTUN 2D\n- Boleh ada karakter/maskot kartun flat sederhana (bentuk SVG: kepala bulat, mata titik, badan sederhana) dan benda yang bergerak (berjalan, melambai, berkedip, memantul).\n- Deskripsikan aksi karakter per shot dengan jelas, tetap disertai teks layar besar.`
@@ -148,6 +189,7 @@ export async function makePlan(prompt: string, cfg: VideoConfig = DEFAULT_CONFIG
       ],
       prompt,
     );
+    onUsage?.(cliEntry(res, "storyboard", false));
     return PlanSchema.parse(res.structured_output ?? JSON.parse(res.result ?? "{}"));
   }
   const res = await api().messages.parse({
@@ -157,6 +199,7 @@ export async function makePlan(prompt: string, cfg: VideoConfig = DEFAULT_CONFIG
     system: PLAN_SYSTEM,
     messages: [{ role: "user", content: prompt }],
   });
+  onUsage?.(apiEntry(res.usage, res.model, "storyboard"));
   if (res.stop_reason === "refusal") throw new Error("Claude menolak permintaan ini.");
   if (!res.parsed_output) throw new Error("Gagal membaca rencana video dari Claude.");
   return res.parsed_output;
@@ -220,7 +263,8 @@ CODE RULES
 
 // API: riwayat pesan disimpan di sini. CLI: percakapan disimpan Claude Code, dilanjutkan via session id.
 // `system` disimpan agar revisi memakai prompt sistem yang sama dengan saat kode pertama ditulis.
-export type CodeSession = { messages: Anthropic.Beta.BetaMessageParam[]; cliSessionId?: string; system?: string };
+// `cliCostUsd` = total_cost_usd terakhir dari Claude Code, untuk menghitung biaya panggilan berikutnya.
+export type CodeSession = { messages: Anthropic.Beta.BetaMessageParam[]; cliSessionId?: string; system?: string; cliCostUsd?: number };
 
 function extractCode(content: Anthropic.Beta.BetaContentBlock[] | string): string {
   const text =
@@ -236,7 +280,7 @@ function extractCode(content: Anthropic.Beta.BetaContentBlock[] | string): strin
   return blocks.sort((a, b) => b.length - a.length)[0].trim() + "\n";
 }
 
-async function ask(session: CodeSession, userText: string): Promise<string> {
+async function ask(session: CodeSession, userText: string, langkah: Langkah, onUsage?: OnUsage): Promise<string> {
   const CODE_SYSTEM = session.system ?? codeSystem();
   if (!USE_API) {
     const first = !session.cliSessionId;
@@ -249,6 +293,8 @@ async function ask(session: CodeSession, userText: string): Promise<string> {
       ],
       userText,
     );
+    onUsage?.(cliEntry(res, langkah, !first, session.cliCostUsd));
+    if (typeof res.total_cost_usd === "number") session.cliCostUsd = res.total_cost_usd;
     return extractCode(res.result ?? "");
   }
   session.messages.push({ role: "user", content: userText });
@@ -262,6 +308,7 @@ async function ask(session: CodeSession, userText: string): Promise<string> {
     messages: session.messages,
   });
   const msg = await stream.finalMessage();
+  onUsage?.(apiEntry(msg.usage, msg.model, langkah));
   // Simpan seluruh content (termasuk blok thinking) agar percakapan tetap utuh untuk revisi.
   session.messages.push({ role: "assistant", content: msg.content });
   if (msg.stop_reason === "refusal") throw new Error("Claude menolak menulis kode untuk video ini.");
@@ -274,6 +321,7 @@ export async function writeSceneCode(
   durations: number[],
   words: SceneWord[][] = [],
   cfg: VideoConfig = DEFAULT_CONFIG,
+  onUsage?: OnUsage,
 ): Promise<{ code: string; session: CodeSession }> {
   const session: CodeSession = { messages: [], system: codeSystem(cfg) };
   const brief = plan.scenes
@@ -285,20 +333,26 @@ export async function writeSceneCode(
   const code = await ask(
     session,
     `Video title: ${plan.judul}\nNumber of scenes: ${plan.scenes.length}\n\n${brief}\n\nWrite src/generated/Scenes.tsx.`,
+    "kode",
+    onUsage,
   );
   return { code, session };
 }
 
-export async function fixSceneCode(session: CodeSession, error: string): Promise<string> {
+export async function fixSceneCode(session: CodeSession, error: string, onUsage?: OnUsage): Promise<string> {
   return ask(
     session,
     `The code failed. Fix the cause and return the complete corrected file.\n\nError output:\n${error.slice(-6000)}`,
+    "perbaikan",
+    onUsage,
   );
 }
 
-export async function reviseSceneCode(session: CodeSession, feedback: string): Promise<string> {
+export async function reviseSceneCode(session: CodeSession, feedback: string, onUsage?: OnUsage): Promise<string> {
   return ask(
     session,
     `The user watched the rendered video and requests these changes (in Indonesian):\n"${feedback}"\n\nApply them and return the complete updated file. Keep the same number of scenes and the same durations.`,
+    "revisi",
+    onUsage,
   );
 }

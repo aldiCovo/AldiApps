@@ -8,6 +8,7 @@ import { makeMasterPrompt, makePlan, PlanSchema, USE_API } from "./claude";
 import { DEFAULT_CONFIG, GAYA_LABEL, normalizeConfig, SUARA } from "./config";
 import { ROOT } from "./env";
 import { jobDirOf, listJobs, loadJob, PLATFORMS, produce, rerender, revise, uploadJob, type Reporter, type Stage } from "./pipeline";
+import { cleanEntries, type UsageEntry } from "./usage";
 import { appendChunk, checkWorkerAuth, claimNext, complete, fail, isNeededFile, reportProgress, workerStatus } from "./queue";
 
 const PORT = Number(process.env.STUDIO_PORT ?? 4321);
@@ -211,7 +212,11 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
     const body = await readBody(req);
     const cfg = normalizeConfig(body as never);
     if (!cfg.topik) return json(res, 400, { error: "Gagasan masih kosong." });
-    return jsonKeepAlive(res, async () => ({ prompt: await makeMasterPrompt(cfg), config: cfg }));
+    return jsonKeepAlive(res, async () => {
+      const usage: UsageEntry[] = [];
+      const prompt = await makeMasterPrompt(cfg, (u) => usage.push(u));
+      return { prompt, config: cfg, usage };
+    });
   }
 
   if (m === "POST" && p === "/api/plan") {
@@ -219,7 +224,11 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
     const cfg = normalizeConfig((body.config ?? {}) as never);
     const prompt = String(body.prompt ?? "").trim();
     if (!prompt) return json(res, 400, { error: "Prompt masih kosong." });
-    return jsonKeepAlive(res, async () => ({ plan: await makePlan(prompt, cfg) }));
+    return jsonKeepAlive(res, async () => {
+      const usage: UsageEntry[] = [];
+      const plan = await makePlan(prompt, cfg, (u) => usage.push(u));
+      return { plan, usage };
+    });
   }
 
   if (m === "POST" && p === "/api/produce") {
@@ -231,7 +240,8 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
     plan.scenes = plan.scenes.filter((s) => s.narasi.trim());
     const cfg = normalizeConfig((body.config ?? {}) as never);
     const prompt = String(body.prompt ?? cfg.topik);
-    startTask("produksi", null, (r) => produce(plan, prompt, cfg, r));
+    const preUsage = cleanEntries(body.usage);
+    startTask("produksi", null, (r) => produce(plan, prompt, cfg, r, preUsage));
     return json(res, 202, { ok: true });
   }
 

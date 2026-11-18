@@ -5,6 +5,7 @@ import readline from "node:readline/promises";
 import { makePlan, USE_API, type Plan } from "./claude";
 import { DEFAULT_CONFIG, normalizeConfig, type VideoConfig } from "./config";
 import { jobDirOf, PLATFORMS, produce, revise, uploadJob, type Reporter } from "./pipeline";
+import type { UsageEntry } from "./usage";
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 let inputClosed = false;
@@ -49,9 +50,9 @@ async function uploadFlow(id: string): Promise<void> {
 }
 
 /** Produksi + review interaktif di terminal. */
-async function produceAndReview(plan: Plan, prompt: string, cfg: Partial<VideoConfig>) {
+async function produceAndReview(plan: Plan, prompt: string, cfg: Partial<VideoConfig>, preUsage: UsageEntry[] = []) {
   printPlan(plan);
-  const id = await produce(plan, prompt, cfg, reporter);
+  const id = await produce(plan, prompt, cfg, reporter, preUsage);
   const outFile = path.join(jobDirOf(id), "video.mp4");
   for (;;) {
     log(`\nVideo selesai: ${outFile}`);
@@ -77,8 +78,9 @@ async function cmdBuat(prompt: string) {
   if (!prompt) throw new Error('Tulis perintahnya, contoh: npm run buat -- "buatkan video tentang cara kerja termos"');
   modeLine();
   log("1) Claude menyusun naskah...");
-  const plan = await makePlan(prompt, DEFAULT_CONFIG);
-  await produceAndReview(plan, prompt, DEFAULT_CONFIG);
+  const usage: UsageEntry[] = [];
+  const plan = await makePlan(prompt, DEFAULT_CONFIG, (u) => usage.push(u));
+  await produceAndReview(plan, prompt, DEFAULT_CONFIG, usage);
 }
 
 /** Buat ulang video dari naskah job lama (suara, animasi, render baru) ke folder job baru. */

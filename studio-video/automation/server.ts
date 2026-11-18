@@ -1,14 +1,16 @@
 // Studio Video: aplikasi web lokal (http://localhost:4321) untuk alur
 // Gagasan -> Master Prompt -> Storyboard -> Kode + Render -> Preview -> Revisi / Upload.
 import { spawn } from "node:child_process";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { makeMasterPrompt, makePlan, PlanSchema, USE_API } from "./claude";
 import { DEFAULT_CONFIG, GAYA_LABEL, normalizeConfig, SUARA } from "./config";
-import { ROOT } from "./env";
+import { env, ROOT } from "./env";
 import { jobDirOf, listJobs, loadJob, PLATFORMS, produce, rerender, revise, uploadJob, type Reporter, type Stage } from "./pipeline";
 import { cleanEntries, type UsageEntry } from "./usage";
+import { tiktokAuthorizeUrl, tiktokExchangeCode, tiktokKeys } from "./upload/tiktok";
 import { appendChunk, checkWorkerAuth, claimNext, complete, fail, isNeededFile, reportProgress, workerStatus } from "./queue";
 
 const PORT = Number(process.env.STUDIO_PORT ?? 4321);
@@ -159,6 +161,21 @@ function sendFile(req: http.IncomingMessage, res: http.ServerResponse, file: str
   fs.createReadStream(file).pipe(res);
 }
 
+/* ---------------- Hubungkan TikTok lewat browser ---------------- */
+
+// state OAuth yang masih berlaku (10 menit), agar callback hanya menerima login yang dimulai dari Studio ini.
+const tiktokStates = new Map<string, number>();
+
+/** Harus sama persis dengan Redirect URI di app TikTok. */
+function tiktokRedirectUri(req: http.IncomingMessage): string {
+  return env("TIKTOK_REDIRECT_URI") || `https://${req.headers.host}/api/tiktok/callback`;
+}
+
+function backToStudio(res: http.ServerResponse, result: string) {
+  res.writeHead(302, { Location: `/?tiktok=${encodeURIComponent(result)}` });
+  res.end();
+}
+
 /* ---------------- Rute ---------------- */
 
 async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
@@ -168,10 +185,36 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
 
   if (m === "GET" && (p === "/" || p === "/index.html")) return sendFile(req, res, path.join(WEB, "index.html"));
 
+  if (m === "GET" && p === "/api/tiktok/login") {
+    if (!tiktokKeys()) return backToStudio(res, "Isi TIKTOK_CLIENT_KEY dan TIKTOK_CLIENT_SECRET di .env server dulu, lalu restart Studio.");
+    const now = Date.now();
+    for (const [k, exp] of tiktokStates) if (exp < now) tiktokStates.delete(k);
+    const state = crypto.randomBytes(16).toString("hex");
+    tiktokStates.set(state, now + 10 * 60_000);
+    res.writeHead(302, { Location: tiktokAuthorizeUrl(tiktokRedirectUri(req), state) });
+    return res.end();
+  }
+
+  if (m === "GET" && p === "/api/tiktok/callback") {
+    const state = url.searchParams.get("state") ?? "";
+    const exp = tiktokStates.get(state);
+    tiktokStates.delete(state);
+    if (!exp || exp < Date.now()) return backToStudio(res, "Login TikTok kedaluwarsa atau tidak dimulai dari Studio. Coba klik Hubungkan TikTok lagi.");
+    const code = url.searchParams.get("code");
+    if (!code) return backToStudio(res, `TikTok tidak memberi izin: ${url.searchParams.get("error_description") || url.searchParams.get("error") || "dibatalkan"}`);
+    try {
+      await tiktokExchangeCode(code, tiktokRedirectUri(req));
+      return backToStudio(res, "ok");
+    } catch (e) {
+      return backToStudio(res, `Gagal menghubungkan TikTok: ${(e as Error).message}`);
+    }
+  }
+
   if (m === "GET" && p === "/api/status") {
     return json(res, 200, {
       mode: USE_API ? "API key (bayar per pemakaian)" : "Langganan Claude (Claude Code)",
       platforms: PLATFORMS.map((x) => ({ name: x.name, ready: x.ready() })),
+      tiktokKeys: tiktokKeys(),
       defaults: DEFAULT_CONFIG,
       gaya: GAYA_LABEL,
       suara: SUARA,

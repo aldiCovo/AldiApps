@@ -4,8 +4,35 @@ import { fetchJson, sleep, type UploadInput } from "./types";
 
 const API = "https://open.tiktokapis.com/v2";
 
-export const tiktokReady = () =>
-  Boolean(env("TIKTOK_CLIENT_KEY") && env("TIKTOK_CLIENT_SECRET") && env("TIKTOK_REFRESH_TOKEN"));
+export const TIKTOK_SCOPE = "user.info.basic,video.publish,video.upload";
+
+export const tiktokKeys = () => Boolean(env("TIKTOK_CLIENT_KEY") && env("TIKTOK_CLIENT_SECRET"));
+export const tiktokReady = () => tiktokKeys() && Boolean(env("TIKTOK_REFRESH_TOKEN"));
+
+export function tiktokAuthorizeUrl(redirectUri: string, state: string): string {
+  return (
+    "https://www.tiktok.com/v2/auth/authorize/?" +
+    new URLSearchParams({ client_key: env("TIKTOK_CLIENT_KEY"), scope: TIKTOK_SCOPE, response_type: "code", redirect_uri: redirectUri, state })
+  );
+}
+
+/** Tukar kode dari halaman izin TikTok dengan refresh token, lalu simpan ke .env. */
+export async function tiktokExchangeCode(code: string, redirectUri: string): Promise<void> {
+  const res = await fetch(`${API}/oauth/token/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_key: env("TIKTOK_CLIENT_KEY"),
+      client_secret: env("TIKTOK_CLIENT_SECRET"),
+      code,
+      grant_type: "authorization_code",
+      redirect_uri: redirectUri,
+    }),
+  });
+  const data: any = await res.json().catch(() => ({}));
+  if (!data.refresh_token) throw new Error(data.error_description || data.error || `HTTP ${res.status}`);
+  setEnv("TIKTOK_REFRESH_TOKEN", data.refresh_token);
+}
 
 /** Access token TikTok berlaku 24 jam, jadi selalu diperbarui dari refresh token. */
 async function accessToken(): Promise<string> {

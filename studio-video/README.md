@@ -60,11 +60,15 @@ Buat API key di https://platform.claude.com, lalu isi `ANTHROPIC_API_KEY`.
 > Catatan: video dari app Google yang belum diverifikasi (audit) bisa dikunci menjadi *private* oleh YouTube. Ajukan audit API YouTube agar bisa upload publik.
 
 ### 3. TikTok
-1. Daftar di https://developers.tiktok.com, buat app, lalu tambahkan produk **Login Kit** dan **Content Posting API** (aktifkan *Direct Post*).
-2. Isi Redirect URI (harus `https://`, misalnya halaman di domain Anda), lalu salin Client Key/Secret/Redirect URI ke `.env`.
-3. Jalankan `npm run auth:tiktok` dan tempel URL hasil redirect.
+1. Daftar di https://developers.tiktok.com, buat app, lalu tambahkan produk **Login Kit** dan **Content Posting API** (aktifkan *Direct Post*). Scope yang dipakai: `user.info.basic`, `video.publish`, `video.upload`.
+2. Di Login Kit, isi Redirect URI:
+   - Studio di server: `https://studio.aldiab.ai.id/api/tiktok/callback`
+   - Studio di laptop: halaman `https://` mana saja di domain Anda (lalu pakai `npm run auth:tiktok`)
+3. Salin Client Key dan Client Secret ke `.env` (`TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`), lalu restart Studio.
+4. Di Studio, klik **Hubungkan TikTok** di bagian atas, login, lalu izinkan. Refresh token tersimpan otomatis ke `.env`.
+   Di laptop tanpa domain sendiri: isi juga `TIKTOK_REDIRECT_URI`, jalankan `npm run auth:tiktok`, dan tempel URL hasil redirect.
 
-> Sebelum app lolos audit TikTok, video hanya bisa diposting **private (SELF_ONLY)**. Setelah lolos, ubah `TIKTOK_PRIVACY=PUBLIC_TO_EVERYONE`.
+> Sebelum app lolos audit TikTok, video hanya bisa diposting **private (SELF_ONLY)**. Pakai mode **Sandbox** dan tambahkan akun TikTok Anda sebagai *Target user* agar bisa mencoba tanpa menunggu review. Setelah lolos audit, ubah `TIKTOK_PRIVACY=PUBLIC_TO_EVERYONE`.
 
 ### 4. Instagram & Facebook
 Syarat: **Facebook Page** dan akun **Instagram Business/Creator** yang terhubung ke Page tersebut.

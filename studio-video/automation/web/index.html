@@ -451,6 +451,8 @@ $("#newBtn").onclick = () => {
     status = await api("/api/status");
     $("#modeChip").textContent = "AI: " + status.mode;
     $("#platChips").innerHTML = status.platforms.map(p => `<span class="chip ${p.ready ? "ok" : "off"}">${p.ready ? "✓" : "○"} ${p.name}</span>`).join(" ");
+    const tt = status.platforms.find(p => p.name === "TikTok");
+    if (tt) $("#platChips").insertAdjacentHTML("beforeend", ` <a class="chip" href="/api/tiktok/login" title="Login TikTok dan izinkan Studio memposting video">${tt.ready ? "Hubungkan ulang TikTok" : "Hubungkan TikTok"}</a>`);
     $("#plats").innerHTML = status.platforms.map(p => `<label class="plat"><input type="checkbox" value="${p.name}" ${p.ready ? "" : "disabled"}> ${p.name} ${p.ready ? "" : "<small>— belum disetel (lihat README)</small>"}</label>`).join("");
     $("#gaya").innerHTML = Object.entries(status.gaya).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
     $("#suara").innerHTML = status.suara.map(s => `<option value="${s.id}">${s.label}</option>`).join("");
@@ -462,6 +464,8 @@ $("#newBtn").onclick = () => {
       status.task.logs.forEach(appendLog); setStage(status.task.stage); setBar(status.task.progress);
       if (!status.task.done) { unlock(4); lockActions(true); info("Ada proses yang sedang berjalan. Progresnya tampil di langkah 4."); }
     }
+    const tiktok = new URLSearchParams(location.search).get("tiktok");
+    if (tiktok) { history.replaceState(null, "", "/"); tiktok === "ok" ? info("TikTok terhubung. Video bisa diupload ke TikTok dari langkah 5.") : showError(tiktok); }
     connect();
     refreshRender(); setInterval(refreshRender, 10000);
   } catch (e) { showError("Tidak bisa terhubung ke server Studio: " + e.message); }

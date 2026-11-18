@@ -8,10 +8,17 @@ import { DEFAULT_CONFIG, GAYA_LABEL, maxWords, sceneRange, size, SUARA, type Vid
 import { env, ROOT } from "./env";
 import { priceUsd, type Langkah, type OnUsage, type UsageEntry } from "./usage";
 
-// Dua cara memanggil Claude:
-// - ANTHROPIC_API_KEY diisi  -> Claude API (bayar per pemakaian)
-// - ANTHROPIC_API_KEY kosong -> Claude Code CLI (`claude -p`), memakai langganan Claude Anda
-export const USE_API = Boolean(env("ANTHROPIC_API_KEY"));
+// Dua cara memanggil Claude, dipilih per panggilan:
+// - "langganan": Claude Code CLI (`claude -p`) dengan langganan Claude pemilik Studio. Hanya untuk video pemilik.
+// - "api": Claude API dengan ANTHROPIC_API_KEY (bayar per pemakaian). Untuk kreator undangan.
+export type AiMode = "langganan" | "api";
+export const apiKeyReady = () => Boolean(env("ANTHROPIC_API_KEY"));
+/** Untuk CLI dan laptop: API jika key diisi, selain itu langganan (perilaku lama). */
+export const DEFAULT_MODE: AiMode = apiKeyReady() ? "api" : "langganan";
+export const MODE_LABEL: Record<AiMode, string> = {
+  langganan: "Langganan Claude (Claude Code)",
+  api: "Claude API (bayar per pemakaian)",
+};
 const MODEL = env("CLAUDE_MODEL", "claude-opus-5-5");
 let _client: Anthropic | null = null;
 const api = () => (_client ??= new Anthropic());
@@ -56,13 +63,20 @@ function apiEntry(usage: Anthropic.Usage | Anthropic.Beta.BetaUsage, model: stri
   return { langkah, model, ...t, usd: priceUsd(model, t), at: new Date().toISOString() };
 }
 
+/** Environment untuk `claude -p` tanpa ANTHROPIC_API_KEY, agar Claude Code memakai langganan, bukan API key. */
+function subscriptionEnv(): NodeJS.ProcessEnv {
+  const e = { ...process.env };
+  delete e.ANTHROPIC_API_KEY;
+  return e;
+}
+
 /** Jalankan Claude Code tanpa tampilan interaktif dan tanpa tools (hanya menjawab teks). */
 function runClaudeCli(args: string[], prompt: string): Promise<CliResult> {
   return new Promise((resolve, reject) => {
     const p = spawn(
       "claude",
       ["-p", "--output-format", "json", "--tools", "", "--model", env("CLAUDE_CLI_MODEL", "opus"), ...args],
-      { cwd: ROOT, stdio: ["pipe", "pipe", "pipe"] },
+      { cwd: ROOT, stdio: ["pipe", "pipe", "pipe"], env: subscriptionEnv() },
     );
     let out = "";
     let err = "";
@@ -103,10 +117,10 @@ Bagian wajib:
 7. BATASAN: durasi, jumlah kata narasi maksimal, hal yang harus dihindari (misinformasi, istilah sulit tanpa penjelasan, dll.).
 Jika gagasan ambigu, pilih tafsiran paling menarik dan masuk akal; jangan bertanya balik.`;
 
-export async function makeMasterPrompt(cfg: VideoConfig, onUsage?: OnUsage): Promise<string> {
+export async function makeMasterPrompt(cfg: VideoConfig, onUsage?: OnUsage, mode: AiMode = DEFAULT_MODE): Promise<string> {
   const { width, height } = size(cfg.rasio);
   const input = `GAGASAN:\n${cfg.topik}\n\nKONFIGURASI:\n- Judul: ${cfg.judul ?? "(buatkan)"}\n- Durasi target: ${cfg.durasi} detik (maks ${maxWords(cfg.durasi)} kata narasi)\n- Rasio: ${cfg.rasio} (${width}x${height}, 30 fps, MP4 H.264 + AAC)\n- Gaya animasi: ${GAYA_LABEL[cfg.gaya]}\n- Target penonton: ${cfg.audiens}\n- Gaya narasi: ${cfg.gayaNarasi}\n- Suara: ${SUARA.find((s) => s.id === cfg.suara)?.label ?? cfg.suara}\n${cfg.catatan ? `- Catatan tambahan: ${cfg.catatan}\n` : ""}`;
-  if (!USE_API) {
+  if (mode === "langganan") {
     const res = await runClaudeCli(["--effort", "low", "--no-session-persistence", "--system-prompt", MASTER_SYSTEM], input);
     onUsage?.(cliEntry(res, "prompt", false));
     return String(res.result ?? "").trim();
@@ -173,13 +187,13 @@ VISUAL (gaya kinetic explainer)
 - Sebutkan kata narasi yang memicu tiap pergantian shot (contoh: "potong di kata 'tapi'").
 - Jangan meminta foto, video asli, atau gambar orang realistis.`;
 
-export async function makePlan(prompt: string, cfg: VideoConfig = DEFAULT_CONFIG, onUsage?: OnUsage): Promise<Plan> {
+export async function makePlan(prompt: string, cfg: VideoConfig = DEFAULT_CONFIG, onUsage?: OnUsage, mode: AiMode = DEFAULT_MODE): Promise<Plan> {
   const kartun =
     cfg.gaya === "kartun"
       ? `\n\nGAYA KARTUN 2D\n- Boleh ada karakter/maskot kartun flat sederhana (bentuk SVG: kepala bulat, mata titik, badan sederhana) dan benda yang bergerak (berjalan, melambai, berkedip, memantul).\n- Deskripsikan aksi karakter per shot dengan jelas, tetap disertai teks layar besar.`
       : "";
   const PLAN_SYSTEM = planSystem(cfg) + "\n" + PLAN_RULES + kartun;
-  if (!USE_API) {
+  if (mode === "langganan") {
     const res = await runClaudeCli(
       [
         "--effort", "medium",
@@ -264,7 +278,11 @@ CODE RULES
 // API: riwayat pesan disimpan di sini. CLI: percakapan disimpan Claude Code, dilanjutkan via session id.
 // `system` disimpan agar revisi memakai prompt sistem yang sama dengan saat kode pertama ditulis.
 // `cliCostUsd` = total_cost_usd terakhir dari Claude Code, untuk menghitung biaya panggilan berikutnya.
-export type CodeSession = { messages: Anthropic.Beta.BetaMessageParam[]; cliSessionId?: string; system?: string; cliCostUsd?: number };
+// `mode` dipilih saat kode pertama ditulis, agar perbaikan dan revisi memakai cara yang sama.
+export type CodeSession = { messages: Anthropic.Beta.BetaMessageParam[]; cliSessionId?: string; system?: string; cliCostUsd?: number; mode?: AiMode };
+
+/** Mode sesi; sesi lama tanpa `mode` ditebak dari isinya. */
+const sessionMode = (s: CodeSession): AiMode => s.mode ?? (s.cliSessionId ? "langganan" : s.messages.length ? "api" : DEFAULT_MODE);
 
 function extractCode(content: Anthropic.Beta.BetaContentBlock[] | string): string {
   const text =
@@ -282,7 +300,7 @@ function extractCode(content: Anthropic.Beta.BetaContentBlock[] | string): strin
 
 async function ask(session: CodeSession, userText: string, langkah: Langkah, onUsage?: OnUsage): Promise<string> {
   const CODE_SYSTEM = session.system ?? codeSystem();
-  if (!USE_API) {
+  if (sessionMode(session) === "langganan") {
     const first = !session.cliSessionId;
     session.cliSessionId ??= randomUUID();
     const res = await runClaudeCli(
@@ -322,8 +340,9 @@ export async function writeSceneCode(
   words: SceneWord[][] = [],
   cfg: VideoConfig = DEFAULT_CONFIG,
   onUsage?: OnUsage,
+  mode: AiMode = DEFAULT_MODE,
 ): Promise<{ code: string; session: CodeSession }> {
-  const session: CodeSession = { messages: [], system: codeSystem(cfg) };
+  const session: CodeSession = { messages: [], system: codeSystem(cfg), mode };
   const brief = plan.scenes
     .map((s, i) => {
       const timing = words[i]?.length ? `\n  Word start frames: ${words[i].map((w) => `${w.t}@${w.s}`).join(" ")}` : "";

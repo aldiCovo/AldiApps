@@ -18,6 +18,7 @@ type RenderItem = {
   status: Status;
   worker: string | null;
   lastSeen: number;
+  claimedAt: number;
   reporter: Reporter;
   finish: (error: string | null) => void;
 };
@@ -60,8 +61,11 @@ function requeueStale() {
 }
 setInterval(requeueStale, 15_000).unref();
 
-/** Masukkan render ke antrean dan tunggu hasilnya. Mengembalikan null jika sukses, atau pesan error render. */
-export function renderRemote(job: JobData, code: string, outFile: string, reporter: Reporter): Promise<string | null> {
+/**
+ * Masukkan render ke antrean dan tunggu hasilnya. `error` null jika sukses. `seconds` = lama render
+ * di laptop (dari diambil sampai selesai), tanpa waktu menunggu di antrean.
+ */
+export function renderRemote(job: JobData, code: string, outFile: string, reporter: Reporter): Promise<{ error: string | null; seconds: number }> {
   return new Promise((resolve) => {
     const renderId = randomUUID();
     const item: RenderItem = {
@@ -74,10 +78,11 @@ export function renderRemote(job: JobData, code: string, outFile: string, report
       status: "waiting",
       worker: null,
       lastSeen: Date.now(),
+      claimedAt: 0,
       reporter,
       finish: (error) => {
         items.delete(renderId);
-        resolve(error);
+        resolve({ error, seconds: item.claimedAt ? (Date.now() - item.claimedAt) / 1000 : 0 });
       },
     };
     fs.rmSync(item.partFile, { force: true });
@@ -101,6 +106,7 @@ export function claimNext(worker: string) {
   it.status = "claimed";
   it.worker = worker;
   it.lastSeen = Date.now();
+  it.claimedAt = Date.now();
   it.reporter.log(`Laptop render "${worker}" mulai merender.`);
   return { renderId: it.renderId, jobId: it.jobId, job: it.job, code: it.code, files: neededFiles(it.job) };
 }

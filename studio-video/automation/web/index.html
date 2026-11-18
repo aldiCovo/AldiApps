@@ -107,9 +107,10 @@
     <header>
       <h1>Gagasan → Video</h1>
       <span class="chip" id="modeChip">…</span>
+      <span class="chip hidden" id="usageChip"></span>
       <span class="chip" id="renderChip">…</span>
       <span id="platChips"></span>
-      <span class="me hidden" id="me"><img id="meAvatar" alt="" referrerpolicy="no-referrer"><b id="meName"></b><form method="post" action="/keluar"><button class="link" type="submit">Keluar</button></form></span>
+      <span class="me hidden" id="me"><img id="meAvatar" alt="" referrerpolicy="no-referrer"><b id="meName"></b><a class="link hidden" id="adminLink" href="/admin">Admin</a><form method="post" action="/keluar"><button class="link" type="submit">Keluar</button></form></span>
     </header>
     <div id="banner" class="banner err hidden"></div>
 
@@ -374,7 +375,7 @@ function connect() {
     if (e.type === "stage") { setStage(e.stage); lockActions(true); }
     if (e.type === "progress") setBar(e);
     if (e.type === "queue") info(e.position ? `Menunggu giliran render (antrean ke-${e.position}). Halaman ini boleh ditutup.` : "Giliran Anda, produksi dimulai.");
-    if (e.type === "done") { lockActions(false); loadJobs(); if (e.jobId) openJob(e.jobId, true); }
+    if (e.type === "done") { lockActions(false); loadJobs(); api("/api/status").then(s => showUsage(s.usage)).catch(() => {}); if (e.jobId) openJob(e.jobId, true); }
     if (e.type === "error") { lockActions(false); showError("Gagal: " + e.message); loadJobs(); }
   };
   es.onerror = () => { es.close(); setTimeout(connect, 2000); };
@@ -429,11 +430,24 @@ function renderBiaya(b) {
   el.classList.toggle("hidden", !b);
   if (!b) return;
   const rinci = Object.entries(b.perLangkah).map(([k, v]) => `${LANGKAH_LABEL[k] || k} ${usd(v.usd)}${v.calls > 1 ? ` (${v.calls}×)` : ""}`).join(" · ");
-  const langganan = status && !/API key/.test(status.mode);
-  el.innerHTML = `Biaya AI: <b>${b.usdPartial ? "≥ " : ""}${usd(b.usd)}</b> · ${tok(b.tokens)} token · ${b.calls} panggilan
+  const langganan = status && /Langganan/.test(status.mode);
+  const render = b.renderSeconds ? ` · render ${Math.max(1, Math.round(b.renderSeconds / 60))} menit` : "";
+  el.innerHTML = `Biaya AI: <b>${b.usdPartial ? "≥ " : ""}${usd(b.usd)}</b> · ${tok(b.tokens)} token · ${b.calls} panggilan${render}
     <div class="rinci">${rinci}</div>
     <div class="rinci">Input ${tok(b.input)} · output ${tok(b.output)} · cache baca ${tok(b.cacheRead)} · cache tulis ${tok(b.cacheWrite)}</div>
     ${langganan ? `<div class="rinci">Perkiraan setara harga Claude API. Dengan langganan Claude, ini tidak ditagih per token.</div>` : ""}`;
+}
+
+/** Pemakaian bulan ini; kreator melihat batasnya. */
+function showUsage(u) {
+  const c = $("#usageChip");
+  if (!u) return;
+  c.classList.remove("hidden");
+  if (u.limitUsd == null) { c.textContent = `Bulan ini: ${u.videos} video · ${usd(u.usd)}`; c.title = "Setara harga Claude API; dengan langganan tidak ditagih per token."; return; }
+  const full = u.usd >= u.limitUsd;
+  c.className = "chip" + (full ? " off" : "");
+  c.textContent = `Pemakaian bulan ini: ${usd(u.usd)} dari ${usd(u.limitUsd)}`;
+  c.title = full ? "Batas tercapai. Hubungi studio@aldiab.ai.id untuk menaikkan batas." : `${u.videos} video · render ${(u.renderSeconds / 3600).toFixed(1)} jam`;
 }
 
 async function loadJobs() {
@@ -456,10 +470,12 @@ $("#newBtn").onclick = () => {
   try {
     status = await api("/api/status");
     $("#modeChip").textContent = "AI: " + status.mode;
+    showUsage(status.usage);
     $("#platChips").innerHTML = status.platforms.map(p => `<span class="chip ${p.ready ? "ok" : "off"}">${p.ready ? "✓" : "○"} ${p.name}</span>`).join(" ");
     if (status.me && status.me.openId !== "lokal") {
       $("#me").classList.remove("hidden"); $("#meName").textContent = status.me.nama;
       if (status.me.avatar) $("#meAvatar").src = status.me.avatar; else $("#meAvatar").classList.add("hidden");
+      if (status.me.role === "owner") $("#adminLink").classList.remove("hidden");
     }
     $("#plats").innerHTML = status.platforms.map(p => `<label class="plat"><input type="checkbox" value="${p.name}" ${p.ready ? "" : "disabled"}> ${p.name} ${p.ready ? "" : "<small>— belum disetel (lihat README)</small>"}</label>`).join("");
     $("#gaya").innerHTML = Object.entries(status.gaya).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");

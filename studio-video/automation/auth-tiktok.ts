@@ -1,7 +1,7 @@
 // Login TikTok sekali untuk mendapatkan refresh token (disimpan ke .env).
 import readline from "node:readline/promises";
 import { spawn } from "node:child_process";
-import { env } from "./env";
+import { env, setEnv } from "./env";
 import { tiktokAuthorizeUrl, tiktokExchangeCode } from "./upload/tiktok";
 
 const key = env("TIKTOK_CLIENT_KEY");
@@ -25,7 +25,8 @@ async function main() {
   const code = new URL(pasted).searchParams.get("code");
   if (!code) throw new Error("Tidak menemukan ?code= di URL tersebut.");
 
-  await tiktokExchangeCode(decodeURIComponent(code), redirect);
+  const t = await tiktokExchangeCode(code, redirect);
+  setEnv("TIKTOK_REFRESH_TOKEN", t.refreshToken);
   console.log("Berhasil! TIKTOK_REFRESH_TOKEN disimpan ke .env");
 }
 

@@ -77,6 +77,9 @@
   .plat { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
   .plat small { color: var(--muted); }
   .uplog { font-size: 13px; word-break: break-all; }
+  .biaya { margin: -8px 0 16px 40px; font-size: 14px; }
+  .biaya b { font-variant-numeric: tabular-nums; }
+  .biaya .rinci { color: var(--muted); font-size: 13px; margin-top: 2px; font-variant-numeric: tabular-nums; }
   .banner { padding: 12px 14px; border-radius: 12px; margin-bottom: 14px; font-size: 14px; }
   .banner.err { background: #fde8e8; color: #9b2c2c; }
   .banner.info { background: var(--warn-soft); color: #7b5410; }
@@ -181,6 +184,7 @@
     <section class="step locked" id="s5">
       <h2><span class="num">5</span> Hasil</h2>
       <p class="hint" id="resTitle"></p>
+      <div class="biaya hidden" id="biaya"></div>
       <div class="result" id="result">
         <video id="video" controls playsinline></video>
         <div>
@@ -297,7 +301,9 @@ for (const id of ["pJudul","pCaption","pDesk","pTags"]) $("#"+id).oninput = () =
 $("#addScene").onclick = () => { plan.scenes.push({ narasi: "", visual: "" }); renderScenes(); };
 
 /* ---------- draft ---------- */
-function saveDraft() { store.set("draft", { config: getConfig(), prompt: $("#prompt").value, plan }); }
+// Biaya langkah prompt & storyboard (sebelum job ada); dikirim bersama /api/produce.
+let preUsage = [];
+function saveDraft() { store.set("draft", { config: getConfig(), prompt: $("#prompt").value, plan, preUsage }); }
 ["topik","judul","durasi","gaya","audiens","gayaNarasi","suara","catatan","prompt"].forEach(id => $("#"+id).addEventListener("input", saveDraft));
 
 /* ---------- langkah ---------- */
@@ -305,7 +311,7 @@ $("#toPrompt").onclick = (e) => busyBtn(e.currentTarget, "AI menyusun prompt…"
   if (!$("#topik").value.trim()) throw new Error("Tulis gagasan Anda dulu.");
   clearBanner();
   const r = await api("/api/prompt", getConfig());
-  $("#prompt").value = r.prompt; unlock(2); markDone(1); saveDraft();
+  $("#prompt").value = r.prompt; preUsage.push(...(r.usage || [])); unlock(2); markDone(1); saveDraft();
   $("#s2").scrollIntoView({ behavior: "smooth" });
 });
 $("#rePrompt").onclick = () => $("#toPrompt").click();
@@ -315,7 +321,7 @@ $("#toPlan").onclick = (e) => busyBtn(e.currentTarget, "AI membuat storyboard…
   if (!$("#prompt").value.trim()) throw new Error("Prompt masih kosong.");
   clearBanner();
   const r = await api("/api/plan", { prompt: $("#prompt").value, config: getConfig() });
-  fillPlan(r.plan); unlock(3); markDone(2); saveDraft();
+  fillPlan(r.plan); preUsage.push(...(r.usage || [])); unlock(3); markDone(2); saveDraft();
   $("#s3").scrollIntoView({ behavior: "smooth" });
 });
 $("#toProduce").onclick = (e) => busyBtn(e.currentTarget, "Memulai…", async () => {
@@ -323,7 +329,8 @@ $("#toProduce").onclick = (e) => busyBtn(e.currentTarget, "Memulai…", async ()
   if (!p.scenes.length) throw new Error("Storyboard belum punya scene dengan narasi.");
   if (!p.judul) throw new Error("Judul masih kosong.");
   clearBanner(); resetProgress();
-  await api("/api/produce", { plan: p, prompt: $("#prompt").value, config: getConfig() });
+  await api("/api/produce", { plan: p, prompt: $("#prompt").value, config: getConfig(), usage: preUsage });
+  preUsage = []; saveDraft();
   unlock(4); markDone(3); $("#s4").scrollIntoView({ behavior: "smooth" });
 });
 
@@ -378,6 +385,7 @@ async function openJob(id, scroll) {
   unlock(5); markDone(j.hasVideo ? 5 : 3);
   const base = "/media/" + encodeURIComponent(id) + "/";
   $("#resTitle").textContent = j.plan ? j.plan.judul : id;
+  renderBiaya(j.biaya);
   $("#result").classList.toggle("landscape", (j.config && j.config.rasio) === "16:9");
   if (j.hasVideo) { $("#video").src = base + "video.mp4?t=" + Date.now(); }
   else { $("#video").removeAttribute("src"); $("#video").load(); }
@@ -406,16 +414,33 @@ $("#uploadBtn").onclick = (e) => busyBtn(e.currentTarget, "Memulai…", async ()
   $("#s4").classList.remove("locked"); $("#s4").scrollIntoView({ behavior: "smooth" });
 });
 
+/* ---------- biaya AI ---------- */
+const usd = (v) => "$" + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: v < 1 ? 3 : 2 });
+const tok = (v) => v.toLocaleString("id-ID");
+const LANGKAH_LABEL = { prompt: "prompt", storyboard: "storyboard", kode: "kode animasi", perbaikan: "perbaikan", revisi: "revisi" };
+function renderBiaya(b) {
+  const el = $("#biaya");
+  el.classList.toggle("hidden", !b);
+  if (!b) return;
+  const rinci = Object.entries(b.perLangkah).map(([k, v]) => `${LANGKAH_LABEL[k] || k} ${usd(v.usd)}${v.calls > 1 ? ` (${v.calls}×)` : ""}`).join(" · ");
+  const langganan = status && !/API key/.test(status.mode);
+  el.innerHTML = `Biaya AI: <b>${b.usdPartial ? "≥ " : ""}${usd(b.usd)}</b> · ${tok(b.tokens)} token · ${b.calls} panggilan
+    <div class="rinci">${rinci}</div>
+    <div class="rinci">Input ${tok(b.input)} · output ${tok(b.output)} · cache baca ${tok(b.cacheRead)} · cache tulis ${tok(b.cacheWrite)}</div>
+    ${langganan ? `<div class="rinci">Perkiraan setara harga Claude API. Dengan langganan Claude, ini tidak ditagih per token.</div>` : ""}`;
+}
+
 async function loadJobs() {
   const jobs = await api("/api/jobs");
   $("#jobs").innerHTML = jobs.map(j => `<button class="job" data-id="${j.id}"><div class="t">${j.judul.replace(/</g,"&lt;")}</div>
-    <div class="s">${new Date(j.created).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })} · ${j.rasio}${j.hasVideo ? "" : " · tanpa video"}${Object.keys(j.uploads).length ? " · terupload" : ""}</div></button>`).join("") || `<div class="job s">Belum ada video.</div>`;
+    <div class="s">${new Date(j.created).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })} · ${j.rasio}${j.hasVideo ? "" : " · tanpa video"}${Object.keys(j.uploads).length ? " · terupload" : ""}${j.biaya ? " · " + (j.biaya.partial ? "≥ " : "") + usd(j.biaya.usd) : ""}</div></button>`).join("") || `<div class="job s">Belum ada video.</div>`;
   document.querySelectorAll(".job[data-id]").forEach(b => b.onclick = () => openJob(b.dataset.id, true).catch(e => showError(e.message)));
 }
 
 $("#newBtn").onclick = () => {
   currentJob = null; plan = null; $("#prompt").value = ""; $("#scenes").innerHTML = ""; setConfig({ ...status.defaults, topik: "", judul: "", catatan: "" });
   for (const id of ["pJudul","pCaption","pDesk","pTags"]) $("#"+id).value = "";
+  preUsage = []; renderBiaya(null);
   unlock(1); markDone(0); clearBanner(); store.set("draft", null); document.querySelectorAll(".job").forEach(b => b.classList.remove("active"));
   window.scrollTo({ top: 0, behavior: "smooth" }); $("#topik").focus();
 };
@@ -431,7 +456,7 @@ $("#newBtn").onclick = () => {
     $("#suara").innerHTML = status.suara.map(s => `<option value="${s.id}">${s.label}</option>`).join("");
     setConfig(status.defaults);
     const d = store.get("draft");
-    if (d) { setConfig(d.config); if (d.prompt) { $("#prompt").value = d.prompt; unlock(2); markDone(1); } if (d.plan) { fillPlan(d.plan); unlock(3); markDone(2); } }
+    if (d) { if (Array.isArray(d.preUsage)) preUsage = d.preUsage; setConfig(d.config); if (d.prompt) { $("#prompt").value = d.prompt; unlock(2); markDone(1); } if (d.plan) { fillPlan(d.plan); unlock(3); markDone(2); } }
     await loadJobs();
     if (status.task) {
       status.task.logs.forEach(appendLog); setStage(status.task.stage); setBar(status.task.progress);

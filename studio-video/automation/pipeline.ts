@@ -13,6 +13,7 @@ import { facebookReady, instagramReady, uploadFacebook, uploadInstagram } from "
 import { tiktokReady, uploadTikTok } from "./upload/tiktok";
 import type { UploadInput } from "./upload/types";
 import { uploadYouTube, youtubeReady } from "./upload/youtube";
+import { readUsage, recorder, summarize, type OnUsage, type UsageEntry } from "./usage";
 
 export const FPS = 30;
 const MAX_FIX = 4;
@@ -77,7 +78,14 @@ export function writeSrt(job: JobData, file: string): void {
  * Tulis kode -> cek tipe -> render (lokal, atau lewat laptop render jika RENDER_MODE=remote).
  * Kalau gagal dan ada sesi Claude, error dikirim ke Claude untuk diperbaiki.
  */
-async function buildVideo(job: JobData, code: string, session: CodeSession | null, outFile: string, r: Reporter): Promise<string> {
+async function buildVideo(
+  job: JobData,
+  code: string,
+  session: CodeSession | null,
+  outFile: string,
+  r: Reporter,
+  onUsage?: OnUsage,
+): Promise<string> {
   const remote = remoteRenderEnabled();
   const max = session ? MAX_FIX : 1;
   for (let attempt = 1; attempt <= max; attempt++) {
@@ -94,15 +102,24 @@ async function buildVideo(job: JobData, code: string, session: CodeSession | nul
     if (!session || attempt === max) throw new Error(`Gagal setelah ${attempt} percobaan. Error terakhir:\n${error.slice(-2000)}`);
     r.stage?.("perbaikan");
     r.log("Ada error, Claude memperbaiki kode...");
-    code = await fixSceneCode(session, error);
+    code = await fixSceneCode(session, error, onUsage);
   }
   throw new Error("unreachable");
 }
 
 const saveSession = (jobDir: string, s: CodeSession) => fs.writeFileSync(path.join(jobDir, "session.json"), JSON.stringify(s));
 
-/** Produksi lengkap: suara -> kode -> cek -> render. Mengembalikan id job. */
-export async function produce(plan: Plan, prompt: string, cfgIn: Partial<VideoConfig>, r: Reporter): Promise<string> {
+/**
+ * Produksi lengkap: suara -> kode -> cek -> render. Mengembalikan id job.
+ * `preUsage` = biaya langkah prompt & storyboard, yang dijalankan sebelum job ada.
+ */
+export async function produce(
+  plan: Plan,
+  prompt: string,
+  cfgIn: Partial<VideoConfig>,
+  r: Reporter,
+  preUsage: UsageEntry[] = [],
+): Promise<string> {
   const cfg = normalizeConfig({ ...DEFAULT_CONFIG, ...cfgIn });
   const id = `${stamp()}-${slugify(plan.judul)}`;
   const jobDir = jobDirOf(id);
@@ -113,6 +130,8 @@ export async function produce(plan: Plan, prompt: string, cfgIn: Partial<VideoCo
   fs.writeFileSync(path.join(jobDir, "config.json"), JSON.stringify(cfg, null, 2));
   fs.writeFileSync(path.join(jobDir, "plan.json"), JSON.stringify(plan, null, 2));
   fs.writeFileSync(path.join(jobDir, "storyboard.json"), JSON.stringify({ config: cfg, ...plan }, null, 2));
+  const track = recorder(jobDir);
+  preUsage.forEach(track);
 
   r.stage?.("suara");
   r.log("Membuat suara narasi + timing per kata...");
@@ -149,9 +168,12 @@ export async function produce(plan: Plan, prompt: string, cfgIn: Partial<VideoCo
 
   r.stage?.("kode");
   r.log("Claude menulis kode animasi (biasanya 5-10 menit)...");
-  const { code: first, session } = await writeSceneCode(plan, durations, sceneWords, cfg);
+  const { code: first, session } = await writeSceneCode(plan, durations, sceneWords, cfg, track);
   saveSession(jobDir, session);
-  const code = await buildVideo(job, first, session, path.join(jobDir, "video.mp4"), r);
+  const code = await buildVideo(job, first, session, path.join(jobDir, "video.mp4"), r, (u) => {
+    track(u);
+    saveSession(jobDir, session); // simpan cliCostUsd agar perbaikan berikutnya tidak terhitung dua kali
+  });
   saveSession(jobDir, session);
   fs.writeFileSync(path.join(jobDir, "Scenes.tsx"), code);
   r.stage?.("selesai");
@@ -168,8 +190,13 @@ export async function revise(id: string, feedback: string, r: Reporter): Promise
   const session: CodeSession = JSON.parse(fs.readFileSync(sessFile, "utf8"));
   r.stage?.("kode");
   r.log("Claude merevisi kode animasi...");
-  const draft = await reviseSceneCode(session, feedback);
-  const code = await buildVideo(job, draft, session, path.join(jobDir, "video.mp4"), r);
+  const track = recorder(jobDir);
+  const draft = await reviseSceneCode(session, feedback, track);
+  saveSession(jobDir, session);
+  const code = await buildVideo(job, draft, session, path.join(jobDir, "video.mp4"), r, (u) => {
+    track(u);
+    saveSession(jobDir, session);
+  });
   saveSession(jobDir, session);
   fs.writeFileSync(path.join(jobDir, "Scenes.tsx"), code);
   fs.appendFileSync(path.join(jobDir, "revisi.txt"), `${new Date().toISOString()}  ${feedback}\n`);
@@ -234,7 +261,15 @@ export async function uploadJob(id: string, names: string[], r: Reporter): Promi
 
 /* ---------------- Riwayat ---------------- */
 
-export type JobSummary = { id: string; judul: string; hasVideo: boolean; rasio: string; created: string; uploads: Record<string, string> };
+export type JobSummary = {
+  id: string;
+  judul: string;
+  hasVideo: boolean;
+  rasio: string;
+  created: string;
+  uploads: Record<string, string>;
+  biaya: { usd: number; tokens: number; partial: boolean } | null; // null = video lama tanpa catatan biaya
+};
 
 const readJson = <T>(file: string, fallback: T): T => {
   try {
@@ -262,8 +297,15 @@ export function listJobs(): JobSummary[] {
         rasio: cfg.rasio ?? "9:16",
         created: fs.statSync(dir).mtime.toISOString(),
         uploads: readJson<Record<string, string>>(path.join(dir, "uploads.json"), {}),
+        biaya: biayaOf(dir),
       };
     });
+}
+
+function biayaOf(dir: string): JobSummary["biaya"] {
+  if (!fs.existsSync(path.join(dir, "usage.json"))) return null;
+  const t = summarize(readUsage(dir));
+  return { usd: t.usd, tokens: t.tokens, partial: t.usdPartial };
 }
 
 export function loadJob(id: string) {
@@ -279,5 +321,6 @@ export function loadJob(id: string) {
     canRevise: fs.existsSync(path.join(dir, "session.json")),
     canRerender: fs.existsSync(path.join(dir, "Scenes.tsx")) && fs.existsSync(path.join(dir, "job.json")),
     uploads: readJson<Record<string, string>>(path.join(dir, "uploads.json"), {}),
+    biaya: fs.existsSync(path.join(dir, "usage.json")) ? summarize(readUsage(dir)) : null,
   };
 }

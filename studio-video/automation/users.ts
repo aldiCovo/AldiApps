@@ -105,7 +105,7 @@ export function takeInvite(code: string, openId: string): boolean {
 export function revokeInvite(code: string): boolean {
   const all = listInvites();
   const inv = all.find((i) => i.code === normalizeCode(code));
-  if (!inv || inv.usedBy) return false;
+  if (!inv || inv.usedBy || inv.revoked) return false;
   inv.revoked = true;
   write(INVITES, all);
   return true;

@@ -2,8 +2,10 @@
 import fs from "node:fs";
 import path from "node:path";
 
-export type Langkah = "prompt" | "storyboard" | "kode" | "perbaikan" | "revisi";
-export const LANGKAH: Langkah[] = ["prompt", "storyboard", "kode", "perbaikan", "revisi"];
+export type Langkah = "prompt" | "storyboard" | "kode" | "perbaikan" | "revisi" | "render";
+export const LANGKAH: Langkah[] = ["prompt", "storyboard", "kode", "perbaikan", "revisi", "render"];
+/** Langkah sebelum job ada; hanya ini yang boleh dikirim dari browser. */
+export const PRE_LANGKAH: Langkah[] = ["prompt", "storyboard"];
 
 export type UsageEntry = {
   langkah: Langkah;
@@ -14,6 +16,7 @@ export type UsageEntry = {
   cacheWrite: number;
   usd: number | null; // null jika harga model tidak diketahui
   at: string;
+  seconds?: number; // langkah "render": lama render dalam detik
 };
 export type OnUsage = (u: UsageEntry) => void;
 
@@ -26,6 +29,7 @@ export type UsageTotal = {
   tokens: number;
   usd: number;
   usdPartial: boolean; // ada panggilan tanpa harga, jadi usd terlalu rendah
+  renderSeconds: number;
   perLangkah: Partial<Record<Langkah, { calls: number; tokens: number; usd: number }>>;
 };
 
@@ -45,13 +49,16 @@ export function priceUsd(model: string, t: { input: number; output: number; cach
 
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0);
 
-/** Bersihkan entri yang datang dari browser (langkah prompt/storyboard terjadi sebelum job dibuat). */
-export function cleanEntries(raw: unknown): UsageEntry[] {
+/**
+ * Bersihkan entri dari file atau dari browser. Dari browser hanya langkah prompt/storyboard yang diterima
+ * (`allowed`), dan itu hanya untuk tampilan biaya per video; tagihan memakai catatan server (ledger).
+ */
+export function cleanEntries(raw: unknown, allowed: Langkah[] = LANGKAH): UsageEntry[] {
   if (!Array.isArray(raw)) return [];
-  return raw.slice(0, 50).flatMap((e): UsageEntry[] => {
+  return raw.slice(0, 500).flatMap((e): UsageEntry[] => {
     if (!e || typeof e !== "object") return [];
     const o = e as Record<string, unknown>;
-    if (!LANGKAH.includes(o.langkah as Langkah)) return [];
+    if (!allowed.includes(o.langkah as Langkah)) return [];
     return [{
       langkah: o.langkah as Langkah,
       model: String(o.model ?? "").slice(0, 60),
@@ -61,6 +68,7 @@ export function cleanEntries(raw: unknown): UsageEntry[] {
       cacheWrite: num(o.cacheWrite),
       usd: o.usd === null ? null : num(o.usd),
       at: String(o.at ?? "").slice(0, 40),
+      ...(o.langkah === "render" ? { seconds: num(o.seconds) } : {}),
     }];
   });
 }
@@ -80,9 +88,17 @@ export function recorder(jobDir: string): OnUsage {
   return (u) => fs.writeFileSync(fileOf(jobDir), JSON.stringify([...readUsage(jobDir), u], null, 2));
 }
 
+export const renderEntry = (seconds: number): UsageEntry => ({
+  langkah: "render", model: "", input: 0, output: 0, cacheRead: 0, cacheWrite: 0, usd: 0, at: new Date().toISOString(), seconds: Math.round(seconds),
+});
+
 export function summarize(entries: UsageEntry[]): UsageTotal {
-  const t: UsageTotal = { calls: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, tokens: 0, usd: 0, usdPartial: false, perLangkah: {} };
+  const t: UsageTotal = { calls: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, tokens: 0, usd: 0, usdPartial: false, renderSeconds: 0, perLangkah: {} };
   for (const e of entries) {
+    if (e.langkah === "render") {
+      t.renderSeconds += e.seconds ?? 0;
+      continue;
+    }
     const tokens = e.input + e.output + e.cacheRead + e.cacheWrite;
     t.calls++;
     t.input += e.input;
@@ -98,4 +114,35 @@ export function summarize(entries: UsageEntry[]): UsageTotal {
     l.usd += e.usd ?? 0;
   }
   return t;
+}
+
+/* ---------------- Rekap per pengguna per bulan (untuk batas dan tagihan) ---------------- */
+
+/** Bulan WIB (UTC+7) dari waktu ISO, format YYYY-MM. */
+export const monthOf = (iso: string) => {
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? new Date(t + 7 * 3600_000).toISOString().slice(0, 7) : "";
+};
+export const thisMonth = () => monthOf(new Date().toISOString());
+
+/**
+ * Langkah prompt dan storyboard dicatat server di ledger per pengguna (bukan dari browser),
+ * karena terjadi sebelum job ada dan bisa dijalankan berkali-kali tanpa jadi video.
+ */
+const ledgerFile = (dataDir: string, key: string) => path.join(dataDir, "usage", `${key.replace(/[^\w.-]/g, "_")}.json`);
+
+export function readLedger(dataDir: string, key: string): UsageEntry[] {
+  try {
+    return cleanEntries(JSON.parse(fs.readFileSync(ledgerFile(dataDir, key), "utf8")), PRE_LANGKAH);
+  } catch {
+    return [];
+  }
+}
+
+export function appendLedger(dataDir: string, key: string, u: UsageEntry) {
+  const file = ledgerFile(dataDir, key);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify([...readLedger(dataDir, key), u], null, 2));
+  fs.renameSync(tmp, file);
 }

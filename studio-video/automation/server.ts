@@ -184,6 +184,8 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
   const m = req.method ?? "GET";
 
   if (m === "GET" && (p === "/" || p === "/index.html")) return sendFile(req, res, path.join(WEB, "index.html"));
+  // Halaman publik untuk app TikTok (Cloudflare Access membiarkan path ini tanpa login).
+  if (m === "GET" && (p === "/terms" || p === "/privacy")) return sendFile(req, res, path.join(WEB, `${p.slice(1)}.html`));
 
   if (m === "GET" && p === "/api/tiktok/login") {
     if (!tiktokKeys()) return backToStudio(res, "Isi TIKTOK_CLIENT_KEY dan TIKTOK_CLIENT_SECRET di .env server dulu, lalu restart Studio.");

@@ -13,7 +13,9 @@ import { facebookReady, instagramReady, uploadFacebook, uploadInstagram } from "
 import { tiktokReady, uploadTikTok } from "./upload/tiktok";
 import type { UploadInput } from "./upload/types";
 import { uploadYouTube, youtubeReady } from "./upload/youtube";
-import { readUsage, recorder, summarize, type OnUsage, type UsageEntry } from "./usage";
+import type { AiMode } from "./claude";
+import { DATA_DIR } from "./users";
+import { monthOf, PRE_LANGKAH, readLedger, readUsage, recorder, renderEntry, summarize, type OnUsage, type UsageEntry, type UsageTotal } from "./usage";
 
 export const FPS = 30;
 const MAX_FIX = 4;
@@ -96,7 +98,15 @@ async function buildVideo(
     if (!error) {
       r.stage?.("render");
       r.log(`[${attempt}/${max}] Render video ${remote ? "di laptop render" : "di komputer ini"}...`);
-      error = remote ? await renderRemote(job, code, outFile, r) : await render(outFile, r.progress);
+      const started = Date.now();
+      if (remote) {
+        const out = await renderRemote(job, code, outFile, r);
+        error = out.error;
+        onUsage?.(renderEntry(out.seconds));
+      } else {
+        error = await render(outFile, r.progress);
+        onUsage?.(renderEntry((Date.now() - started) / 1000));
+      }
     }
     if (!error) return code;
     if (!session || attempt === max) throw new Error(`Gagal setelah ${attempt} percobaan. Error terakhir:\n${error.slice(-2000)}`);
@@ -121,6 +131,7 @@ export async function produce(
   preUsage: UsageEntry[] = [],
   ownerId: string | null = null, // openId pemilik; null = pemilik Studio (CLI, video lama)
   onCreated?: (id: string) => void,
+  mode?: AiMode, // kosong = DEFAULT_MODE (CLI/laptop)
 ): Promise<string> {
   const cfg = normalizeConfig({ ...DEFAULT_CONFIG, ...cfgIn });
   const id = `${stamp()}-${slugify(plan.judul)}`;
@@ -172,7 +183,7 @@ export async function produce(
 
   r.stage?.("kode");
   r.log("Claude menulis kode animasi (biasanya 5-10 menit)...");
-  const { code: first, session } = await writeSceneCode(plan, durations, sceneWords, cfg, track);
+  const { code: first, session } = await writeSceneCode(plan, durations, sceneWords, cfg, track, mode);
   saveSession(jobDir, session);
   const code = await buildVideo(job, first, session, path.join(jobDir, "video.mp4"), r, (u) => {
     track(u);
@@ -217,7 +228,7 @@ export async function rerender(id: string, r: Reporter): Promise<void> {
   const job: JobData = JSON.parse(fs.readFileSync(jobFile, "utf8"));
   ensureSfx(path.join(ROOT, "public"));
   r.log("Render ulang dari kode tersimpan...");
-  await buildVideo(job, fs.readFileSync(codeFile, "utf8"), null, path.join(jobDir, "video.mp4"), r);
+  await buildVideo(job, fs.readFileSync(codeFile, "utf8"), null, path.join(jobDir, "video.mp4"), r, recorder(jobDir));
   r.stage?.("selesai");
   r.log("Render ulang selesai.");
 }
@@ -333,4 +344,28 @@ export function loadJob(id: string) {
     uploads: readJson<Record<string, string>>(path.join(dir, "uploads.json"), {}),
     biaya: fs.existsSync(path.join(dir, "usage.json")) ? summarize(readUsage(dir)) : null,
   };
+}
+
+/* ---------------- Rekap pemakaian per pengguna per bulan ---------------- */
+
+export type MonthlyUsage = UsageTotal & { videos: number };
+
+/**
+ * Pemakaian satu pengguna di bulan (YYYY-MM, WIB): ledger prompt/storyboard dari server, ditambah langkah
+ * kode, perbaikan, revisi, dan render dari job miliknya. Langkah prompt/storyboard di usage.json job
+ * dilewati, karena berasal dari browser dan sudah tercatat di ledger.
+ * `openId` null = pemilik Studio (job tanpa owner.json).
+ */
+export function monthlyUsage(openId: string | null, ledgerKey: string, month: string): MonthlyUsage {
+  const entries: UsageEntry[] = readLedger(DATA_DIR, ledgerKey).filter((e) => monthOf(e.at) === month);
+  let videos = 0;
+  if (fs.existsSync(JOBS_DIR)) {
+    for (const d of fs.readdirSync(JOBS_DIR)) {
+      if (d.startsWith("_") || jobOwner(d) !== openId) continue;
+      const own = readUsage(path.join(JOBS_DIR, d)).filter((e) => !PRE_LANGKAH.includes(e.langkah) && monthOf(e.at) === month);
+      if (own.some((e) => e.langkah === "kode")) videos++;
+      entries.push(...own);
+    }
+  }
+  return { ...summarize(entries), videos };
 }

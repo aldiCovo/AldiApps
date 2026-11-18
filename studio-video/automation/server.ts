@@ -5,14 +5,14 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
-import { makeMasterPrompt, makePlan, PlanSchema, USE_API } from "./claude";
+import { apiKeyReady, makeMasterPrompt, makePlan, MODE_LABEL, PlanSchema, type AiMode } from "./claude";
 import { DEFAULT_CONFIG, GAYA_LABEL, normalizeConfig, SUARA } from "./config";
 import { env, ROOT } from "./env";
-import { jobDirOf, jobOwner, listJobs, loadJob, PLATFORMS, produce, rerender, revise, uploadJob, type Reporter, type Stage } from "./pipeline";
-import { cleanEntries, type UsageEntry } from "./usage";
+import { jobDirOf, jobOwner, listJobs, loadJob, monthlyUsage, PLATFORMS, produce, rerender, revise, uploadJob, type Reporter, type Stage } from "./pipeline";
+import { appendLedger, cleanEntries, PRE_LANGKAH, thisMonth, type UsageEntry } from "./usage";
 import { clearCookie, sameOrigin, sessionCookie, sessionUser } from "./session";
 import { tiktokAuthorizeUrl, tiktokExchangeCode, tiktokKeys, tiktokProfile } from "./upload/tiktok";
-import { getUser, inviteUsable, newUser, normalizeCode, owner, publicUser, saveUser, takeInvite, updateUser, type User } from "./users";
+import { createInvite, DATA_DIR, getUser, inviteUsable, listInvites, listUsers, newUser, normalizeCode, owner, publicUser, revokeInvite, saveUser, takeInvite, updateUser, type User } from "./users";
 import { viaAccess } from "./access";
 import { appendChunk, checkWorkerAuth, claimNext, complete, fail, isNeededFile, reportProgress, workerStatus } from "./queue";
 
@@ -252,6 +252,20 @@ async function currentUser(req: http.IncomingMessage): Promise<User | null> {
   return null;
 }
 
+/* ---------------- Mode Claude, pemakaian, dan batas ---------------- */
+
+// Video pemilik memakai langganan Claude-nya; video kreator memakai API key (dibayar per pemakaian).
+const modeFor = (u: User): AiMode => (u.role === "owner" ? "langganan" : "api");
+
+/** Pemakaian bulan ini. Pemilik: gabungan job tanpa owner.json (lama/laptop) dan job dengan openId-nya. */
+function usageFor(u: User, month = thisMonth()) {
+  if (u.role !== "owner") return monthlyUsage(u.openId, u.openId, month);
+  const a = monthlyUsage(null, LOCAL_ID, month);
+  if (u.openId === LOCAL_ID) return a;
+  const b = monthlyUsage(u.openId, u.openId, month);
+  return { ...b, usd: a.usd + b.usd, tokens: a.tokens + b.tokens, calls: a.calls + b.calls, videos: a.videos + b.videos, renderSeconds: a.renderSeconds + b.renderSeconds };
+}
+
 /* ---------------- Rute ---------------- */
 
 async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
@@ -329,6 +343,12 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
   if (m === "POST" && p === "/keluar") return redirect(res, "/", clearCookie(req));
 
   const isOwner = me.role === "owner";
+
+  // Admin: dikunci Cloudflare Access di tepi, dan di sini dicek lagi (token Access sah + peran pemilik).
+  if (p === "/admin" || p.startsWith("/admin/")) {
+    if (!isOwner || !(await viaAccess(req))) return json(res, 403, { error: "Khusus pemilik Studio." });
+    return handleAdmin(req, res, url, p, m);
+  }
   const mine = (id: string) => {
     const o = jobOwner(id);
     return o === me.openId || (o === null && isOwner);
@@ -337,8 +357,28 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
   /** true = sudah dijawab 403 (bukan pemilik), route harus berhenti. */
   const ownerOnly = () => {
     if (isOwner) return false;
-    json(res, 403, { error: `Studio untuk kreator segera dibuka. Info: ${KONTAK}` });
+    json(res, 403, { error: `Upload TikTok untuk kreator segera dibuka. Info: ${KONTAK}` });
     return true;
+  };
+  /** Kreator: API key harus ada dan pemakaian bulan ini di bawah batas. true = sudah dijawab, route berhenti. */
+  const creatorGate = () => {
+    if (isOwner) return false;
+    if (!apiKeyReady()) {
+      json(res, 503, { error: `Studio belum siap untuk kreator. Info: ${KONTAK}` });
+      return true;
+    }
+    const used = usageFor(me).usd;
+    if (used >= me.limitUsd) {
+      json(res, 403, { error: `Batas pemakaian bulan ini sudah tercapai ($${used.toFixed(2)} dari $${me.limitUsd.toFixed(2)}). Hubungi ${KONTAK} untuk menaikkan batas.` });
+      return true;
+    }
+    return false;
+  };
+  const mode = modeFor(me);
+  /** Catat langkah prompt/storyboard di server (dasar tagihan), sekaligus kembalikan ke browser untuk tampilan. */
+  const ledger = (usage: UsageEntry[]) => (u: UsageEntry) => {
+    usage.push(u);
+    appendLedger(DATA_DIR, me.openId, u);
   };
 
   if (m === "GET" && p === "/api/status") {
@@ -346,7 +386,8 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
     const render = workerStatus();
     return json(res, 200, {
       me: publicUser(me),
-      mode: USE_API ? "API key (bayar per pemakaian)" : "Langganan Claude (Claude Code)",
+      mode: MODE_LABEL[modeFor(me)],
+      usage: (({ usd, tokens, videos, renderSeconds }) => ({ month: thisMonth(), usd, tokens, videos, renderSeconds, limitUsd: isOwner ? null : me.limitUsd }))(usageFor(me)),
       platforms: PLATFORMS.filter((x) => isOwner || x.name === "TikTok").map((x) => ({ name: x.name, ready: x.ready() })),
       tiktokKeys: tiktokKeys(),
       defaults: DEFAULT_CONFIG,
@@ -388,32 +429,32 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
   }
 
   if (m === "POST" && p === "/api/prompt") {
-    if (ownerOnly()) return;
+    if (creatorGate()) return;
     const body = await readBody(req);
     const cfg = normalizeConfig(body as never);
     if (!cfg.topik) return json(res, 400, { error: "Gagasan masih kosong." });
     return jsonKeepAlive(res, async () => {
       const usage: UsageEntry[] = [];
-      const prompt = await makeMasterPrompt(cfg, (u) => usage.push(u));
+      const prompt = await makeMasterPrompt(cfg, ledger(usage), mode);
       return { prompt, config: cfg, usage };
     });
   }
 
   if (m === "POST" && p === "/api/plan") {
-    if (ownerOnly()) return;
+    if (creatorGate()) return;
     const body = await readBody(req);
     const cfg = normalizeConfig((body.config ?? {}) as never);
     const prompt = String(body.prompt ?? "").trim();
     if (!prompt) return json(res, 400, { error: "Prompt masih kosong." });
     return jsonKeepAlive(res, async () => {
       const usage: UsageEntry[] = [];
-      const plan = await makePlan(prompt, cfg, (u) => usage.push(u));
+      const plan = await makePlan(prompt, cfg, ledger(usage), mode);
       return { plan, usage };
     });
   }
 
   if (m === "POST" && p === "/api/produce") {
-    if (ownerOnly()) return;
+    if (creatorGate()) return;
     if (busy(me.openId)) return json(res, 409, { error: "Masih ada proses berjalan. Tunggu sampai selesai." });
     const body = await readBody(req);
     const parsed = PlanSchema.safeParse(body.plan);
@@ -422,14 +463,14 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
     plan.scenes = plan.scenes.filter((s) => s.narasi.trim());
     const cfg = normalizeConfig((body.config ?? {}) as never);
     const prompt = String(body.prompt ?? cfg.topik);
-    const preUsage = cleanEntries(body.usage);
+    const preUsage = cleanEntries(body.usage, PRE_LANGKAH); // hanya untuk tampilan biaya per video
     const ownerId = me.openId === LOCAL_ID ? null : me.openId;
-    startTask(me, "produksi", null, (r, t) => produce(plan, prompt, cfg, r, preUsage, ownerId, (id) => (t.jobId = id)));
+    startTask(me, "produksi", null, (r, t) => produce(plan, prompt, cfg, r, preUsage, ownerId, (id) => (t.jobId = id), mode));
     return json(res, 202, { ok: true });
   }
 
   if (m === "POST" && p === "/api/revise") {
-    if (ownerOnly()) return;
+    if (creatorGate()) return;
     if (busy(me.openId)) return json(res, 409, { error: "Masih ada proses berjalan." });
     const body = await readBody(req);
     const id = safeId(String(body.jobId ?? ""));
@@ -455,7 +496,7 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
   }
 
   if (m === "POST" && p === "/api/rerender") {
-    if (ownerOnly()) return;
+    if (creatorGate()) return;
     if (busy(me.openId)) return json(res, 409, { error: "Masih ada proses berjalan." });
     const body = await readBody(req);
     const id = safeId(String(body.jobId ?? ""));
@@ -474,6 +515,91 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
   }
 
   json(res, 404, { error: "Tidak ditemukan" });
+}
+
+/* ----- Admin: undangan, kreator, batas, dan rekap biaya ----- */
+
+const csvCell = (v: unknown) => {
+  let t = String(v ?? "");
+  // Nama dari TikTok bisa diawali = + - @, yang dibaca Excel sebagai rumus.
+  if (typeof v === "string" && /^[=+\-@\t\r]/.test(t)) t = "'" + t;
+  return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+};
+
+async function handleAdmin(req: http.IncomingMessage, res: http.ServerResponse, url: URL, p: string, m: string) {
+  const bulanParam = url.searchParams.get("bulan") ?? "";
+  const bulan = /^\d{4}-\d{2}$/.test(bulanParam) ? bulanParam : thisMonth();
+
+  if (m === "GET" && p === "/admin") return sendFile(req, res, path.join(WEB, "admin.html"));
+
+  const rows = () =>
+    listUsers().map((u) => {
+      const x = usageFor(u, bulan);
+      return {
+        ...publicUser(u),
+        disabled: u.disabled,
+        invite: u.invite,
+        createdAt: u.createdAt,
+        lastLoginAt: u.lastLoginAt,
+        tiktok: Boolean(u.tiktok),
+        usage: { videos: x.videos, calls: x.calls, tokens: x.tokens, usd: x.usd, usdPartial: x.usdPartial, renderSeconds: x.renderSeconds },
+      };
+    });
+
+  if (m === "GET" && p === "/admin/api/data") {
+    const base = `https://${req.headers.host}/masuk?undangan=`;
+    return json(res, 200, {
+      bulan,
+      apiKeyReady: apiKeyReady(),
+      users: rows(),
+      invites: listInvites().reverse().map((i) => ({ ...i, link: base + i.code })),
+    });
+  }
+
+  if (m === "GET" && p === "/admin/api/rekap.csv") {
+    const head = ["bulan", "nama", "open_id", "peran", "video", "panggilan_ai", "token", "usd_harga_api", "jam_render", "batas_usd"];
+    const lines = rows().map((u) =>
+      [bulan, u.nama, u.openId, u.role, u.usage.videos, u.usage.calls, u.usage.tokens, u.usage.usd.toFixed(4), (u.usage.renderSeconds / 3600).toFixed(2), u.role === "owner" ? "" : u.limitUsd]
+        .map(csvCell)
+        .join(","),
+    );
+    res.writeHead(200, {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="aldi-studio-rekap-${bulan}.csv"`,
+      "Cache-Control": "no-store",
+    });
+    return res.end([head.join(","), ...lines].join("\n") + "\n");
+  }
+
+  if (m === "POST" && p === "/admin/api/invite") {
+    const body = await readBody(req);
+    const inv = createInvite(String(body.catatan ?? ""));
+    return json(res, 200, { ...inv, link: `https://${req.headers.host}/masuk?undangan=${inv.code}` });
+  }
+
+  if (m === "POST" && p === "/admin/api/invite/revoke") {
+    const body = await readBody(req);
+    return revokeInvite(String(body.code ?? "")) ? json(res, 200, { ok: true }) : json(res, 400, { error: "Undangan tidak ada atau sudah dipakai." });
+  }
+
+  if (m === "POST" && p === "/admin/api/user") {
+    const body = await readBody(req);
+    const u = getUser(String(body.openId ?? ""));
+    if (!u) return json(res, 404, { error: "Pengguna tidak ditemukan" });
+    const patch: Partial<User> = {};
+    if (body.limitUsd !== undefined) {
+      const v = Number(body.limitUsd);
+      if (!Number.isFinite(v) || v < 0 || v > 10000) return json(res, 400, { error: "Batas harus angka 0 sampai 10000." });
+      patch.limitUsd = Math.round(v * 100) / 100;
+    }
+    if (body.disabled !== undefined) {
+      if (u.role === "owner") return json(res, 400, { error: "Pemilik tidak bisa dinonaktifkan." });
+      patch.disabled = Boolean(body.disabled);
+    }
+    return json(res, 200, publicUser(updateUser(u.openId, patch)!));
+  }
+
+  return json(res, 404, { error: "Tidak ditemukan" });
 }
 
 /* ----- API worker (laptop render). Wajib header Authorization: Bearer <WORKER_TOKEN> ----- */

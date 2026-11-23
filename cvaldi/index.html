@@ -193,8 +193,8 @@ footer span:last-child{font-family:var(--mono)}
   <div class="metrics" aria-label="Career highlights">
     <div class="metric"><strong data-i18n="m1">7+ yrs</strong><span data-i18n="m1s">Software engineering experience</span></div>
     <div class="metric"><strong>Kubernetes</strong><span data-i18n="m2s">Container orchestration & operations</span></div>
-    <div class="metric"><strong data-i18n="m3">2 yrs</strong><span data-i18n="m3s">ND6 Bug Team leadership</span></div>
-    <div class="metric"><strong>Full stack</strong><span data-i18n="m4s">Java · APIs · SQL · web apps</span></div>
+    <div class="metric"><strong>GitOps</strong><span data-i18n="m3s">ArgoCD · Jenkins · Bitbucket Pipelines</span></div>
+    <div class="metric"><strong data-i18n="m4">4 live apps</strong><span data-i18n="m4s">Self-hosted on my own Kubernetes cluster</span></div>
   </div>
 
   <div class="content">
@@ -213,7 +213,7 @@ footer span:last-child{font-family:var(--mono)}
         <h2 data-i18n="tSkills" class="section-title">Core Skills</h2>
         <div class="skill-group"><h3 data-i18n="g1">Containers & orchestration</h3><div class="chips"><span class="chip blue">Docker</span><span class="chip blue">Kubernetes</span><span class="chip blue">NGINX Ingress</span><span class="chip blue">Traefik</span><span class="chip blue">Helm</span><span class="chip blue">Kustomize</span></div></div>
         <div class="skill-group"><h3 data-i18n="g2">CI/CD & source control</h3><div class="chips"><span class="chip teal">Jenkins</span><span class="chip teal">Bitbucket Pipelines</span><span class="chip teal">Git</span><span class="chip teal">ArgoCD (GitOps)</span><span class="chip teal">GHCR</span></div></div>
-        <div class="skill-group"><h3 data-i18n="g3">Cloud & operating systems</h3><div class="chips"><span class="chip gold">BytePlus</span><span class="chip gold">Linux</span><span class="chip gold">Cloudflare (Tunnel · Access · DNS)</span><span class="chip gold">MetalLB</span></div></div>
+        <div class="skill-group"><h3 data-i18n="g3">Cloud & operating systems</h3><div class="chips"><span class="chip gold">BytePlus</span><span class="chip gold">Linux</span><span class="chip gold">Bash</span><span class="chip gold">Cloudflare (Tunnel · Access · DNS)</span><span class="chip gold">MetalLB</span></div></div>
         <div class="skill-group"><h3 data-i18n="g7">Observability</h3><div class="chips"><span class="chip">Prometheus</span><span class="chip">Grafana</span><span class="chip">Loki</span><span class="chip">Alertmanager</span></div></div>
         <div class="skill-group"><h3 data-i18n="g4">Databases</h3><div class="chips"><span class="chip">MySQL</span><span class="chip">PostgreSQL</span><span class="chip">MongoDB</span><span class="chip">Oracle</span><span class="chip">Elasticsearch</span><span class="chip">RabbitMQ</span><span class="chip">NATS</span></div></div>
         <div class="skill-group"><h3 data-i18n="g5">Software development</h3><div class="chips"><span class="chip">Java</span><span class="chip">Spring Boot</span><span class="chip">JavaScript</span><span class="chip">React JS</span><span class="chip">PHP</span><span class="chip">Go</span><span class="chip">SQL</span></div></div>
@@ -297,7 +297,7 @@ footer span:last-child{font-family:var(--mono)}
             <div class="org" data-i18n="p1o">Personal project · self-hosted on AldiServer</div>
             <ul>
               <li data-i18n="p1a">Built and operate a single-node kubeadm Kubernetes cluster with MetalLB, Traefik ingress, and Cloudflare Tunnel, serving public HTTPS sites without opening any inbound ports; private apps sit behind Cloudflare Access.</li>
-              <li data-i18n="p1b">Set up GitOps delivery with ArgoCD: application code and Kustomize manifests live in separate repositories, a build script pushes commit-tagged images to GHCR and bumps the manifest tag, and ArgoCD syncs it to the cluster.</li>
+              <li data-i18n="p1b">Set up GitOps delivery with ArgoCD: application code and Kustomize manifests live in separate repositories, a Bash build script pushes commit-tagged images to GHCR and bumps the manifest tag, and ArgoCD syncs it to the cluster.</li>
               <li data-i18n="p1c">Run four live applications: this CV, an e-commerce shop of 10 Go microservices (PostgreSQL, Elasticsearch, RabbitMQ, NATS, WebSockets), a daily stock-signal service, and an AI video studio with a remote render worker.</li>
               <li data-i18n="p1d">Built the monitoring stack: Prometheus, Alertmanager, Grafana, Loki with Grafana Alloy, plus node, blackbox, PostgreSQL, NATS and kube-state-metrics exporters.</li>
             </ul>
@@ -321,9 +321,9 @@ footer span:last-child{font-family:var(--mono)}
  "m1": "7+ thn",
  "m1s": "Pengalaman software engineering",
  "m2s": "Orkestrasi & operasional container",
- "m3": "2 thn",
- "m3s": "Memimpin ND6 Bug Team",
- "m4s": "Java · API · SQL · aplikasi web",
+ "m3s": "ArgoCD · Jenkins · Bitbucket Pipelines",
+ "m4": "4 aplikasi live",
+ "m4s": "Self-hosted di cluster Kubernetes milik sendiri",
  "tContact": "Kontak",
  "tSkills": "Keahlian Utama",
  "tEdu": "Pendidikan",
@@ -370,7 +370,7 @@ footer span:last-child{font-family:var(--mono)}
  "p1w": "OKT 2026 — SEKARANG",
  "p1o": "Proyek pribadi · self-hosted di AldiServer",
  "p1a": "Membangun dan mengoperasikan cluster Kubernetes kubeadm single-node dengan MetalLB, ingress Traefik, dan Cloudflare Tunnel, sehingga situs HTTPS publik berjalan tanpa membuka port masuk; aplikasi privat dilindungi Cloudflare Access.",
- "p1b": "Menyiapkan delivery GitOps dengan ArgoCD: kode aplikasi dan manifest Kustomize dipisah di dua repository, script build mendorong image bertag commit ke GHCR dan memperbarui tag di manifest, lalu ArgoCD menyinkronkannya ke cluster.",
+ "p1b": "Menyiapkan delivery GitOps dengan ArgoCD: kode aplikasi dan manifest Kustomize dipisah di dua repository, script build Bash mendorong image bertag commit ke GHCR dan memperbarui tag di manifest, lalu ArgoCD menyinkronkannya ke cluster.",
  "p1c": "Menjalankan empat aplikasi live: CV ini, toko e-commerce dengan 10 microservice Go (PostgreSQL, Elasticsearch, RabbitMQ, NATS, WebSocket), layanan sinyal saham harian, dan studio video AI dengan worker render terpisah.",
  "p1d": "Membangun stack monitoring: Prometheus, Alertmanager, Grafana, Loki dengan Grafana Alloy, serta exporter node, blackbox, PostgreSQL, NATS, dan kube-state-metrics.",
  "tagDb": "Database",

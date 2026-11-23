@@ -192,9 +192,9 @@ footer span:last-child{font-family:var(--mono)}
 
   <div class="metrics" aria-label="Career highlights">
     <div class="metric"><strong data-i18n="m1">7+ yrs</strong><span data-i18n="m1s">Software engineering experience</span></div>
-    <div class="metric"><strong>Kubernetes</strong><span data-i18n="m2s">Container orchestration & operations</span></div>
-    <div class="metric"><strong>GitOps</strong><span data-i18n="m3s">ArgoCD · Jenkins · Bitbucket Pipelines</span></div>
-    <div class="metric"><strong data-i18n="m4">4 live apps</strong><span data-i18n="m4s">Self-hosted on my own Kubernetes cluster</span></div>
+    <div class="metric"><strong data-i18n="m2">3 K8s clusters</strong><span data-i18n="m2s">22 nodes · 4 data centers</span></div>
+    <div class="metric"><strong data-i18n="m3">160+ apps</strong><span data-i18n="m3s">Delivered with ArgoCD GitOps</span></div>
+    <div class="metric"><strong data-i18n="m4">900+ pods</strong><span data-i18n="m4s">Production, staging & sandbox</span></div>
   </div>
 
   <div class="content">
@@ -211,8 +211,8 @@ footer span:last-child{font-family:var(--mono)}
 
       <section>
         <h2 data-i18n="tSkills" class="section-title">Core Skills</h2>
-        <div class="skill-group"><h3 data-i18n="g1">Containers & orchestration</h3><div class="chips"><span class="chip blue">Docker</span><span class="chip blue">Kubernetes</span><span class="chip blue">NGINX Ingress</span><span class="chip blue">Traefik</span><span class="chip blue">Helm</span><span class="chip blue">Kustomize</span></div></div>
-        <div class="skill-group"><h3 data-i18n="g2">CI/CD & source control</h3><div class="chips"><span class="chip teal">Jenkins</span><span class="chip teal">Bitbucket Pipelines</span><span class="chip teal">Git</span><span class="chip teal">ArgoCD (GitOps)</span><span class="chip teal">GHCR</span></div></div>
+        <div class="skill-group"><h3 data-i18n="g1">Containers & orchestration</h3><div class="chips"><span class="chip blue">Docker</span><span class="chip blue">Kubernetes (MicroK8s · kubeadm)</span><span class="chip blue">Docker Compose</span><span class="chip blue">NGINX Ingress</span><span class="chip blue">Traefik</span><span class="chip blue">Helm</span><span class="chip blue">Kustomize</span></div></div>
+        <div class="skill-group"><h3 data-i18n="g2">CI/CD & source control</h3><div class="chips"><span class="chip teal">Jenkins</span><span class="chip teal">Bitbucket Pipelines</span><span class="chip teal">Git</span><span class="chip teal">ArgoCD (GitOps)</span><span class="chip teal">Sealed Secrets</span><span class="chip teal">Nexus</span><span class="chip teal">GHCR</span></div></div>
         <div class="skill-group"><h3 data-i18n="g3">Cloud & operating systems</h3><div class="chips"><span class="chip gold">BytePlus</span><span class="chip gold">Linux</span><span class="chip gold">Bash</span><span class="chip gold">Cloudflare (Tunnel · Access · DNS)</span><span class="chip gold">MetalLB</span></div></div>
         <div class="skill-group"><h3 data-i18n="g7">Observability</h3><div class="chips"><span class="chip">Prometheus</span><span class="chip">Grafana</span><span class="chip">Loki</span><span class="chip">Alertmanager</span></div></div>
         <div class="skill-group"><h3 data-i18n="g4">Databases</h3><div class="chips"><span class="chip">MySQL</span><span class="chip">PostgreSQL</span><span class="chip">MongoDB</span><span class="chip">Oracle</span><span class="chip">Elasticsearch</span><span class="chip">RabbitMQ</span><span class="chip">NATS</span></div></div>
@@ -250,9 +250,10 @@ footer span:last-child{font-family:var(--mono)}
             <div class="job-head"><h3>DevOps Engineer</h3><span data-i18n="when1" class="when">JAN 2026 — PRESENT</span></div>
             <div class="org">PT. Paramadaksa Teknologi Nusantara (NEXSOFT)</div>
             <ul>
-              <li data-i18n="li14">Manage infrastructure across 4 data centers in Jakarta and Yogyakarta, alongside BytePlus cloud environments.</li>
+              <li data-i18n="li14">Operate 3 MicroK8s Kubernetes clusters (22 nodes: 2 production, 1 staging/sandbox) and infrastructure across 4 data centers in Jakarta and Yogyakarta, running 750+ deployments and 900+ pods.</li>
+              <li data-i18n="li15">Deliver 160+ applications through ArgoCD GitOps from a central Bitbucket repository, with Sealed Secrets keeping secrets safe in Git.</li>
+              <li data-i18n="li16">Run 170 Docker Compose containers outside Kubernetes, covering staging and sandbox environments and internal platforms such as Nexus, a private image registry, Redmine, and Confluence.</li>
               <li data-i18n="li0">Build and maintain CI/CD workflows using Jenkins and Bitbucket Pipelines to streamline build, test, and deployment processes.</li>
-              <li data-i18n="li1">Build, package, and deploy applications as Docker containers across Kubernetes environments.</li>
               <li data-i18n="li2">Operate Kubernetes workloads, including deployments, services, ConfigMaps, scaling, and rolling updates.</li>
               <li data-i18n="li3">Configure NGINX Ingress for application routing, traffic management, and TLS/SSL termination.</li>
               <li data-i18n="li4">Provision and manage BytePlus cloud infrastructure, including compute, Kubernetes, and networking resources.</li>
@@ -260,7 +261,7 @@ footer span:last-child{font-family:var(--mono)}
               <li data-i18n="li6">Manage MySQL, PostgreSQL, and MongoDB operations, including backup/restore, troubleshooting, and performance tuning.</li>
               <li data-i18n="li7">Monitor application and infrastructure health, investigate production issues, and support service stability and availability.</li>
             </ul>
-            <div class="tags"><span>Docker</span><span>Kubernetes</span><span>Jenkins</span><span>Bitbucket</span><span>BytePlus</span><span>NGINX</span><span>Linux</span><span data-i18n="tagDb">Databases</span></div>
+            <div class="tags"><span>Docker</span><span>Kubernetes</span><span>MicroK8s</span><span>ArgoCD</span><span>Jenkins</span><span>Bitbucket</span><span>BytePlus</span><span>NGINX</span><span>Linux</span><span data-i18n="tagDb">Databases</span></div>
           </article>
 
           <article class="job">
@@ -321,10 +322,12 @@ footer span:last-child{font-family:var(--mono)}
  "print": "↓ Simpan PDF",
  "m1": "7+ thn",
  "m1s": "Pengalaman software engineering",
- "m2s": "Orkestrasi & operasional container",
- "m3s": "ArgoCD · Jenkins · Bitbucket Pipelines",
- "m4": "4 aplikasi live",
- "m4s": "Self-hosted di cluster Kubernetes milik sendiri",
+ "m2": "3 cluster K8s",
+ "m2s": "22 node · 4 data center",
+ "m3": "160+ aplikasi",
+ "m3s": "Dikirim lewat GitOps ArgoCD",
+ "m4": "900+ pod",
+ "m4s": "Production, staging & sandbox",
  "tContact": "Kontak",
  "tSkills": "Keahlian Utama",
  "tEdu": "Pendidikan",
@@ -352,9 +355,10 @@ footer span:last-child{font-family:var(--mono)}
  "pp3s": "Memprioritaskan insiden, mengoordinasikan perbaikan, me-review perubahan, dan memastikan penyelesaian.",
  "when1": "JAN 2026 — SEKARANG",
  "when2": "AGU 2019 — DES 2025",
- "li14": "Mengelola infrastruktur di 4 data center di Jakarta dan Yogyakarta, berdampingan dengan lingkungan cloud BytePlus.",
+ "li14": "Mengoperasikan 3 cluster Kubernetes MicroK8s (22 node: 2 production, 1 staging/sandbox) dan infrastruktur di 4 data center di Jakarta dan Yogyakarta, dengan 750+ deployment dan 900+ pod.",
+ "li15": "Mengirim 160+ aplikasi lewat GitOps ArgoCD dari satu repository Bitbucket terpusat, dengan Sealed Secrets untuk menyimpan secret dengan aman di Git.",
+ "li16": "Menjalankan 170 container Docker Compose di luar Kubernetes, untuk lingkungan staging dan sandbox serta platform internal seperti Nexus, private image registry, Redmine, dan Confluence.",
  "li0": "Membangun dan memelihara alur CI/CD menggunakan Jenkins dan Bitbucket Pipelines untuk menyederhanakan proses build, testing, dan deployment.",
- "li1": "Membangun, mengemas, dan men-deploy aplikasi sebagai container Docker di lingkungan Kubernetes.",
  "li2": "Mengoperasikan workload Kubernetes, termasuk deployment, service, ConfigMap, scaling, dan rolling update.",
  "li3": "Mengonfigurasi NGINX Ingress untuk routing aplikasi, pengelolaan trafik, dan terminasi TLS/SSL.",
  "li4": "Menyiapkan dan mengelola infrastruktur cloud BytePlus, termasuk resource compute, Kubernetes, dan jaringan.",

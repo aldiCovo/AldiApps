@@ -4,7 +4,8 @@ import { fetchJson, sleep, type UploadInput } from "./types";
 
 const API = "https://open.tiktokapis.com/v2";
 
-export const TIKTOK_SCOPE = "user.info.basic,video.publish,video.upload";
+// Hanya yang dipakai: profil dasar (login) dan Direct Post.
+export const TIKTOK_SCOPE = "user.info.basic,video.publish";
 
 export const tiktokKeys = () => Boolean(env("TIKTOK_CLIENT_KEY") && env("TIKTOK_CLIENT_SECRET"));
 export const tiktokReady = () => tiktokKeys() && Boolean(env("TIKTOK_REFRESH_TOKEN"));
@@ -16,8 +17,16 @@ export function tiktokAuthorizeUrl(redirectUri: string, state: string): string {
   );
 }
 
-/** Tukar kode dari halaman izin TikTok dengan refresh token, lalu simpan ke .env. */
-export async function tiktokExchangeCode(code: string, redirectUri: string): Promise<void> {
+export type TikTokTokens = {
+  openId: string;
+  accessToken: string;
+  refreshToken: string;
+  refreshExpiresAt: number; // ms
+  scope: string;
+};
+
+/** Tukar kode dari halaman izin TikTok dengan token akun yang login. */
+export async function tiktokExchangeCode(code: string, redirectUri: string): Promise<TikTokTokens> {
   const res = await fetch(`${API}/oauth/token/`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -30,8 +39,23 @@ export async function tiktokExchangeCode(code: string, redirectUri: string): Pro
     }),
   });
   const data: any = await res.json().catch(() => ({}));
-  if (!data.refresh_token) throw new Error(data.error_description || data.error || `HTTP ${res.status}`);
-  setEnv("TIKTOK_REFRESH_TOKEN", data.refresh_token);
+  if (!data.refresh_token || !data.open_id) throw new Error(data.error_description || data.error || `HTTP ${res.status}`);
+  return {
+    openId: String(data.open_id),
+    accessToken: String(data.access_token),
+    refreshToken: String(data.refresh_token),
+    refreshExpiresAt: Date.now() + Number(data.refresh_expires_in ?? 0) * 1000,
+    scope: String(data.scope ?? ""),
+  };
+}
+
+/** Nama dan foto profil akun TikTok (scope user.info.basic). */
+export async function tiktokProfile(accessToken: string): Promise<{ nama: string; avatar: string }> {
+  const r = await fetchJson(`${API}/user/info/?fields=open_id,display_name,avatar_url`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const u = r.data?.user ?? {};
+  return { nama: String(u.display_name ?? "Kreator TikTok").slice(0, 80), avatar: String(u.avatar_url ?? "") };
 }
 
 /** Access token TikTok berlaku 24 jam, jadi selalu diperbarui dari refresh token. */

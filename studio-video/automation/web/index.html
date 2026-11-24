@@ -84,6 +84,9 @@
   .banner.err { background: #fde8e8; color: #9b2c2c; }
   .banner.info { background: var(--warn-soft); color: #7b5410; }
   .hidden { display: none !important; }
+  .me { display: inline-flex; align-items: center; gap: 8px; }
+  .me img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: #ddd; }
+  .me form { margin: 0; }
   @media (max-width: 900px) {
     .app { grid-template-columns: 1fr; } aside { position: static; height: auto; }
     main { padding: 18px 16px 60px; } .grid { grid-template-columns: 1fr; } .grid .wide { grid-column: auto; }
@@ -106,6 +109,7 @@
       <span class="chip" id="modeChip">…</span>
       <span class="chip" id="renderChip">…</span>
       <span id="platChips"></span>
+      <span class="me hidden" id="me"><img id="meAvatar" alt="" referrerpolicy="no-referrer"><b id="meName"></b><form method="post" action="/keluar"><button class="link" type="submit">Keluar</button></form></span>
     </header>
     <div id="banner" class="banner err hidden"></div>
 
@@ -228,6 +232,7 @@ function unlock(n) { for (let i = 1; i <= 5; i++) $("#s"+i).classList.toggle("lo
 function markDone(n) { for (let i = 1; i <= 5; i++) $("#s"+i).classList.toggle("done", i <= n); }
 async function api(path, body) {
   const r = await fetch(path, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (r.status === 401) { location.href = "/"; throw new Error("Sesi berakhir, silakan login lagi."); }
   const j = await r.json().catch(() => ({}));
   // /api/prompt dan /api/plan menjawab 200 lebih dulu (keepalive), lalu { error } jika gagal.
   if (!r.ok || j.error) throw new Error(j.error || ("HTTP " + r.status));
@@ -368,6 +373,7 @@ function connect() {
     if (e.type === "log") appendLog(e.line);
     if (e.type === "stage") { setStage(e.stage); lockActions(true); }
     if (e.type === "progress") setBar(e);
+    if (e.type === "queue") info(e.position ? `Menunggu giliran render (antrean ke-${e.position}). Halaman ini boleh ditutup.` : "Giliran Anda, produksi dimulai.");
     if (e.type === "done") { lockActions(false); loadJobs(); if (e.jobId) openJob(e.jobId, true); }
     if (e.type === "error") { lockActions(false); showError("Gagal: " + e.message); loadJobs(); }
   };
@@ -451,8 +457,10 @@ $("#newBtn").onclick = () => {
     status = await api("/api/status");
     $("#modeChip").textContent = "AI: " + status.mode;
     $("#platChips").innerHTML = status.platforms.map(p => `<span class="chip ${p.ready ? "ok" : "off"}">${p.ready ? "✓" : "○"} ${p.name}</span>`).join(" ");
-    const tt = status.platforms.find(p => p.name === "TikTok");
-    if (tt) $("#platChips").insertAdjacentHTML("beforeend", ` <a class="chip" href="/api/tiktok/login" title="Login TikTok dan izinkan Studio memposting video">${tt.ready ? "Hubungkan ulang TikTok" : "Hubungkan TikTok"}</a>`);
+    if (status.me && status.me.openId !== "lokal") {
+      $("#me").classList.remove("hidden"); $("#meName").textContent = status.me.nama;
+      if (status.me.avatar) $("#meAvatar").src = status.me.avatar; else $("#meAvatar").classList.add("hidden");
+    }
     $("#plats").innerHTML = status.platforms.map(p => `<label class="plat"><input type="checkbox" value="${p.name}" ${p.ready ? "" : "disabled"}> ${p.name} ${p.ready ? "" : "<small>— belum disetel (lihat README)</small>"}</label>`).join("");
     $("#gaya").innerHTML = Object.entries(status.gaya).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
     $("#suara").innerHTML = status.suara.map(s => `<option value="${s.id}">${s.label}</option>`).join("");
@@ -462,10 +470,10 @@ $("#newBtn").onclick = () => {
     await loadJobs();
     if (status.task) {
       status.task.logs.forEach(appendLog); setStage(status.task.stage); setBar(status.task.progress);
-      if (!status.task.done) { unlock(4); lockActions(true); info("Ada proses yang sedang berjalan. Progresnya tampil di langkah 4."); }
+      if (!status.task.done) { unlock(4); lockActions(true); info(status.queuePosition ? `Menunggu giliran render (antrean ke-${status.queuePosition}).` : "Ada proses yang sedang berjalan. Progresnya tampil di langkah 4."); }
     }
-    const tiktok = new URLSearchParams(location.search).get("tiktok");
-    if (tiktok) { history.replaceState(null, "", "/"); tiktok === "ok" ? info("TikTok terhubung. Video bisa diupload ke TikTok dari langkah 5.") : showError(tiktok); }
+    const pesan = new URLSearchParams(location.search).get("masuk");
+    if (pesan) { history.replaceState(null, "", "/"); showError(pesan); }
     connect();
     refreshRender(); setInterval(refreshRender, 10000);
   } catch (e) { showError("Tidak bisa terhubung ke server Studio: " + e.message); }

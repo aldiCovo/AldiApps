@@ -119,6 +119,8 @@ export async function produce(
   cfgIn: Partial<VideoConfig>,
   r: Reporter,
   preUsage: UsageEntry[] = [],
+  ownerId: string | null = null, // openId pemilik; null = pemilik Studio (CLI, video lama)
+  onCreated?: (id: string) => void,
 ): Promise<string> {
   const cfg = normalizeConfig({ ...DEFAULT_CONFIG, ...cfgIn });
   const id = `${stamp()}-${slugify(plan.judul)}`;
@@ -126,6 +128,8 @@ export async function produce(
   const audioDir = path.join(ROOT, "public", "jobs", id);
   fs.mkdirSync(jobDir, { recursive: true });
   fs.mkdirSync(audioDir, { recursive: true });
+  if (ownerId) fs.writeFileSync(path.join(jobDir, "owner.json"), JSON.stringify({ openId: ownerId }));
+  onCreated?.(id);
   fs.writeFileSync(path.join(jobDir, "prompt.txt"), prompt);
   fs.writeFileSync(path.join(jobDir, "config.json"), JSON.stringify(cfg, null, 2));
   fs.writeFileSync(path.join(jobDir, "plan.json"), JSON.stringify(plan, null, 2));
@@ -279,11 +283,17 @@ const readJson = <T>(file: string, fallback: T): T => {
   }
 };
 
-export function listJobs(): JobSummary[] {
+/** openId pemilik job, atau null untuk job tanpa owner.json (milik pemilik Studio). */
+export function jobOwner(id: string): string | null {
+  return readJson<{ openId?: string }>(path.join(jobDirOf(id), "owner.json"), {}).openId ?? null;
+}
+
+/** `canSee(ownerId)` menyaring job per pengguna; tanpa filter = semua job. */
+export function listJobs(canSee: (ownerId: string | null) => boolean = () => true): JobSummary[] {
   if (!fs.existsSync(JOBS_DIR)) return [];
   return fs
     .readdirSync(JOBS_DIR)
-    .filter((d) => fs.existsSync(path.join(JOBS_DIR, d, "plan.json")))
+    .filter((d) => !d.startsWith("_") && fs.existsSync(path.join(JOBS_DIR, d, "plan.json")) && canSee(jobOwner(d)))
     .sort()
     .reverse()
     .map((d) => {

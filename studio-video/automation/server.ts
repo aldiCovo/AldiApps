@@ -181,14 +181,15 @@ const MIME: Record<string, string> = {
   ".srt": "text/plain; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".html": "text/html; charset=utf-8",
+  ".jpg": "image/jpeg",
 };
 
 /** Kirim file dengan dukungan Range (agar video bisa di-seek di browser). */
-function sendFile(req: http.IncomingMessage, res: http.ServerResponse, file: string, download = false) {
+function sendFile(req: http.IncomingMessage, res: http.ServerResponse, file: string, download = false, cache = "no-store") {
   if (!fs.existsSync(file)) return json(res, 404, { error: "File tidak ditemukan" });
   const stat = fs.statSync(file);
   const type = MIME[path.extname(file)] ?? "application/octet-stream";
-  const headers: http.OutgoingHttpHeaders = { "Content-Type": type, "Accept-Ranges": "bytes", "Cache-Control": "no-store" };
+  const headers: http.OutgoingHttpHeaders = { "Content-Type": type, "Accept-Ranges": "bytes", "Cache-Control": cache };
   if (download) headers["Content-Disposition"] = `attachment; filename="${path.basename(path.dirname(file))}-${path.basename(file)}"`;
   const range = req.headers.range?.match(/bytes=(\d*)-(\d*)/);
   if (range) {
@@ -309,6 +310,9 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
   }
   if (m === "GET" && (p === "/" || p === "/index.html")) return sendFile(req, res, path.join(WEB, me ? "index.html" : "landing.html"));
   if (m === "GET" && (p === "/terms" || p === "/privacy")) return sendFile(req, res, path.join(WEB, `${p.slice(1)}.html`));
+  // Contoh video hasil Studio untuk halaman depan (file tetap di automation/web/showcase).
+  const sm = p.match(/^\/showcase\/([a-z0-9-]+\.(?:mp4|jpg))$/);
+  if ((m === "GET" || m === "HEAD") && sm) return sendFile(req, res, path.join(WEB, "showcase", sm[1]), false, "public, max-age=86400");
 
   // Link undangan: /masuk?undangan=KODE
   if (m === "GET" && p === "/masuk") {

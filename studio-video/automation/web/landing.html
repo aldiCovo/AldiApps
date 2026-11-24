@@ -5,153 +5,584 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Aldi Studio</title>
 <meta name="description" content="Aldi Studio mengubah gagasan menjadi video animasi pendek dengan narasi, lalu memostingnya ke akun TikTok Anda.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #0d0f22; --bg2: #17143a; --panel: rgba(255,255,255,0.05); --line: rgba(255,255,255,0.10);
-    --ink: #f4f3ff; --muted: #a9a6c9; --accent: #ff7a59; --violet: #7c5cff;
+    --bone: #f5f4f0; --paper: #fff; --ink: #0a0a0a;
+    --muted: rgba(10,10,10,0.62); --faint: rgba(10,10,10,0.42); --line: rgba(10,10,10,0.11);
+    --on-dark: #f5f4f0; --on-dark-muted: rgba(245,244,240,0.62); --dark-line: rgba(245,244,240,0.14);
+    --accent: #ff5a36; --peach: #ffb38a; --lilac: #b9a7ff;
+    --display: "Inter", system-ui, sans-serif; --text: "Instrument Sans", system-ui, sans-serif;
+    --ease: cubic-bezier(.2,.7,.1,1);
   }
   * { box-sizing: border-box; }
-  html { background: var(--bg); }
-  body { margin: 0; color: var(--ink); font: 16px/1.6 "Avenir Next", "Segoe UI", system-ui, sans-serif;
-    background: radial-gradient(900px 500px at 20% -10%, rgba(124,92,255,0.35), transparent 60%), linear-gradient(180deg, var(--bg2), var(--bg) 60%); min-height: 100vh; }
+  html { background: var(--bone); scroll-behavior: smooth; }
+  body { margin: 0; color: var(--ink); font: 17px/1.55 var(--text); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
   a { color: inherit; }
-  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
-  nav { display: flex; align-items: center; gap: 12px; padding: 20px 0; }
-  .logo { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: -0.01em; font-size: 18px; text-decoration: none; }
-  .logo svg { width: 34px; height: 34px; border-radius: 9px; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 0 clamp(16px, 3vw, 40px); position: relative; }
+
+  /* ---------- Latar: kisi halus, cahaya warna yang bergerak, dan grain ---------- */
+  .bg { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+  .bg .grid { position: absolute; inset: -2px; background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px); background-size: 88px 88px; -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 20%, #000 20%, transparent 75%); mask-image: radial-gradient(ellipse 80% 60% at 50% 20%, #000 20%, transparent 75%); opacity: .55; }
+  .orb { position: absolute; border-radius: 50%; filter: blur(90px); opacity: .55; will-change: transform; }
+  .orb.a { width: 46vw; height: 46vw; left: 52%; top: -14vw; background: radial-gradient(circle, var(--accent), transparent 65%); animation: driftA 22s ease-in-out infinite alternate; }
+  .orb.b { width: 38vw; height: 38vw; left: -10vw; top: 22vh; background: radial-gradient(circle, var(--lilac), transparent 65%); animation: driftB 26s ease-in-out infinite alternate; }
+  .orb.c { width: 30vw; height: 30vw; left: 30%; top: 60vh; background: radial-gradient(circle, var(--peach), transparent 65%); animation: driftC 30s ease-in-out infinite alternate; opacity: .45; }
+  @keyframes driftA { to { transform: translate(-12vw, 10vh) scale(1.15); } }
+  @keyframes driftB { to { transform: translate(14vw, -6vh) scale(.9); } }
+  @keyframes driftC { to { transform: translate(-10vw, -14vh) scale(1.2); } }
+  .grain { position: absolute; inset: -50%; opacity: .07; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); animation: grain 1.2s steps(6) infinite; }
+  @keyframes grain { 0%{transform:translate(0,0)} 20%{transform:translate(-3%,2%)} 40%{transform:translate(2%,-4%)} 60%{transform:translate(-4%,-1%)} 80%{transform:translate(3%,3%)} 100%{transform:translate(0,0)} }
+
+  /* Bilah progres scroll */
+  .progress { position: fixed; left: 0; top: 0; height: 2px; width: 100%; background: var(--accent); transform-origin: 0 50%; transform: scaleX(0); z-index: 50; }
+
+  /* ---------- Navigasi ---------- */
+  nav { position: sticky; top: 12px; z-index: 40; display: flex; align-items: center; gap: 28px; padding: 10px 10px 10px 16px; margin-top: 12px; border-radius: 999px; transition: background .4s, box-shadow .4s, backdrop-filter .4s; }
+  nav.solid { background: rgba(245,244,240,0.72); backdrop-filter: blur(14px) saturate(1.4); -webkit-backdrop-filter: blur(14px) saturate(1.4); box-shadow: 0 1px 0 var(--line), 0 10px 30px rgba(10,10,10,0.06); }
+  .logo { display: flex; align-items: center; gap: 10px; font: 600 17px var(--display); letter-spacing: -0.02em; text-decoration: none; }
+  .logo svg { width: 32px; height: 32px; border-radius: 9px; }
   nav .sp { flex: 1; }
-  nav a.small { color: var(--muted); text-decoration: none; font-size: 14px; }
-  .hero { padding: 56px 0 40px; display: grid; grid-template-columns: 1.2fr 1fr; gap: 40px; align-items: center; }
-  h1 { font-size: clamp(34px, 5vw, 54px); line-height: 1.08; letter-spacing: -0.03em; margin: 0 0 18px; }
-  h1 em { font-style: normal; color: var(--accent); }
-  .lead { color: var(--muted); font-size: 18px; margin: 0 0 28px; max-width: 34em; }
-  .btn { display: inline-flex; align-items: center; gap: 10px; background: #fff; color: #111; border: 0; border-radius: 12px; padding: 14px 20px; font-weight: 700; font-size: 16px; text-decoration: none; cursor: pointer; }
-  .btn svg { width: 20px; height: 20px; }
-  .note { color: var(--muted); font-size: 14px; margin-top: 14px; }
-  .invite { display: flex; gap: 8px; margin-top: 18px; max-width: 420px; }
-  .invite input { flex: 1; min-width: 0; background: var(--panel); border: 1px solid var(--line); color: var(--ink); border-radius: 10px; padding: 11px 12px; font: inherit; letter-spacing: 0.08em; text-transform: uppercase; }
-  .invite button { background: var(--accent); color: #fff; border: 0; border-radius: 10px; padding: 0 16px; font: inherit; font-weight: 700; cursor: pointer; }
-  .msg { background: rgba(255,122,89,0.12); border: 1px solid rgba(255,122,89,0.4); color: #ffd6cb; border-radius: 12px; padding: 12px 14px; margin: 0 0 20px; font-size: 15px; }
-  .phone { justify-self: center; width: min(300px, 80vw); aspect-ratio: 9 / 16; border-radius: 34px; border: 1px solid var(--line); background: linear-gradient(160deg, #241f5c, #0f1128); position: relative; overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,0.45); }
-  .phone .card { position: absolute; left: 18px; right: 18px; border-radius: 16px; padding: 14px; background: rgba(255,255,255,0.08); border: 1px solid var(--line); font-size: 13px; }
-  .phone .c1 { top: 60px; } .phone .c2 { top: 230px; } .phone .c3 { bottom: 70px; background: var(--accent); color: #fff; border: 0; font-weight: 700; text-align: center; }
-  .phone .big { display: block; margin-top: 4px; line-height: 1.15; font-size: 24px; font-weight: 800; letter-spacing: -0.02em; }
-  .phone .bar { height: 6px; border-radius: 6px; background: rgba(255,255,255,0.15); margin-top: 8px; overflow: hidden; }
-  .phone .bar i { display: block; height: 100%; width: 68%; background: var(--violet); }
-  section { padding: 44px 0; border-top: 1px solid var(--line); }
-  h2 { font-size: 26px; letter-spacing: -0.02em; margin: 0 0 22px; }
-  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; counter-reset: s; }
-  .steps div, .feat div { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
-  .steps div::before { counter-increment: s; content: counter(s); display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--violet); font-weight: 800; margin-bottom: 10px; }
-  .steps b, .feat b { display: block; margin-bottom: 4px; }
-  .steps p, .feat p { margin: 0; color: var(--muted); font-size: 14.5px; }
-  .feat { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-  .access { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
-  .access ul { margin: 0; padding-left: 20px; color: var(--muted); }
-  .access li { margin-bottom: 8px; }
-  .en { color: var(--muted); font-size: 15px; }
-  footer { border-top: 1px solid var(--line); padding: 28px 0 40px; color: var(--muted); font-size: 14px; display: flex; flex-wrap: wrap; gap: 8px 22px; }
-  footer a { color: var(--ink); }
+  nav .link { color: var(--muted); text-decoration: none; font-size: 15px; position: relative; transition: color .2s; }
+  nav .link::after { content: ""; position: absolute; left: 0; right: 0; bottom: -4px; height: 1px; background: var(--ink); transform: scaleX(0); transform-origin: right; transition: transform .35s var(--ease); }
+  nav .link:hover { color: var(--ink); }
+  nav .link:hover::after { transform: scaleX(1); transform-origin: left; }
+
+  .pill { position: relative; display: inline-flex; align-items: center; gap: 10px; border-radius: 999px; padding: 12px 20px; font: 500 15px var(--text); text-decoration: none; border: 0; cursor: pointer; overflow: hidden; transition: transform .3s var(--ease), background .2s; isolation: isolate; }
+  .pill.dark { background: var(--ink); color: var(--on-dark); }
+  .pill.dark::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--accent); transform: translateY(101%); border-radius: inherit; transition: transform .45s var(--ease); }
+  .pill.dark:hover::before { transform: none; }
+  .pill.light { background: var(--on-dark); color: var(--ink); }
+  .pill svg { width: 18px; height: 18px; }
+  .pill .arr { display: inline-block; transition: transform .3s var(--ease); }
+  .pill:hover .arr { transform: translateX(4px); }
+
+  .tag { font-size: 14px; color: var(--faint); letter-spacing: 0.01em; }
+  .tag::before { content: "( "; } .tag::after { content: " )"; }
+
+  /* ---------- Hero ---------- */
+  .hero { position: relative; padding: clamp(40px, 7vw, 96px) 0 clamp(32px, 4vw, 56px); }
+  .msg { background: #fff3ef; border: 1px solid #ffc9bb; color: #8a2a12; border-radius: 12px; padding: 12px 16px; margin: 0 0 28px; font-size: 15px; max-width: 640px; }
+  .badge { display: inline-flex; align-items: center; gap: 10px; padding: 6px 14px 6px 6px; border-radius: 999px; background: rgba(255,255,255,0.6); border: 1px solid var(--line); backdrop-filter: blur(8px); font-size: 14px; color: var(--muted); }
+  .badge b { background: var(--ink); color: var(--on-dark); font: 500 12px var(--text); padding: 4px 10px; border-radius: 999px; }
+  h1 { font: 500 clamp(50px, 9.4vw, 136px)/0.9 var(--display); letter-spacing: -0.045em; margin: 22px 0 0; position: relative; z-index: 2; }
+  h1 .ln { display: block; overflow: hidden; padding-bottom: .16em; margin-bottom: -.16em; }
+  h1 .ln > span { display: inline-block; transform: translateY(110%); animation: rise 1.1s var(--ease) forwards; }
+  h1 .ln:nth-child(2) > span { animation-delay: .12s; }
+  h1 .ln:nth-child(3) > span { animation-delay: .24s; }
+  h1 .ln:nth-child(4) > span { animation-delay: .36s; }
+  @keyframes rise { to { transform: none; } }
+  h1 .soft { color: rgba(10,10,10,0.26); }
+  h1 .grad { background: linear-gradient(100deg, var(--ink) 20%, var(--accent) 50%, var(--ink) 80%); background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; padding-bottom: .16em; margin-bottom: -.16em; animation: rise 1.1s var(--ease) .24s forwards, sheen 6s ease-in-out 1.4s infinite; }
+  @keyframes sheen { 0%,100% { background-position: 100% 0; } 50% { background-position: 0 0; } }
+  .fade-up { opacity: 0; transform: translateY(16px); animation: fadeUp .9s var(--ease) forwards; }
+  @keyframes fadeUp { to { opacity: 1; transform: none; } }
+
+  /* Ponsel dengan video animasi */
+  .hero-top { display: grid; grid-template-columns: 1fr auto; gap: clamp(24px, 4vw, 64px); align-items: center; }
+  .hero-copy { min-width: 0; }
+  .phone-zone { position: relative; width: clamp(220px, 19vw, 280px); margin-right: clamp(40px, 5vw, 90px); z-index: 1; perspective: 1200px; }
+  .phone { aspect-ratio: 9/19; border-radius: 44px; background: #0a0a0a; padding: 10px; box-shadow: 0 50px 100px -20px rgba(10,10,10,0.45), 0 0 0 1px rgba(10,10,10,0.9), inset 0 0 0 2px #2a2a2a; transform: rotateY(-14deg) rotateX(6deg) rotateZ(2deg); transition: transform .6s var(--ease); transform-style: preserve-3d; animation: float 7s ease-in-out infinite; opacity: 0; animation: phoneIn 1.2s var(--ease) .5s forwards, float 7s ease-in-out 1.7s infinite; }
+  @keyframes phoneIn { from { opacity: 0; transform: translateY(60px) rotateY(-30deg) rotateX(10deg); } to { opacity: 1; } }
+  @keyframes float { 0%,100% { translate: 0 0; } 50% { translate: 0 -14px; } }
+  .screen { position: relative; width: 100%; height: 100%; border-radius: 34px; overflow: hidden; background: radial-gradient(120% 70% at 30% 10%, #3a1d14, #120c0a 55%, #0a0a0a); color: #fff; }
+  .screen::before { content: ""; position: absolute; top: 10px; left: 50%; width: 32%; height: 22px; translate: -50% 0; background: #000; border-radius: 999px; z-index: 5; }
+  .side { position: absolute; right: 10px; bottom: 76px; display: flex; flex-direction: column; gap: 14px; z-index: 4; }
+  .side i { width: 30px; height: 30px; border-radius: 50%; background: rgba(255,255,255,0.14); display: grid; place-items: center; font-style: normal; font-size: 13px; }
+  .side i.heart { animation: beat 2.8s ease-in-out infinite; }
+  @keyframes beat { 0%,70%,100% { transform: scale(1); } 76% { transform: scale(1.25); background: var(--accent); } }
+  .meta { position: absolute; left: 14px; right: 14px; bottom: 18px; font-size: 11.5px; line-height: 1.35; z-index: 4; }
+  .meta b { font-size: 12.5px; }
+  .meta .ai { display: inline-block; margin-top: 5px; padding: 2px 7px; border-radius: 4px; background: rgba(255,255,255,0.16); font-size: 10.5px; }
+  .float-chip { position: absolute; z-index: 3; display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 14px; background: rgba(255,255,255,0.78); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--line); box-shadow: 0 14px 30px rgba(10,10,10,0.08); font-size: 13.5px; white-space: nowrap; opacity: 0; animation: fadeUp .8s var(--ease) forwards, bob 5s ease-in-out infinite; }
+  .float-chip i { width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; font-style: normal; font-size: 12px; color: #fff; }
+  .float-chip.c1 { left: -62%; top: 18%; animation-delay: 1.1s, 1.9s; }
+  .float-chip.c2 { left: -42%; top: 84%; animation-delay: 1.3s, 2.6s; }
+  .float-chip.c3 { right: -18%; bottom: -4%; animation-delay: 1.5s, 3.1s; }
+  @keyframes bob { 0%,100% { translate: 0 0; } 50% { translate: 0 -8px; } }
+
+  .hero-foot { position: relative; z-index: 2; display: grid; grid-template-columns: 1.1fr 1fr; gap: 40px; align-items: end; margin-top: clamp(36px, 5vw, 64px); padding-top: 28px; border-top: 1px solid var(--line); }
+  .lead { font-size: clamp(18px, 1.6vw, 22px); line-height: 1.45; color: var(--muted); margin: 0; max-width: 30em; letter-spacing: -0.01em; }
+  .lead b { color: var(--ink); font-weight: 500; }
+  .cta { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; justify-self: end; }
+  .note { color: var(--faint); font-size: 14px; margin: 0; }
+  .invite { display: flex; gap: 8px; width: min(400px, 100%); }
+  .invite input { flex: 1; min-width: 0; background: rgba(255,255,255,0.8); border: 1px solid var(--line); color: var(--ink); border-radius: 999px; padding: 11px 18px; font: inherit; font-size: 15px; letter-spacing: 0.08em; text-transform: uppercase; outline: none; transition: border-color .2s, box-shadow .2s; }
+  .invite input:focus { border-color: var(--ink); box-shadow: 0 0 0 4px rgba(255,90,54,0.15); }
+  .invite input::placeholder { text-transform: none; letter-spacing: 0; color: var(--faint); }
+  .invite button { background: transparent; color: var(--ink); border: 1px solid var(--ink); border-radius: 999px; padding: 0 20px; font: 500 15px var(--text); cursor: pointer; transition: background .2s, color .2s; }
+  .invite button:hover { background: var(--ink); color: var(--on-dark); }
+
+  /* ---------- Marquee ---------- */
+  .marquee { margin: clamp(28px, 4vw, 48px) calc(-1 * clamp(16px, 3vw, 40px)); padding: 22px 0; border-block: 1px solid var(--line); overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent); mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent); }
+  .marquee .track { display: flex; width: max-content; gap: 44px; animation: marq 38s linear infinite; }
+  .marquee:hover .track { animation-play-state: paused; }
+  .marquee span { font: 500 clamp(26px, 3vw, 40px)/1 var(--display); letter-spacing: -0.03em; white-space: nowrap; display: flex; align-items: center; gap: 44px; }
+  .marquee span::after { content: "✦"; font-size: .55em; color: var(--accent); }
+  .marquee span:nth-child(even) { color: rgba(10,10,10,0.3); }
+  @keyframes marq { to { transform: translateX(-50%); } }
+
+  /* ---------- Panel gelap ---------- */
+  .stage { background: var(--ink); color: var(--on-dark); border-radius: 22px; padding: clamp(24px, 4vw, 48px); display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; position: relative; overflow: hidden; }
+  .stage::before { content: ""; position: absolute; width: 140%; aspect-ratio: 1; left: -20%; top: -70%; background: conic-gradient(from 0deg, transparent 0 60%, rgba(255,90,54,0.35) 72%, rgba(185,167,255,0.25) 82%, transparent 92%); animation: spin 14s linear infinite; filter: blur(40px); pointer-events: none; }
+  @keyframes spin { to { transform: rotate(1turn); } }
+  .stage .head { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 18px; position: relative; }
+  .stage .head .tag { color: var(--on-dark-muted); }
+  .live { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--on-dark-muted); }
+  .live i { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 1.8s infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255,90,54,.6); } 70% { box-shadow: 0 0 0 10px rgba(255,90,54,0); } 100% { box-shadow: 0 0 0 0 rgba(255,90,54,0); } }
+  .card { --x: 50%; --y: 50%; border: 1px solid var(--dark-line); border-radius: 14px; padding: 20px; background: radial-gradient(400px circle at var(--x) var(--y), rgba(245,244,240,0.09), rgba(245,244,240,0.02) 40%); position: relative; min-height: 220px; display: flex; flex-direction: column; transition: transform .4s var(--ease), border-color .3s; backdrop-filter: blur(6px); }
+  .card:hover { transform: translateY(-4px); border-color: rgba(245,244,240,0.3); }
+  .card small { color: var(--on-dark-muted); font-size: 13px; }
+  .card .big { font: 500 clamp(22px, 2.2vw, 30px)/1.08 var(--display); letter-spacing: -0.03em; margin: 12px 0 auto; }
+  .card .row { display: flex; justify-content: space-between; font-size: 13px; color: var(--on-dark-muted); margin-top: 18px; }
+  .bar { height: 3px; border-radius: 3px; background: var(--dark-line); margin-top: 10px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--peach), var(--on-dark)); transition: width 2.6s var(--ease); }
+  .stage.in .bar i { width: 68%; }
+  .card.go { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .card.go small, .card.go .row { color: rgba(255,255,255,0.82); }
+  .card.go::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.35) 50%, transparent 70%); background-size: 250% 100%; animation: shine 3.5s ease-in-out infinite; pointer-events: none; }
+  @keyframes shine { 0% { background-position: 150% 0; } 60%,100% { background-position: -50% 0; } }
+
+  /* ---------- Angka ---------- */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: clamp(56px, 8vw, 110px); border-top: 1px solid var(--line); }
+  .stats div { padding: 26px 24px 0 0; }
+  .stats div + div { padding-left: 24px; border-left: 1px solid var(--line); }
+  .stats b { display: block; font: 500 clamp(44px, 5.5vw, 80px)/1 var(--display); letter-spacing: -0.05em; }
+  .stats b sup { font-size: .4em; vertical-align: top; margin-left: 2px; color: var(--accent); }
+  .stats div > span { color: var(--muted); font-size: 15px; }
+
+  /* ---------- Bagian ---------- */
+  section { padding: clamp(64px, 9vw, 128px) 0 0; }
+  .sec-head { display: grid; grid-template-columns: 1fr 2fr; gap: 40px; align-items: end; padding-bottom: 28px; border-bottom: 1px solid var(--line); }
+  h2 { font: 500 clamp(38px, 5.6vw, 80px)/0.95 var(--display); letter-spacing: -0.04em; margin: 0; }
+  h2 .soft { color: rgba(10,10,10,0.28); }
+  h2 .w { display: inline-block; opacity: 0; transform: translateY(40%); filter: blur(8px); transition: opacity .8s var(--ease), transform .8s var(--ease), filter .8s var(--ease); transition-delay: calc(var(--i) * 70ms); }
+  .in h2 .w, h2.in .w { opacity: 1; transform: none; filter: none; }
+
+  .rows { list-style: none; margin: 0; padding: 0; }
+  .rows li { position: relative; display: grid; grid-template-columns: 80px 1fr 1.2fr 40px; gap: 24px; align-items: baseline; padding: 30px 0; border-bottom: 1px solid var(--line); overflow: hidden; transition: padding .4s var(--ease), color .3s; }
+  .rows li::before { content: ""; position: absolute; inset: 0; background: var(--ink); transform: scaleY(0); transform-origin: bottom; transition: transform .45s var(--ease); z-index: -1; border-radius: 12px; }
+  .rows li:hover { padding-inline: 20px; color: var(--on-dark); }
+  .rows li:hover::before { transform: none; }
+  .rows li:hover p, .rows li:hover .n { color: var(--on-dark-muted); }
+  .rows .n { font: 500 14px var(--display); color: var(--faint); font-variant-numeric: tabular-nums; }
+  .rows b { font: 500 clamp(22px, 2.4vw, 32px)/1.1 var(--display); letter-spacing: -0.03em; }
+  .rows p { margin: 0; color: var(--muted); transition: color .3s; }
+  .rows .go { justify-self: end; font-size: 22px; transform: translateX(-10px) rotate(-45deg); opacity: 0; transition: transform .4s var(--ease), opacity .3s; }
+  .rows li:hover .go { opacity: 1; transform: none; color: var(--accent); }
+  .rows { isolation: isolate; }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 40px; }
+  .grid div { --x: 50%; --y: 50%; position: relative; background: rgba(255,255,255,0.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 18px; padding: 28px; min-height: 210px; overflow: hidden; transition: transform .45s var(--ease), box-shadow .45s var(--ease), border-color .3s; }
+  .grid div::before { content: ""; position: absolute; inset: 0; background: radial-gradient(320px circle at var(--x) var(--y), rgba(255,90,54,0.13), transparent 60%); opacity: 0; transition: opacity .3s; pointer-events: none; }
+  .grid div:hover { transform: translateY(-6px); box-shadow: 0 24px 50px -20px rgba(10,10,10,0.18); border-color: rgba(10,10,10,0.2); }
+  .grid div:hover::before { opacity: 1; }
+  .grid .ic { width: 44px; height: 44px; border-radius: 12px; background: var(--ink); color: var(--on-dark); display: grid; place-items: center; transition: transform .5s var(--ease), background .3s; }
+  .grid div:hover .ic { transform: rotate(-8deg) scale(1.08); background: var(--accent); }
+  .grid .ic svg { width: 22px; height: 22px; }
+  .grid b { display: block; font: 500 21px/1.2 var(--display); letter-spacing: -0.02em; margin: 26px 0 8px; }
+  .grid p { margin: 0; color: var(--muted); font-size: 15.5px; }
+
+  .access { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; margin-top: 40px; }
+  .access ul { margin: 0; padding: 0; list-style: none; }
+  .access li { padding: 16px 0; border-bottom: 1px solid var(--line); color: var(--muted); }
+  .access li:first-child { padding-top: 0; }
+  .access li b { color: var(--ink); font-weight: 500; }
+  .en { color: var(--muted); margin: 0; font-size: 16px; }
+  .en-box { background: rgba(255,255,255,0.65); backdrop-filter: blur(10px); border-radius: 18px; padding: 28px; border: 1px solid var(--line); }
+  .en-box .tag { display: block; margin-bottom: 14px; }
+
+  /* ---------- Penutup ---------- */
+  .closing { position: relative; overflow: hidden; margin: clamp(64px, 9vw, 128px) 0 16px; background: var(--ink); color: var(--on-dark); border-radius: 24px; padding: clamp(32px, 6vw, 80px) clamp(24px, 4vw, 56px) 28px; isolation: isolate; }
+  .closing .glow { position: absolute; z-index: -1; width: 70%; aspect-ratio: 1; right: -15%; top: -40%; background: radial-gradient(circle, rgba(255,90,54,0.55), transparent 60%); filter: blur(60px); animation: driftA 16s ease-in-out infinite alternate; }
+  .closing .glow.b { left: -20%; right: auto; top: 30%; background: radial-gradient(circle, rgba(185,167,255,0.35), transparent 60%); animation: driftB 20s ease-in-out infinite alternate; }
+  .closing .lines { position: absolute; inset: 0; z-index: -1; background-image: linear-gradient(var(--dark-line) 1px, transparent 1px), linear-gradient(90deg, var(--dark-line) 1px, transparent 1px); background-size: 72px 72px; -webkit-mask-image: radial-gradient(ellipse at 30% 30%, #000, transparent 70%); mask-image: radial-gradient(ellipse at 30% 30%, #000, transparent 70%); opacity: .5; }
+  .closing h2 { font-size: clamp(44px, 8vw, 120px); }
+  .closing h2 .soft { color: rgba(245,244,240,0.3); }
+  .closing .actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 36px 0 clamp(48px, 7vw, 96px); }
+  .pill.ghost { background: transparent; color: var(--on-dark); border: 1px solid var(--dark-line); }
+  .pill.ghost:hover { border-color: var(--on-dark); }
+  .pill.light::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--accent); transform: translateY(101%); transition: transform .45s var(--ease); }
+  .pill.light:hover { color: #fff; }
+  .pill.light:hover::before { transform: none; }
+  .big-word { font: 600 clamp(80px, 19vw, 290px)/.8 var(--display); letter-spacing: -0.06em; color: transparent; -webkit-text-stroke: 1px rgba(245,244,240,0.18); white-space: nowrap; margin: 0 0 24px; user-select: none; }
+  footer { display: flex; flex-wrap: wrap; gap: 10px 28px; padding-top: 24px; border-top: 1px solid var(--dark-line); font-size: 14px; color: var(--on-dark-muted); }
+  footer a { text-decoration: none; color: var(--on-dark); }
+  footer a:hover { text-decoration: underline; }
   footer .sp { flex: 1; }
-  @media (max-width: 860px) {
-    .hero, .access { grid-template-columns: 1fr; }
-    .steps { grid-template-columns: 1fr 1fr; }
-    .feat { grid-template-columns: 1fr; }
-    .phone { display: none; }
+
+
+  /* ---------- Latar tambahan: aurora, cahaya kursor ---------- */
+  .bg .aurora { position: absolute; width: 140vmax; height: 140vmax; left: 50%; top: -95vmax; translate: -50% 0; background: conic-gradient(from 0deg, #ff5a36, #ffb38a, #f7d774, #b9a7ff, #7cc6ff, #ff7aa8, #ff5a36); filter: blur(110px); opacity: .42; border-radius: 50%; animation: spin 48s linear infinite; }
+  .orb { opacity: .7; }
+  .orb.d { width: 34vw; height: 34vw; right: -8vw; top: 120vh; background: radial-gradient(circle, #7cc6ff, transparent 65%); animation: driftB 24s ease-in-out infinite alternate-reverse; }
+  .bg .cursor-light { position: absolute; width: 640px; height: 640px; left: 0; top: 0; translate: -50% -50%; border-radius: 50%; background: radial-gradient(circle, rgba(255,90,54,0.16), rgba(185,167,255,0.10) 40%, transparent 70%); transition: transform .25s ease-out; will-change: transform; }
+  .bg .beams { position: absolute; inset: 0; background: repeating-linear-gradient(115deg, transparent 0 140px, rgba(255,255,255,0.35) 140px 141px, transparent 141px 280px); -webkit-mask-image: linear-gradient(180deg, #000, transparent 70%); mask-image: linear-gradient(180deg, #000, transparent 70%); animation: beams 18s linear infinite; opacity: .6; }
+  @keyframes beams { to { background-position: 560px 0; } }
+
+  /* Video di ponsel hero */
+  .hero-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .screen::after { content: ""; position: absolute; inset: auto 0 0 0; height: 30%; background: linear-gradient(transparent, rgba(0,0,0,0.75)); z-index: 3; pointer-events: none; }
+  .side { bottom: 36% !important; }
+
+  /* ---------- Showcase video asli ---------- */
+  .showcase { position: relative; overflow: hidden; isolation: isolate; margin-top: clamp(28px, 4vw, 48px); padding: clamp(36px, 5vw, 72px); background: #0b0b0d; color: var(--on-dark); border-radius: 26px; display: grid; grid-template-columns: 1fr auto; gap: clamp(32px, 5vw, 72px); align-items: center; }
+  .showcase .aurora { position: absolute; z-index: -1; inset: -40%; background: conic-gradient(from 90deg at 60% 50%, transparent 0 25%, rgba(255,90,54,0.45) 35%, rgba(185,167,255,0.35) 48%, rgba(124,198,255,0.25) 58%, transparent 70%); filter: blur(70px); animation: spin 30s linear infinite; }
+  .showcase::after { content: ""; position: absolute; inset: 0; z-index: -1; background-image: linear-gradient(var(--dark-line) 1px, transparent 1px), linear-gradient(90deg, var(--dark-line) 1px, transparent 1px); background-size: 64px 64px; -webkit-mask-image: radial-gradient(ellipse at 70% 50%, #000, transparent 70%); mask-image: radial-gradient(ellipse at 70% 50%, #000, transparent 70%); opacity: .45; }
+  .showcase + .stage { margin-top: 16px; }
+  .showcase .tag { color: var(--on-dark-muted); }
+  .showcase h2 { margin: 16px 0 20px; }
+  .showcase h2 .soft { color: rgba(245,244,240,0.32); }
+  .sc-copy p { color: var(--on-dark-muted); margin: 0 0 28px; max-width: 26em; font-size: 18px; }
+  .reels { display: flex; gap: clamp(16px, 2vw, 28px); align-items: flex-start; }
+  .reel { margin: 0; width: clamp(220px, 20vw, 290px); }
+  .reel.two { margin-top: 64px; }
+  .frame { position: relative; aspect-ratio: 9/16; border-radius: 22px; overflow: hidden; background: #000; box-shadow: 0 40px 80px -24px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.1); transition: transform .6s var(--ease), box-shadow .6s var(--ease); }
+  .reel:hover .frame { transform: translateY(-8px) scale(1.02); box-shadow: 0 50px 90px -20px rgba(255,90,54,0.35), 0 0 0 1px rgba(255,255,255,0.2); }
+  .frame video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .snd { position: absolute; right: 12px; bottom: 12px; width: 40px; height: 40px; border-radius: 50%; border: 0; cursor: pointer; background: rgba(10,10,10,0.55); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); color: #fff; font-size: 16px; display: grid; place-items: center; transition: transform .2s, background .2s; }
+  .snd:hover { transform: scale(1.1); background: var(--accent); }
+  .snd .on, .snd.unmuted .off { display: none; } .snd.unmuted .on { display: inline; }
+  .rec { position: absolute; left: 12px; top: 12px; display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; background: rgba(10,10,10,0.55); backdrop-filter: blur(8px); font-size: 12px; }
+  .rec i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: pulse 1.8s infinite; }
+  .reel figcaption { padding: 16px 4px 0; }
+  .reel figcaption .tag { font-size: 12px; }
+  .reel figcaption b { display: block; font: 500 17px/1.3 var(--display); letter-spacing: -0.01em; margin: 6px 0 6px; }
+  .reel figcaption small { color: var(--on-dark-muted); font-size: 13px; }
+
+  /* Muncul saat discroll */
+  .reveal { opacity: 0; transform: translateY(40px); transition: opacity 1s var(--ease), transform 1s var(--ease); }
+  .reveal.in { opacity: 1; transform: none; }
+  .stagger > * { opacity: 0; transform: translateY(24px); transition: opacity .8s var(--ease), transform .8s var(--ease); }
+  .stagger.in > * { opacity: 1; transform: none; }
+  .stagger.in > *:nth-child(2) { transition-delay: .08s; } .stagger.in > *:nth-child(3) { transition-delay: .16s; }
+  .stagger.in > *:nth-child(4) { transition-delay: .24s; } .stagger.in > *:nth-child(5) { transition-delay: .32s; } .stagger.in > *:nth-child(6) { transition-delay: .4s; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+    .reveal, .stagger > *, h2 .w, h1 .ln > span, .fade-up, .phone, .float-chip { opacity: 1 !important; transform: none !important; filter: none !important; }
+    html { scroll-behavior: auto; }
+  }
+
+  @media (max-width: 1100px) {
+    .phone-zone { width: 220px; }
+    .float-chip.c1 { left: -60%; } .float-chip.c2 { left: -50%; }
+  }
+  @media (max-width: 900px) {
+    .showcase { grid-template-columns: 1fr; }
+    .reels { justify-content: center; }
+    .hero-top { grid-template-columns: 1fr; }
+    .phone-zone { margin: 32px auto 0; width: 240px; }
+    .float-chip.c1 { left: -40%; } .float-chip.c2 { left: -44%; } .float-chip.c3 { right: -30%; }
+    .hero-foot, .sec-head, .access { grid-template-columns: 1fr; }
+    .cta { justify-self: start; }
+    .stage { grid-template-columns: 1fr; }
+    .card { min-height: 0; }
+    .grid { grid-template-columns: 1fr 1fr; }
+    .stats { grid-template-columns: 1fr 1fr; }
+    .stats div:nth-child(3) { padding-left: 0; border-left: 0; }
+    .rows li { grid-template-columns: 48px 1fr; }
+    .rows p { grid-column: 2; }
+    .rows .go { display: none; }
   }
   @media (max-width: 560px) {
-    .steps { grid-template-columns: 1fr; }
-    nav a.small[href="#akses"] { display: none; }
-    .hero { padding-top: 28px; }
+    .showcase { padding: 28px 18px; }
+    .reel { width: calc(50% - 8px); }
+    .reel.two { margin-top: 40px; }
+    .reel figcaption b { font-size: 14px; }
+    nav { gap: 14px; }
+    nav .link { display: none; }
+    .grid { grid-template-columns: 1fr; }
+    .float-chip { font-size: 12px; padding: 8px 10px; }
+    .float-chip.c1 { left: -16%; } .float-chip.c2 { left: -18%; top: 70%; } .float-chip.c3 { right: -10%; }
   }
-  .hero > *, .steps > *, .feat > *, .access > * { min-width: 0; }
 </style>
 </head>
 <body>
+<div class="bg" aria-hidden="true"><div class="aurora"></div><div class="beams"></div><div class="grid"></div><div class="orb a"></div><div class="orb b"></div><div class="orb c"></div><div class="orb d"></div><div class="cursor-light" id="cl"></div><div class="grain"></div></div>
+<div class="progress" aria-hidden="true"></div>
+
 <div class="wrap">
-  <nav>
+  <nav id="nav">
     <a class="logo" href="/">
-      <svg viewBox="0 0 1024 1024" aria-hidden="true"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#26215C"/><stop offset="1" stop-color="#0A0D1F"/></linearGradient></defs><rect width="1024" height="1024" fill="url(#g)"/><text x="512" y="610" text-anchor="middle" font-family="Futura, Avenir Next, sans-serif" font-weight="700" font-size="400" fill="#fff">AB</text><path d="M220 690 L220 750 L272 720 Z" fill="#FF7A59"/></svg>
+      <svg viewBox="0 0 1024 1024" aria-hidden="true"><rect width="1024" height="1024" fill="#0a0a0a"/><text x="512" y="610" text-anchor="middle" font-family="Inter, Helvetica, sans-serif" font-weight="600" font-size="400" letter-spacing="-20" fill="#f5f4f0">AB</text><path d="M220 690 L220 750 L272 720 Z" fill="#ff5a36"/></svg>
       Aldi Studio
     </a>
     <span class="sp"></span>
-    <a class="small" href="#akses">Akses &amp; biaya</a>
-    <a class="small" href="mailto:studio@aldiab.ai.id">Kontak</a>
+    <a class="link" href="#contoh">Contoh</a>
+    <a class="link" href="#cara">Cara kerja</a>
+    <a class="link" href="#fitur">Fitur</a>
+    <a class="link" href="#akses">Akses &amp; biaya</a>
+    <a class="pill dark magnet" href="/api/tiktok/login">Masuk <span class="arr">→</span></a>
   </nav>
 
-  <div class="hero">
-    <div>
-      <div class="msg" id="msg" hidden></div>
-      <h1>Dari gagasan jadi <em>video animasi</em> TikTok.</h1>
-      <p class="lead">Tulis idenya. Aldi Studio menyusun naskah dan storyboard, membuat narasi suara, menganimasikan setiap scene, lalu membantu Anda memosting ke akun TikTok Anda sendiri.</p>
-      <a class="btn" href="/api/tiktok/login">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#111" d="M16.6 5.82A4.28 4.28 0 0 1 15.54 3h-3.09v12.4a2.59 2.59 0 0 1-2.59 2.5 2.6 2.6 0 0 1 0-5.2c.27 0 .53.04.77.12V9.66a5.7 5.7 0 0 0-.77-.05 5.69 5.69 0 1 0 5.69 5.69V9.01a7.35 7.35 0 0 0 4.3 1.38V7.3a4.3 4.3 0 0 1-3.25-1.48z"/></svg>
-        Masuk dengan TikTok
-      </a>
-      <p class="note">Khusus kreator undangan. Sudah terdaftar? Langsung masuk.</p>
-      <form class="invite" action="/masuk" method="get">
-        <input name="undangan" placeholder="Kode undangan" aria-label="Kode undangan" autocomplete="off" required maxlength="20">
-        <button type="submit">Daftar</button>
-      </form>
+  <header class="hero">
+    <div class="msg" id="msg" hidden></div>
+    <div class="hero-top">
+    <div class="hero-copy">
+    <span class="badge fade-up"><b>Baru</b> Studio video AI untuk kreator TikTok</span>
+    <h1>
+      <span class="ln"><span>Gagasan.</span></span>
+      <span class="ln"><span class="soft">Animasi.</span></span>
+      <span class="ln"><span class="grad">Langsung ke</span></span>
+      <span class="ln"><span>TikTok.</span></span>
+    </h1>
     </div>
-    <div class="phone" aria-hidden="true">
-      <div class="card c1">Gagasan<br><span class="big">Kenapa kucing suka kardus?</span></div>
-      <div class="card c2">Storyboard · 6 scene<div class="bar"><i></i></div><div style="margin-top:10px">Narasi, animasi, render…</div></div>
-      <div class="card c3">Posting ke TikTok</div>
+
+    <div class="phone-zone" aria-hidden="true">
+      <div class="float-chip c1"><i style="background:#0a0a0a">✦</i>Naskah &amp; storyboard</div>
+      <div class="float-chip c2"><i style="background:#7c5cff">◉</i>Narasi suara AI</div>
+      <div class="float-chip c3"><i style="background:#ff5a36">↑</i>Posting ke TikTok</div>
+      <div class="phone" id="phone">
+        <div class="screen">
+          <video class="hero-video" src="/showcase/kucing.mp4" poster="/showcase/kucing.jpg" autoplay muted loop playsinline preload="auto"></video>
+          <div class="side"><i class="heart">♥</i><i>💬</i><i>↗</i></div>
+          <div class="meta"><b>@kreator</b> · Jurus salto si oren 🐱<br><span class="ai">Dibuat dengan AI</span></div>
+        </div>
+      </div>
+    </div>
+
+    </div>
+
+    <div class="hero-foot">
+      <p class="lead fade-up" style="animation-delay:.6s">Tulis satu kalimat ide. <b>Aldi Studio</b> menyusun naskah dan storyboard, membuat narasi suara, menganimasikan setiap scene, lalu membantu Anda memosting ke akun TikTok Anda sendiri.</p>
+      <div class="cta fade-up" style="animation-delay:.75s">
+        <a class="pill dark magnet" href="/api/tiktok/login">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16.6 5.82A4.28 4.28 0 0 1 15.54 3h-3.09v12.4a2.59 2.59 0 0 1-2.59 2.5 2.6 2.6 0 0 1 0-5.2c.27 0 .53.04.77.12V9.66a5.7 5.7 0 0 0-.77-.05 5.690 5.690 0 1 0 5.69 5.69V9.01a7.35 7.35 0 0 0 4.3 1.38V7.3a4.3 4.3 0 0 1-3.25-1.48z"/></svg>
+          Masuk dengan TikTok <span class="arr">→</span>
+        </a>
+        <p class="note">Khusus kreator undangan. Sudah terdaftar? Langsung masuk.</p>
+        <form class="invite" action="/masuk" method="get">
+          <input name="undangan" placeholder="Kode undangan" aria-label="Kode undangan" autocomplete="off" required maxlength="20">
+          <button type="submit">Daftar</button>
+        </form>
+      </div>
+    </div>
+  </header>
+
+  <div class="marquee" aria-hidden="true">
+    <div class="track">
+      <span>Motion graphics</span><span>Narasi suara AI</span><span>Subtitle otomatis</span><span>9:16 &amp; 16:9</span><span>Storyboard per scene</span><span>Revisi dengan kata-kata</span><span>Label konten AI</span><span>Posting ke TikTok</span>
+      <span>Motion graphics</span><span>Narasi suara AI</span><span>Subtitle otomatis</span><span>9:16 &amp; 16:9</span><span>Storyboard per scene</span><span>Revisi dengan kata-kata</span><span>Label konten AI</span><span>Posting ke TikTok</span>
     </div>
   </div>
 
-  <section>
-    <h2>Cara kerjanya</h2>
-    <div class="steps">
-      <div><b>Tulis gagasan</b><p>Satu atau dua kalimat tentang video yang Anda mau, plus durasi, rasio, dan gaya.</p></div>
-      <div><b>Periksa storyboard</b><p>AI menyusun naskah per scene. Anda bebas mengedit narasi dan arahan visual.</p></div>
-      <div><b>Produksi</b><p>Narasi suara dibuat, animasi ditulis dan dirender menjadi MP4 dengan subtitle.</p></div>
-      <div><b>Posting ke TikTok</b><p>Pilih privasi, izin komentar, duet, dan stitch, lalu posting ke akun TikTok Anda.</p></div>
+
+  <section class="showcase reveal" id="contoh">
+    <div class="aurora" aria-hidden="true"></div>
+    <div class="sc-copy">
+      <span class="tag">Dibuat dengan Aldi Studio</span>
+      <h2 class="split">Video asli. <span class="soft">Dari satu gagasan.</span></h2>
+      <p>Dua video ini dibuat oleh Aldi Studio dari satu kalimat gagasan: naskah, narasi suara, animasi, dan subtitle. Putar dan nyalakan suaranya.</p>
+      <a class="pill light magnet" href="/api/tiktok/login">Buat video Anda <span class="arr">→</span></a>
+    </div>
+    <div class="reels">
+      <figure class="reel">
+        <div class="frame">
+          <video data-src="/showcase/kucing.mp4" poster="/showcase/kucing.jpg" muted loop playsinline preload="none"></video>
+          <button class="snd" type="button" aria-label="Nyalakan suara"><span class="off">🔇</span><span class="on">🔊</span></button>
+          <span class="rec"><i></i>9:16</span>
+        </div>
+        <figcaption><span class="tag">Gagasan</span><b>“Kenapa kucing selalu mendarat pakai kaki?”</b><small>Motion graphics · Narasi · Subtitle</small></figcaption>
+      </figure>
+      <figure class="reel two">
+        <div class="frame">
+          <video data-src="/showcase/badak.mp4" poster="/showcase/badak.jpg" muted loop playsinline preload="none"></video>
+          <button class="snd" type="button" aria-label="Nyalakan suara"><span class="off">🔇</span><span class="on">🔊</span></button>
+          <span class="rec"><i></i>9:16</span>
+        </div>
+        <figcaption><span class="tag">Gagasan</span><b>“Semua badak Jawa tinggal di satu tempat. Kenapa butuh rumah kedua?”</b><small>Motion graphics · Narasi · Subtitle</small></figcaption>
+      </figure>
     </div>
   </section>
 
-  <section>
-    <h2>Yang Anda dapat</h2>
-    <div class="feat">
-      <div><b>Naskah dan storyboard</b><p>Disusun dari gagasan Anda, berbahasa Indonesia, dan bisa diedit sebelum produksi.</p></div>
-      <div><b>Narasi dan subtitle</b><p>Suara narator dengan timing per kata, plus file subtitle .srt.</p></div>
-      <div><b>Animasi motion graphics</b><p>Teks kinetik, kartu, angka, dan ilustrasi 2D, dalam rasio 9:16 atau 16:9.</p></div>
-      <div><b>Revisi dengan kata-kata</b><p>Tulis apa yang ingin diubah, dan animasinya dirender ulang.</p></div>
-      <div><b>Posting dengan kontrol penuh</b><p>Tidak ada yang dikirim ke TikTok sebelum Anda menekan Posting. Konten diberi label buatan AI.</p></div>
-      <div><b>Biaya transparan</b><p>Setiap video menampilkan token AI dan waktu render yang dipakai.</p></div>
+  <div class="stage reveal" aria-hidden="true">
+    <div class="head"><span class="tag">Di studio sekarang</span><span class="live"><i></i>Produksi berjalan</span></div>
+    <div class="card spot">
+      <small>01 — Gagasan</small>
+      <span class="big">Kenapa kucing suka tidur di kardus?</span>
+      <div class="row"><span>45 detik · 9:16</span><span>Motion graphics</span></div>
+    </div>
+    <div class="card spot">
+      <small>02 — Storyboard &amp; render</small>
+      <span class="big">6 scene, narasi, subtitle</span>
+      <div class="bar"><i></i></div>
+      <div class="row"><span>Render</span><span class="count" data-to="68" data-suffix="%">0%</span></div>
+    </div>
+    <div class="card go">
+      <small>03 — Posting</small>
+      <span class="big">Siap diposting ke TikTok Anda</span>
+      <div class="row"><span>Privasi pilihan Anda</span><span>Label AI</span></div>
+    </div>
+  </div>
+
+  <div class="stats stagger">
+    <div><b><span class="count" data-to="4">0</span></b><span>langkah dari ide ke posting</span></div>
+    <div><b><span class="count" data-to="90">0</span><sup>dtk</sup></b><span>durasi video maksimal</span></div>
+    <div><b><span class="count" data-to="2">0</span></b><span>rasio: 9:16 dan 16:9</span></div>
+    <div><b><span class="count" data-to="100">0</span><sup>%</sup></b><span>Anda yang menekan Posting</span></div>
+  </div>
+
+  <section id="cara" class="reveal">
+    <div class="sec-head">
+      <span class="tag">Empat langkah</span>
+      <h2 class="split">Cara kerjanya. <span class="soft">Sederhana.</span></h2>
+    </div>
+    <ol class="rows">
+      <li><span class="n">001</span><b>Tulis gagasan</b><p>Satu atau dua kalimat tentang video yang Anda mau, plus durasi, rasio, dan gaya.</p><span class="go">→</span></li>
+      <li><span class="n">002</span><b>Periksa storyboard</b><p>AI menyusun naskah per scene. Anda bebas mengedit narasi dan arahan visual.</p><span class="go">→</span></li>
+      <li><span class="n">003</span><b>Produksi</b><p>Narasi suara dibuat, animasi ditulis dan dirender menjadi MP4 dengan subtitle.</p><span class="go">→</span></li>
+      <li><span class="n">004</span><b>Posting ke TikTok</b><p>Pilih privasi, izin komentar, duet, dan stitch, lalu posting ke akun TikTok Anda.</p><span class="go">→</span></li>
+    </ol>
+  </section>
+
+  <section id="fitur" class="reveal">
+    <div class="sec-head">
+      <span class="tag">Yang Anda dapat</span>
+      <h2 class="split">Satu studio. <span class="soft">Tanpa tim produksi.</span></h2>
+    </div>
+    <div class="grid stagger">
+      <div class="spot"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 4h10l4 4v12H5z"/><path d="M9 12h6M9 16h4"/></svg></span><b>Naskah dan storyboard</b><p>Disusun dari gagasan Anda, berbahasa Indonesia, dan bisa diedit sebelum produksi.</p></div>
+      <div class="spot"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg></span><b>Narasi dan subtitle</b><p>Suara narator dengan timing per kata, plus file subtitle .srt.</p></div>
+      <div class="spot"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9l5 3-5 3z"/></svg></span><b>Animasi motion graphics</b><p>Teks kinetik, kartu, angka, dan ilustrasi 2D, dalam rasio 9:16 atau 16:9.</p></div>
+      <div class="spot"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20l4-1L19 8l-3-3L5 16z"/><path d="M14 7l3 3"/></svg></span><b>Revisi dengan kata-kata</b><p>Tulis apa yang ingin diubah, dan animasinya dirender ulang.</p></div>
+      <div class="spot"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg></span><b>Posting dengan kontrol penuh</b><p>Tidak ada yang dikirim ke TikTok sebelum Anda menekan Posting. Konten diberi label buatan AI.</p></div>
+      <div class="spot"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg></span><b>Biaya transparan</b><p>Setiap video menampilkan token AI dan waktu render yang dipakai.</p></div>
     </div>
   </section>
 
-  <section id="akses">
+  <section id="akses" class="reveal">
+    <div class="sec-head">
+      <span class="tag">Akses &amp; biaya</span>
+      <h2 class="split">Dengan undangan. <span class="soft">Bayar sesuai pakai.</span></h2>
+    </div>
     <div class="access">
-      <div>
-        <h2>Akses dan biaya</h2>
-        <ul>
-          <li>Aldi Studio terbuka untuk kreator yang diundang. Minta undangan lewat <a href="mailto:studio@aldiab.ai.id">studio@aldiab.ai.id</a>.</li>
-          <li>Masuk dengan akun TikTok Anda. Studio hanya memakai profil dasar dan izin memosting video yang Anda setujui.</li>
-          <li>Biaya dihitung dari pemakaian, yaitu token AI dan waktu render, dengan batas bulanan per kreator. Tagihan dikirim lewat email.</li>
-          <li>Izin Studio bisa dicabut kapan saja dari aplikasi TikTok.</li>
-        </ul>
-      </div>
-      <div>
-        <h2>In English</h2>
+      <ul class="stagger">
+        <li><b>Undangan.</b> Aldi Studio terbuka untuk kreator yang diundang. Minta undangan lewat <a href="mailto:studio@aldiab.ai.id">studio@aldiab.ai.id</a>.</li>
+        <li><b>Masuk dengan TikTok.</b> Studio hanya memakai profil dasar dan izin memosting video yang Anda setujui.</li>
+        <li><b>Biaya.</b> Dihitung dari pemakaian, yaitu token AI dan waktu render, dengan batas bulanan per kreator. Tagihan dikirim lewat email.</li>
+        <li><b>Kendali Anda.</b> Izin Studio bisa dicabut kapan saja dari aplikasi TikTok.</li>
+      </ul>
+      <div class="en-box">
+        <span class="tag">In English</span>
         <p class="en">Aldi Studio turns an idea into a short animated video with narration and subtitles, then lets invited creators post it to their own TikTok account. Creators sign in with TikTok, review the storyboard, and choose privacy and interaction settings before anything is posted. Access is by invitation, and usage is billed by AI tokens and render time.</p>
       </div>
     </div>
   </section>
 
-  <footer>
-    <span>© 2026 Aldi AB</span>
-    <span class="sp"></span>
-    <a href="/terms">Terms of Service</a>
-    <a href="/privacy">Privacy Policy</a>
-    <a href="mailto:studio@aldiab.ai.id">studio@aldiab.ai.id</a>
-  </footer>
+  <div class="closing reveal">
+    <div class="glow"></div><div class="glow b"></div><div class="lines"></div>
+    <h2 class="split">Buat video berikutnya. <span class="soft">Hari ini.</span></h2>
+    <div class="actions">
+      <a class="pill light magnet" href="/api/tiktok/login">Masuk dengan TikTok <span class="arr">→</span></a>
+      <a class="pill ghost magnet" href="mailto:studio@aldiab.ai.id">Minta undangan</a>
+    </div>
+    <div class="big-word" aria-hidden="true">Aldi Studio</div>
+    <footer>
+      <span>© 2026 Aldi AB</span>
+      <span class="sp"></span>
+      <a href="/terms">Terms of Service</a>
+      <a href="/privacy">Privacy Policy</a>
+      <a href="mailto:studio@aldiab.ai.id">studio@aldiab.ai.id</a>
+    </footer>
+  </div>
 </div>
+
 <script>
+(() => {
   const m = new URLSearchParams(location.search).get("masuk");
   if (m) { const el = document.getElementById("msg"); el.textContent = m; el.hidden = false; history.replaceState(null, "", "/"); }
+
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Judul bagian: pecah per kata supaya muncul satu per satu.
+  document.querySelectorAll("h2.split").forEach((h) => {
+    let i = 0;
+    const wrap = (node) => {
+      [...node.childNodes].forEach((c) => {
+        if (c.nodeType === 3) {
+          const frag = document.createDocumentFragment();
+          c.textContent.split(/(\s+)/).forEach((t) => {
+            if (!t) return;
+            if (/^\s+$/.test(t)) { frag.append(t); return; }
+            const s = document.createElement("span"); s.className = "w"; s.style.setProperty("--i", i++); s.textContent = t; frag.append(s);
+          });
+          c.replaceWith(frag);
+        } else if (c.nodeType === 1) wrap(c);
+      });
+    };
+    wrap(h);
+  });
+
+  // Angka yang menghitung naik.
+  const countUp = (el) => {
+    const to = +el.dataset.to, suf = el.dataset.suffix || "", t0 = performance.now(), d = 1600;
+    const step = (t) => { const p = Math.min(1, (t - t0) / d), e = 1 - Math.pow(1 - p, 3); el.textContent = Math.round(to * e) + suf; if (p < 1) requestAnimationFrame(step); };
+    still ? (el.textContent = to + suf) : requestAnimationFrame(step);
+  };
+
+  // Muncul saat discroll.
+  const io = new IntersectionObserver((es) => es.forEach((e) => {
+    if (!e.isIntersecting) return;
+    e.target.classList.add("in");
+    e.target.querySelectorAll(".count").forEach(countUp);
+    io.unobserve(e.target);
+  }), { threshold: 0.15 });
+  document.querySelectorAll(".reveal, .stagger, h2.split").forEach((el) => io.observe(el));
+
+  // Navigasi jadi kaca saat discroll, plus bilah progres.
+  const nav = document.getElementById("nav"), bar = document.querySelector(".progress");
+  const onScroll = () => {
+    nav.classList.toggle("solid", scrollY > 20);
+    const h = document.documentElement.scrollHeight - innerHeight;
+    bar.style.transform = `scaleX(${h > 0 ? scrollY / h : 0})`;
+  };
+  addEventListener("scroll", onScroll, { passive: true }); onScroll();
+
+  // Sorotan cahaya mengikuti kursor di kartu.
+  document.querySelectorAll(".spot").forEach((c) => c.addEventListener("pointermove", (e) => {
+    const r = c.getBoundingClientRect();
+    c.style.setProperty("--x", e.clientX - r.left + "px"); c.style.setProperty("--y", e.clientY - r.top + "px");
+  }));
+
+  // Video contoh: muat dan putar hanya saat terlihat; tombol suara per video.
+  const vids = [...document.querySelectorAll(".reel video")];
+  const vio = new IntersectionObserver((es) => es.forEach((e) => {
+    const v = e.target;
+    if (e.isIntersecting) { if (!v.src) v.src = v.dataset.src; if (!still) v.play().catch(() => {}); } else v.pause();
+  }), { threshold: 0.35 });
+  vids.forEach((v) => vio.observe(v));
+  document.querySelectorAll(".snd").forEach((b) => b.addEventListener("click", () => {
+    const v = b.parentElement.querySelector("video");
+    if (!v.src) v.src = v.dataset.src;
+    const turnOn = v.muted;
+    vids.forEach((o) => { o.muted = true; }); document.querySelectorAll(".snd").forEach((o) => o.classList.remove("unmuted"));
+    if (turnOn) { v.muted = false; v.play().catch(() => {}); b.classList.add("unmuted"); b.setAttribute("aria-label", "Matikan suara"); }
+    else b.setAttribute("aria-label", "Nyalakan suara");
+  }));
+  if (still) { document.querySelector(".hero-video").pause(); return; }
+
+  // Cahaya latar mengikuti kursor.
+  const cl = document.getElementById("cl");
+  addEventListener("pointermove", (e) => { cl.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`; }, { passive: true });
+
+  // Tombol magnetis.
+  document.querySelectorAll(".magnet").forEach((b) => {
+    b.addEventListener("pointermove", (e) => { const r = b.getBoundingClientRect(); b.style.transform = `translate(${(e.clientX - r.left - r.width / 2) * 0.2}px, ${(e.clientY - r.top - r.height / 2) * 0.3}px)`; });
+    b.addEventListener("pointerleave", () => { b.style.transform = ""; });
+  });
+
+  // Ponsel miring mengikuti kursor.
+  const phone = document.getElementById("phone");
+  addEventListener("pointermove", (e) => {
+    const x = e.clientX / innerWidth - 0.5, y = e.clientY / innerHeight - 0.5;
+    phone.style.transform = `rotateY(${-14 + x * 16}deg) rotateX(${6 - y * 10}deg) rotateZ(2deg)`;
+  });
+
+})();
 </script>
 </body>
 </html>

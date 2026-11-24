@@ -12,6 +12,7 @@ import { jobDirOf, jobOwner, listJobs, loadJob, monthlyUsage, PLATFORMS, produce
 import { appendLedger, cleanEntries, PRE_LANGKAH, thisMonth, type UsageEntry } from "./usage";
 import { clearCookie, sameOrigin, sessionCookie, sessionUser } from "./session";
 import { tiktokAuthorizeUrl, tiktokExchangeCode, tiktokKeys, tiktokProfile } from "./upload/tiktok";
+import { checkPost, creatorInfo, directPost, NeedsLogin, parsePostOptions, userAccessToken, waitPublish, type CreatorInfo } from "./upload/tiktok-post";
 import { createInvite, DATA_DIR, getUser, inviteUsable, listInvites, listUsers, newUser, normalizeCode, owner, publicUser, revokeInvite, saveUser, takeInvite, updateUser, type User } from "./users";
 import { viaAccess } from "./access";
 import { appendChunk, checkWorkerAuth, claimNext, complete, fail, isNeededFile, reportProgress, workerStatus } from "./queue";
@@ -252,6 +253,29 @@ async function currentUser(req: http.IncomingMessage): Promise<User | null> {
   return null;
 }
 
+/* ---------------- URL video sementara untuk TikTok (PULL_FROM_URL) ---------------- */
+
+// TikTok mengambil video dari https://<host>/pull/<token>/video.mp4. Token acak, berlaku sampai posting
+// selesai atau paling lama 1 jam; boleh diminta berulang karena TikTok bisa mengunduh per bagian.
+const pulls = new Map<string, { file: string; exp: number }>();
+function pullUrl(req: http.IncomingMessage, file: string): { url: string; done: () => void } {
+  const now = Date.now();
+  for (const [k, v] of pulls) if (v.exp < now) pulls.delete(k);
+  const token = crypto.randomBytes(24).toString("hex");
+  pulls.set(token, { file, exp: now + 3600_000 });
+  return { url: `https://${req.headers.host}/pull/${token}/video.mp4`, done: () => pulls.delete(token) };
+}
+
+/** Durasi video job dalam detik, dari job.json. */
+function jobSeconds(id: string): number {
+  try {
+    const j = JSON.parse(fs.readFileSync(path.join(jobDirOf(id), "job.json"), "utf8"));
+    return j.scenes.reduce((a: number, s: { durationInFrames: number }) => a + s.durationInFrames, 0) / j.fps;
+  } catch {
+    return 0;
+  }
+}
+
 /* ---------------- Mode Claude, pemakaian, dan batas ---------------- */
 
 // Video pemilik memakai langganan Claude-nya; video kreator memakai API key (dibayar per pemakaian).
@@ -276,6 +300,13 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
 
   /* ----- Publik ----- */
   if (m === "GET" && p === "/healthz") return json(res, 200, { ok: true }); // readinessProbe Kubernetes
+
+  const pm = p.match(/^\/pull\/([a-f0-9]{48})\/video\.mp4$/);
+  if ((m === "GET" || m === "HEAD") && pm) {
+    const it = pulls.get(pm[1]);
+    if (!it || it.exp < Date.now()) return json(res, 404, { error: "Tidak ditemukan" });
+    return sendFile(req, res, it.file);
+  }
   if (m === "GET" && (p === "/" || p === "/index.html")) return sendFile(req, res, path.join(WEB, me ? "index.html" : "landing.html"));
   if (m === "GET" && (p === "/terms" || p === "/privacy")) return sendFile(req, res, path.join(WEB, `${p.slice(1)}.html`));
 
@@ -286,7 +317,11 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
     if (code && !inviteUsable(code)) return backWith(res, `Kode undangan tidak berlaku atau sudah dipakai. Hubungi ${KONTAK}.`);
     return startLogin(req, res, code || null, false);
   }
-  if (m === "GET" && p === "/api/tiktok/login") return me ? redirect(res, "/") : startLogin(req, res, null, false);
+  // Login, atau hubungkan ulang TikTok (izin baru / token kedaluwarsa) bagi yang sudah masuk.
+  if (m === "GET" && p === "/api/tiktok/login") {
+    if (me && me.openId === LOCAL_ID) return redirect(res, localOnly() ? "/" : "/admin/klaim");
+    return startLogin(req, res, null, false);
+  }
 
   if (m === "GET" && p === "/api/tiktok/callback") {
     const key = url.searchParams.get("state") ?? "";
@@ -388,7 +423,9 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
       me: publicUser(me),
       mode: MODE_LABEL[modeFor(me)],
       usage: (({ usd, tokens, videos, renderSeconds }) => ({ month: thisMonth(), usd, tokens, videos, renderSeconds, limitUsd: isOwner ? null : me.limitUsd }))(usageFor(me)),
-      platforms: PLATFORMS.filter((x) => isOwner || x.name === "TikTok").map((x) => ({ name: x.name, ready: x.ready() })),
+      // Di server TikTok punya kotak posting sendiri (akun masing-masing). Di laptop tetap lewat .env.
+      platforms: PLATFORMS.filter((x) => (localOnly() ? true : isOwner && x.name !== "TikTok")).map((x) => ({ name: x.name, ready: x.ready() })),
+      tiktokPost: !localOnly(),
       tiktokKeys: tiktokKeys(),
       defaults: DEFAULT_CONFIG,
       gaya: GAYA_LABEL,
@@ -491,6 +528,59 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
     if (!mine(id)) return json(res, 404, { error: "Job tidak ditemukan" });
     startTask(me, "upload", id, async (r) => {
       await uploadJob(id, names, r);
+    });
+    return json(res, 202, { ok: true });
+  }
+
+  if (m === "GET" && p === "/api/tiktok/creator") {
+    const id = safeId(url.searchParams.get("jobId") ?? "");
+    if (!id || !mine(id)) return json(res, 404, { error: "Job tidak ditemukan" });
+    try {
+      const info = await creatorInfo(await userAccessToken(me.openId));
+      return json(res, 200, { ...info, durationSec: jobSeconds(id) });
+    } catch (e) {
+      return json(res, e instanceof NeedsLogin ? 401 : 502, { error: (e as Error).message, needsLogin: e instanceof NeedsLogin });
+    }
+  }
+
+  if (m === "POST" && p === "/api/tiktok/post") {
+    if (busy(me.openId)) return json(res, 409, { error: "Masih ada proses berjalan." });
+    const body = await readBody(req);
+    const id = safeId(String(body.jobId ?? ""));
+    if (!id || !mine(id)) return json(res, 404, { error: "Job tidak ditemukan" });
+    const file = path.join(jobDirOf(id), "video.mp4");
+    if (!fs.existsSync(file)) return json(res, 400, { error: "Video belum ada." });
+    const opts = parsePostOptions(body);
+    let token: string;
+    let info: CreatorInfo;
+    try {
+      token = await userAccessToken(me.openId);
+      info = await creatorInfo(token); // dibaca ulang, karena izin akun bisa berubah sejak halaman dibuka
+    } catch (e) {
+      return json(res, e instanceof NeedsLogin ? 401 : 502, { error: (e as Error).message, needsLogin: e instanceof NeedsLogin });
+    }
+    const bad = checkPost(info, opts, jobSeconds(id));
+    if (bad) return json(res, 400, { error: bad });
+    const pull = pullUrl(req, file);
+    startTask(me, "upload", id, async (r) => {
+      const resultsPath = path.join(jobDirOf(id), "uploads.json");
+      const save = (v: string) => {
+        const all = fs.existsSync(resultsPath) ? JSON.parse(fs.readFileSync(resultsPath, "utf8")) : {};
+        fs.writeFileSync(resultsPath, JSON.stringify({ ...all, TikTok: v }, null, 2));
+      };
+      try {
+        r.log(`Posting ke TikTok @${info.username} (privasi: ${opts.privacy})...`);
+        const publishId = await directPost(token, pull.url, info, opts);
+        r.log("Video dikirim. TikTok perlu beberapa menit untuk memprosesnya sebelum tampil di profil.");
+        const out = await waitPublish(token, publishId, r.log);
+        save(out);
+        r.log(out);
+      } catch (e) {
+        save(`GAGAL: ${(e as Error).message}`);
+        throw e;
+      } finally {
+        pull.done();
+      }
     });
     return json(res, 202, { ok: true });
   }

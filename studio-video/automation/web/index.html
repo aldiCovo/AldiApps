@@ -83,6 +83,14 @@
   .banner { padding: 12px 14px; border-radius: 12px; margin-bottom: 14px; font-size: 14px; }
   .banner.err { background: #fde8e8; color: #9b2c2c; }
   .banner.info { background: var(--warn-soft); color: #7b5410; }
+  .tt-who { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .tt-who img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: #ddd; }
+  .tt-opts { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 0; }
+  .tt-opts label, .tt-check { display: flex; align-items: center; gap: 6px; font-weight: 500; margin: 0; }
+  .tt-check { align-items: flex-start; margin: 6px 0; }
+  .tt-check small { display: block; color: var(--muted); font-weight: 400; }
+  label.off { color: var(--muted); }
+  .tt-field { margin-top: 10px; }
   .hidden { display: none !important; }
   .me { display: inline-flex; align-items: center; gap: 8px; }
   .me img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: #ddd; }
@@ -208,7 +216,35 @@
             <textarea id="feedback" rows="3" placeholder="Contoh: scene 2 terlalu ramai, buat teksnya lebih besar dan latarnya oranye"></textarea>
             <div class="row"><button class="btn" id="reviseBtn">Revisi & render ulang</button></div>
           </div>
-          <div class="box">
+          <div class="box hidden" id="ttBox">
+            <h3>Posting ke TikTok</h3>
+            <div id="ttState" class="meter">Memuat akun TikTok…</div>
+            <div id="ttForm" class="hidden">
+              <div class="tt-who"><img id="ttAvatar" alt="" referrerpolicy="no-referrer"><div><b id="ttNick"></b><div class="meter" id="ttUser"></div></div></div>
+              <label for="ttTitle">Caption</label>
+              <textarea id="ttTitle" rows="3" maxlength="2200"></textarea>
+              <div class="tt-field">
+                <label for="ttPrivacy">Siapa yang bisa menonton video ini</label>
+                <select id="ttPrivacy"><option value="" selected disabled>Pilih…</option></select>
+              </div>
+              <div class="tt-opts">
+                <label id="ttCommentL"><input type="checkbox" id="ttComment"> Izinkan komentar</label>
+                <label id="ttDuetL"><input type="checkbox" id="ttDuet"> Izinkan Duet</label>
+                <label id="ttStitchL"><input type="checkbox" id="ttStitch"> Izinkan Stitch</label>
+              </div>
+              <label class="tt-check"><input type="checkbox" id="ttCommercial"><span>Ungkapkan konten komersial<small>Aktifkan jika video ini mempromosikan diri Anda, brand, produk, atau jasa.</small></span></label>
+              <div id="ttCommercialBox" class="hidden" style="margin-left:22px">
+                <label class="tt-check" id="ttYourBrandL"><input type="checkbox" id="ttYourBrand"><span>Brand Anda<small>Anda mempromosikan diri sendiri atau bisnis Anda.</small></span></label>
+                <label class="tt-check" id="ttBrandedL"><input type="checkbox" id="ttBranded"><span>Konten bersponsor<small>Anda mempromosikan brand lain atau pihak ketiga.</small></span></label>
+                <div class="meter" id="ttLabelNote"></div>
+              </div>
+              <div class="banner err hidden" id="ttWarn" style="margin:10px 0 0"></div>
+              <p class="meter" id="ttConsent" style="margin:12px 0 0"></p>
+              <div class="row"><span id="ttPostWrap"><button class="btn primary" id="ttPost" disabled>Posting ke TikTok</button></span></div>
+              <p class="meter" style="margin:8px 0 0">Tidak ada yang dikirim sebelum Anda menekan Posting. Setelah itu TikTok perlu beberapa menit untuk memproses video sebelum tampil di profil Anda. Video diberi label buatan AI.</p>
+            </div>
+          </div>
+          <div class="box" id="upBox">
             <h3>Upload</h3>
             <div id="plats"></div>
             <div class="row"><button class="btn primary" id="uploadBtn">Upload</button></div>
@@ -353,7 +389,7 @@ function setBar(p) {
   $("#barText").textContent = p.stage === "render" ? `Render frame ${p.done.toLocaleString("id-ID")} / ${p.total.toLocaleString("id-ID")} (${pct}%)` : `Encoding ${pct}%`;
 }
 function appendLog(line) { const l = $("#log"); l.textContent += line + "\n"; l.scrollTop = l.scrollHeight; }
-function lockActions(on) { ["#toProduce","#reviseBtn","#uploadBtn","#rerenderBtn"].forEach(s => $(s).disabled = on); }
+function lockActions(on) { ["#toProduce","#reviseBtn","#uploadBtn","#rerenderBtn"].forEach(s => $(s).disabled = on); if (on) $("#ttPost").disabled = true; else updateTT(); }
 
 /* ---------- status laptop render ---------- */
 async function refreshRender() {
@@ -375,6 +411,7 @@ function connect() {
     if (e.type === "stage") { setStage(e.stage); lockActions(true); }
     if (e.type === "progress") setBar(e);
     if (e.type === "queue") info(e.position ? `Menunggu giliran render (antrean ke-${e.position}). Halaman ini boleh ditutup.` : "Giliran Anda, produksi dimulai.");
+    if (e.type === "done" || e.type === "error") ttBusy = false;
     if (e.type === "done") { lockActions(false); loadJobs(); api("/api/status").then(s => showUsage(s.usage)).catch(() => {}); if (e.jobId) openJob(e.jobId, true); }
     if (e.type === "error") { lockActions(false); showError("Gagal: " + e.message); loadJobs(); }
   };
@@ -402,8 +439,82 @@ async function openJob(id, scroll) {
   $("#reviseBtn").disabled = !j.canRevise;
   $("#reviseBtn").title = j.canRevise ? "" : "Video lama tanpa sesi AI tersimpan tidak bisa direvisi";
   $("#uplog").innerHTML = Object.entries(j.uploads || {}).map(([k, v]) => `<div><b>${k}:</b> ${/^https?:/.test(v) ? `<a href="${v}" target="_blank" rel="noopener">${v}</a>` : v.replace(/</g, "&lt;")}</div>`).join("");
+  loadTikTok(j);
   if (scroll) $("#s5").scrollIntoView({ behavior: "smooth" });
 }
+
+/* ---------- Posting ke TikTok (aturan Direct Post TikTok) ---------- */
+const PRIVACY_LABEL = { PUBLIC_TO_EVERYONE: "Semua orang", MUTUAL_FOLLOW_FRIENDS: "Teman (saling mengikuti)", FOLLOWER_OF_CREATOR: "Pengikut", SELF_ONLY: "Hanya saya" };
+const MUSIC = '<a href="https://www.tiktok.com/legal/page/global/music-usage-confirmation/en" target="_blank" rel="noopener">Music Usage Confirmation</a>';
+const BRANDED = '<a href="https://www.tiktok.com/legal/page/global/bc-policy/en" target="_blank" rel="noopener">Branded Content Policy</a>';
+let tt = null; // info kreator untuk job yang terbuka
+let ttBusy = false; // posting sedang berjalan: tombol tetap mati agar tidak terkirim dua kali
+
+async function loadTikTok(j) {
+  tt = null;
+  const box = $("#ttBox");
+  box.classList.toggle("hidden", !(status && status.tiktokPost && j.hasVideo));
+  if (box.classList.contains("hidden")) return;
+  $("#ttForm").classList.add("hidden");
+  $("#ttState").classList.remove("hidden");
+  $("#ttState").textContent = "Memuat akun TikTok…";
+  const r = await fetch("/api/tiktok/creator?jobId=" + encodeURIComponent(j.id));
+  const d = await r.json().catch(() => ({}));
+  if (currentJob !== j) return;
+  if (!r.ok) {
+    $("#ttState").innerHTML = (d.error || "Akun TikTok tidak bisa dibaca.").replace(/</g, "&lt;") + (d.needsLogin ? ' <a href="/api/tiktok/login">Hubungkan akun TikTok</a>' : "");
+    return;
+  }
+  tt = d;
+  $("#ttState").classList.add("hidden");
+  $("#ttForm").classList.remove("hidden");
+  $("#ttNick").textContent = d.nickname; $("#ttUser").textContent = d.username ? "@" + d.username : "";
+  if (d.avatar) $("#ttAvatar").src = d.avatar;
+  $("#ttTitle").value = (j.plan && j.plan.caption) || "";
+  $("#ttPrivacy").innerHTML = '<option value="" selected disabled>Pilih…</option>' + d.privacyOptions.map(o => `<option value="${o}">${PRIVACY_LABEL[o] || o}</option>`).join("");
+  for (const [k, off] of [["Comment", d.commentDisabled], ["Duet", d.duetDisabled], ["Stitch", d.stitchDisabled]]) {
+    const cb = $("#tt" + k); cb.checked = false; cb.disabled = off;
+    $("#tt" + k + "L").classList.toggle("off", off);
+    $("#tt" + k + "L").title = off ? "Dinonaktifkan di pengaturan akun TikTok Anda" : "";
+  }
+  $("#ttCommercial").checked = false; $("#ttYourBrand").checked = false; $("#ttBranded").checked = false;
+  updateTT();
+}
+
+function updateTT() {
+  if (!tt) return;
+  const commercial = $("#ttCommercial").checked;
+  $("#ttCommercialBox").classList.toggle("hidden", !commercial);
+  if (!commercial) { $("#ttYourBrand").checked = false; $("#ttBranded").checked = false; }
+  const priv = $("#ttPrivacy").value, yours = $("#ttYourBrand").checked, branded = $("#ttBranded").checked;
+  // Konten bersponsor tidak boleh privat.
+  const self = $("#ttPrivacy").querySelector('option[value="SELF_ONLY"]');
+  if (self) { self.disabled = branded; self.title = branded ? "Konten bersponsor tidak bisa diatur menjadi privat." : ""; }
+  $("#ttBranded").disabled = priv === "SELF_ONLY";
+  $("#ttBrandedL").classList.toggle("off", priv === "SELF_ONLY");
+  $("#ttBrandedL").title = priv === "SELF_ONLY" ? "Konten bersponsor tidak bisa diatur menjadi privat." : "";
+  $("#ttLabelNote").textContent = branded ? "Video Anda akan diberi label 'Paid partnership'." : yours ? "Video Anda akan diberi label 'Promotional content'." : "";
+  $("#ttConsent").innerHTML = branded ? `By posting, you agree to TikTok's ${BRANDED} and ${MUSIC}.` : `By posting, you agree to TikTok's ${MUSIC}.`;
+  const tooLong = tt.maxDurationSec && tt.durationSec > tt.maxDurationSec;
+  const warn = tooLong ? `Video ${Math.ceil(tt.durationSec)} detik, lebih panjang dari batas akun TikTok ini (${tt.maxDurationSec} detik).` : "";
+  $("#ttWarn").textContent = warn; $("#ttWarn").classList.toggle("hidden", !warn);
+  const needDisclosure = commercial && !yours && !branded;
+  $("#ttPost").disabled = ttBusy || !priv || needDisclosure || tooLong;
+  $("#ttPostWrap").title = needDisclosure ? "Anda perlu menandai apakah konten ini mempromosikan diri Anda, pihak ketiga, atau keduanya." : !priv ? "Pilih siapa yang bisa menonton video ini." : "";
+}
+["#ttPrivacy", "#ttCommercial", "#ttYourBrand", "#ttBranded"].forEach(s => $(s).addEventListener("change", updateTT));
+
+$("#ttPost").onclick = async (e) => { await busyBtn(e.currentTarget, "Mengirim…", async () => {
+  clearBanner(); resetProgress();
+  await api("/api/tiktok/post", {
+    jobId: currentJob.id, title: $("#ttTitle").value, privacy: $("#ttPrivacy").value,
+    allowComment: $("#ttComment").checked, allowDuet: $("#ttDuet").checked, allowStitch: $("#ttStitch").checked,
+    commercial: $("#ttCommercial").checked, yourBrand: $("#ttYourBrand").checked, branded: $("#ttBranded").checked,
+  });
+  ttBusy = true;
+  lockActions(true);
+  info("Video sedang dikirim ke TikTok. Prosesnya tampil di langkah 4, dan TikTok perlu beberapa menit sebelum video muncul di profil.");
+}); updateTT(); };
 $("#openFolder").onclick = () => currentJob && api("/api/open/" + encodeURIComponent(currentJob.id), {}).catch(e => info(e.message));
 $("#rerenderBtn").onclick = (e) => busyBtn(e.currentTarget, "Memulai…", async () => {
   clearBanner(); resetProgress(); await api("/api/rerender", { jobId: currentJob.id });
@@ -477,6 +588,7 @@ $("#newBtn").onclick = () => {
       if (status.me.avatar) $("#meAvatar").src = status.me.avatar; else $("#meAvatar").classList.add("hidden");
       if (status.me.role === "owner") $("#adminLink").classList.remove("hidden");
     }
+    $("#upBox").classList.toggle("hidden", !status.platforms.length);
     $("#plats").innerHTML = status.platforms.map(p => `<label class="plat"><input type="checkbox" value="${p.name}" ${p.ready ? "" : "disabled"}> ${p.name} ${p.ready ? "" : "<small>— belum disetel (lihat README)</small>"}</label>`).join("");
     $("#gaya").innerHTML = Object.entries(status.gaya).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
     $("#suara").innerHTML = status.suara.map(s => `<option value="${s.id}">${s.label}</option>`).join("");

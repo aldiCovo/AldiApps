@@ -3,44 +3,68 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Admin Studio</title>
+<title>Admin · Aldi Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  :root { --bg: #f3f0ea; --panel: #fff; --ink: #16151b; --muted: #77736b; --line: rgba(0,0,0,0.09); --accent: #ff5a36; --ok: #1f9d55; --ok-soft: #e3f5ea; --bad: #9b2c2c; --bad-soft: #fde8e8; }
+  :root { --bg: #f5f4f0; --panel: rgba(255,255,255,0.72); --ink: #0a0a0a; --muted: rgba(10,10,10,0.58); --line: rgba(10,10,10,0.10); --accent: #ff5a36; --ok: #1f8a4c; --ok-soft: #dff3e6; --bad: #8a2a12; --bad-soft: #fdebe7;
+    --display: "Inter", system-ui, sans-serif; --text: "Instrument Sans", system-ui, sans-serif; --ease: cubic-bezier(.2,.7,.1,1); }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 "Segoe UI", system-ui, sans-serif; }
-  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 60px; }
-  header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 18px; }
-  h1 { font-size: 24px; margin: 0 auto 0 0; letter-spacing: -0.02em; }
-  h2 { font-size: 17px; margin: 0 0 12px; }
+  html { background: var(--bg); }
+  body { margin: 0; color: var(--ink); font: 15px/1.55 var(--text); -webkit-font-smoothing: antialiased; }
+  .bg { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+  .bg .aurora { position: absolute; width: 120vmax; height: 120vmax; right: -50vmax; top: -85vmax; border-radius: 50%; background: conic-gradient(from 0deg, #ff5a36, #ffb38a, #f7d774, #b9a7ff, #7cc6ff, #ff7aa8, #ff5a36); filter: blur(120px); opacity: .26; animation: spin 60s linear infinite; }
+  .bg .grid-lines { position: absolute; inset: 0; background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px); background-size: 88px 88px; -webkit-mask-image: radial-gradient(ellipse 70% 60% at 70% 0%, #000, transparent 75%); mask-image: radial-gradient(ellipse 70% 60% at 70% 0%, #000, transparent 75%); opacity: .5; }
+  @keyframes spin { to { transform: rotate(1turn); } }
+  @keyframes rise { from { opacity: 0; transform: translateY(16px); } }
+  main { max-width: 1140px; margin: 0 auto; padding: 32px 20px 70px; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; }
+  .brand svg { width: 34px; height: 34px; border-radius: 9px; }
+  h1 { font: 500 clamp(30px, 3.4vw, 44px)/1 var(--display); letter-spacing: -0.04em; margin: 0 auto 0 0; }
+  h2 { font: 500 21px/1.2 var(--display); letter-spacing: -0.03em; margin: 0 0 14px; }
   a { color: inherit; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; margin-bottom: 16px; }
-  .chip { display: inline-flex; padding: 4px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600; background: #eee; }
+  .card { background: var(--panel); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid var(--line); border-radius: 20px; padding: 24px 26px; margin-bottom: 16px; box-shadow: 0 20px 50px -30px rgba(10,10,10,0.25); animation: rise .7s var(--ease) both; }
+  .card + .card { animation-delay: .08s; }
+  .chip { display: inline-flex; padding: 5px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 500; background: rgba(10,10,10,0.06); }
   .chip.ok { background: var(--ok-soft); color: var(--ok); } .chip.bad { background: var(--bad-soft); color: var(--bad); }
   .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-  input[type=text], input[type=number], input[type=month] { border: 1px solid rgba(0,0,0,0.15); border-radius: 9px; padding: 8px 10px; font: inherit; background: #fff; }
-  button, .btn { border: 0; border-radius: 9px; padding: 8px 14px; font: inherit; font-weight: 700; cursor: pointer; background: var(--ink); color: #fff; text-decoration: none; display: inline-block; }
-  button.primary { background: var(--accent); }
-  button.ghost, .btn.ghost { background: transparent; color: var(--ink); border: 1px solid rgba(0,0,0,0.16); }
-  button:disabled { opacity: .5; cursor: default; }
+  input[type=text], input[type=number], input[type=month] { border: 1px solid rgba(10,10,10,0.13); border-radius: 12px; padding: 9px 12px; font: inherit; background: rgba(255,255,255,0.9); transition: border-color .2s, box-shadow .2s; }
+  input:focus { outline: none; border-color: var(--ink); box-shadow: 0 0 0 4px rgba(255,90,54,0.14); }
+  button, .btn { position: relative; overflow: hidden; isolation: isolate; border: 0; border-radius: 999px; padding: 9px 16px; font: inherit; font-weight: 500; cursor: pointer; background: var(--ink); color: #fff; text-decoration: none; display: inline-block; transition: transform .3s var(--ease), color .3s; }
+  button::before, .btn::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--accent); transform: translateY(101%); transition: transform .45s var(--ease); }
+  button:hover:not(:disabled), .btn:hover { transform: translateY(-1px); }
+  button:hover:not(:disabled)::before, .btn:hover::before { transform: none; }
+  button.primary { background: var(--accent); } button.primary::before { background: var(--ink); }
+  button.ghost, .btn.ghost { background: rgba(255,255,255,0.6); color: var(--ink); border: 1px solid rgba(10,10,10,0.16); }
+  button.ghost::before, .btn.ghost::before { background: var(--ink); }
+  button.ghost:hover, .btn.ghost:hover { color: #fff; }
+  button:disabled { opacity: .45; cursor: default; }
   .scroll { overflow-x: auto; }
   table { border-collapse: collapse; width: 100%; font-size: 14px; }
-  th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; white-space: nowrap; }
-  th { color: var(--muted); font-weight: 600; font-size: 12.5px; }
+  th, td { text-align: left; padding: 11px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; white-space: nowrap; }
+  tbody tr { transition: background .2s; }
+  tbody tr:hover { background: rgba(255,255,255,0.7); }
+  th { color: var(--muted); font-weight: 500; font-size: 12.5px; }
   td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-  .who { display: flex; align-items: center; gap: 8px; }
-  .who img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: #ddd; }
+  .who { display: flex; align-items: center; gap: 10px; }
+  .who img { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; background: #ddd; }
   .muted { color: var(--muted); font-size: 13px; }
-  .code { font-family: ui-monospace, Consolas, monospace; letter-spacing: .05em; }
+  .code { font-family: ui-monospace, "SF Mono", Consolas, monospace; letter-spacing: .05em; }
   .limit { width: 90px; }
-  .msg { padding: 10px 12px; border-radius: 10px; margin-bottom: 14px; }
-  .msg.err { background: var(--bad-soft); color: var(--bad); } .msg.ok { background: var(--ok-soft); color: var(--ok); }
+  .msg { padding: 12px 16px; border-radius: 14px; margin-bottom: 14px; animation: rise .4s var(--ease) both; }
+  .msg.err { background: var(--bad-soft); color: var(--bad); border: 1px solid #ffcfc2; } .msg.ok { background: var(--ok-soft); color: var(--ok); }
   .hidden { display: none !important; }
-  tfoot td { font-weight: 700; }
+  tfoot td { font-weight: 600; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
+<div class="bg" aria-hidden="true"><div class="aurora"></div><div class="grid-lines"></div></div>
 <main>
   <header>
+    <a class="brand" href="/" aria-label="Aldi Studio"><svg viewBox="0 0 1024 1024" aria-hidden="true"><rect width="1024" height="1024" fill="#0a0a0a"/><text x="512" y="610" text-anchor="middle" font-family="Inter, Helvetica, sans-serif" font-weight="600" font-size="400" letter-spacing="-20" fill="#f5f4f0">AB</text><path d="M220 690 L220 750 L272 720 Z" fill="#ff5a36"/></svg></a>
     <h1>Admin Studio</h1>
     <span class="chip" id="apiChip">…</span>
     <a class="btn ghost" href="/">← Kembali ke Studio</a>

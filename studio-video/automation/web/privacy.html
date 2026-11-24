@@ -4,13 +4,14 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Aldi Studio Privacy</title>
 <style>
-:root { --bg: #fafaf9; --fg: #1c1917; --muted: #57534e; }
-@media (prefers-color-scheme: dark) { :root { --bg: #1c1917; --fg: #f5f5f4; --muted: #a8a29e; } }
-body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 system-ui, sans-serif; }
-main { max-width: 720px; margin: 0 auto; padding: 40px 16px 64px; }
-h1 { font-size: 28px; margin: 0 0 4px; }
-h2 { font-size: 18px; margin: 28px 0 6px; }
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@500&family=Instrument+Sans:wght@400;500&display=swap");
+:root { --bg: #f5f4f0; --fg: #0a0a0a; --muted: rgba(10,10,10,0.6); --line: rgba(10,10,10,0.11); }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 17px/1.6 "Instrument Sans", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+main { max-width: 760px; margin: 0 auto; padding: 64px 20px 80px; }
+h1 { font: 500 clamp(40px, 7vw, 64px)/0.95 Inter, system-ui, sans-serif; letter-spacing: -0.04em; margin: 0 0 14px; }
+h2 { font: 500 22px/1.2 Inter, system-ui, sans-serif; letter-spacing: -0.02em; margin: 36px 0 8px; padding-top: 24px; border-top: 1px solid var(--line); }
 .muted { color: var(--muted); }
+a { color: inherit; }
 </style>
 </head>
 <body><main>

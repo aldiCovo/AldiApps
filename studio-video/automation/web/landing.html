@@ -228,6 +228,13 @@
   .screen::after { content: ""; position: absolute; inset: auto 0 0 0; height: 30%; background: linear-gradient(transparent, rgba(0,0,0,0.75)); z-index: 3; pointer-events: none; }
   .side { bottom: 36% !important; }
 
+  .frame, .screen { cursor: pointer; }
+  .play-ov { position: absolute; inset: 0; z-index: 4; display: grid; place-items: center; border: 0; padding: 0; background: rgba(0,0,0,0.18); opacity: 0; pointer-events: none; transition: opacity .3s; cursor: pointer; }
+  .paused .play-ov { opacity: 1; pointer-events: auto; }
+  .play-ov span { width: 64px; height: 64px; border-radius: 50%; background: rgba(255,255,255,0.92); box-shadow: 0 10px 30px rgba(0,0,0,0.35); display: grid; place-items: center; transition: transform .25s; }
+  .play-ov:hover span { transform: scale(1.08); }
+  .play-ov span::after { content: ""; margin-left: 5px; border-style: solid; border-width: 11px 0 11px 18px; border-color: transparent transparent transparent #0a0a0a; }
+  .snd { z-index: 5; }
   /* ---------- Showcase video asli ---------- */
   .showcase { position: relative; overflow: hidden; isolation: isolate; margin-top: clamp(28px, 4vw, 48px); padding: clamp(36px, 5vw, 72px); background: #0b0b0d; color: var(--on-dark); border-radius: 26px; display: grid; grid-template-columns: 1fr auto; gap: clamp(32px, 5vw, 72px); align-items: center; }
   .showcase .aurora { position: absolute; z-index: -1; inset: -40%; background: conic-gradient(from 90deg at 60% 50%, transparent 0 25%, rgba(255,90,54,0.45) 35%, rgba(185,167,255,0.35) 48%, rgba(124,198,255,0.25) 58%, transparent 70%); filter: blur(70px); animation: spin 30s linear infinite; }
@@ -548,22 +555,39 @@
     c.style.setProperty("--x", e.clientX - r.left + "px"); c.style.setProperty("--y", e.clientY - r.top + "px");
   }));
 
-  // Video contoh: muat dan putar hanya saat terlihat; tombol suara per video.
-  const vids = [...document.querySelectorAll(".reel video")];
+  // Video: diputar otomatis tanpa suara saat terlihat. Kalau browser menolak autoplay
+  // (Mode Hemat Daya, Penghemat Data), tombol ▶ muncul dan video bisa diketuk.
+  const boxes = [...document.querySelectorAll(".frame, .screen")];
+  const vidOf = (box) => box.querySelector("video");
+  const load = (v) => { if (!v.getAttribute("src") && v.dataset.src) v.src = v.dataset.src; };
+  const tryPlay = (v) => { load(v); const p = v.play(); if (p) p.catch(() => {}); };
+  boxes.forEach((box) => {
+    const v = vidOf(box);
+    box.classList.add("paused");
+    const ov = document.createElement("button");
+    ov.type = "button"; ov.className = "play-ov"; ov.setAttribute("aria-label", "Putar video"); ov.innerHTML = "<span></span>";
+    box.appendChild(ov);
+    v.addEventListener("playing", () => box.classList.remove("paused"));
+    v.addEventListener("pause", () => box.classList.add("paused"));
+    box.addEventListener("click", (e) => {
+      if (e.target.closest(".snd")) return;
+      v.paused ? tryPlay(v) : v.pause();
+    });
+  });
   const vio = new IntersectionObserver((es) => es.forEach((e) => {
     const v = e.target;
-    if (e.isIntersecting) { if (!v.src) v.src = v.dataset.src; if (!still) v.play().catch(() => {}); } else v.pause();
+    if (e.isIntersecting) tryPlay(v); else if (!v.paused) v.pause();
   }), { threshold: 0.35 });
-  vids.forEach((v) => vio.observe(v));
+  boxes.forEach((box) => vio.observe(vidOf(box)));
+  const vids = boxes.map(vidOf);
   document.querySelectorAll(".snd").forEach((b) => b.addEventListener("click", () => {
     const v = b.parentElement.querySelector("video");
-    if (!v.src) v.src = v.dataset.src;
     const turnOn = v.muted;
     vids.forEach((o) => { o.muted = true; }); document.querySelectorAll(".snd").forEach((o) => o.classList.remove("unmuted"));
-    if (turnOn) { v.muted = false; v.play().catch(() => {}); b.classList.add("unmuted"); b.setAttribute("aria-label", "Matikan suara"); }
+    if (turnOn) { v.muted = false; tryPlay(v); b.classList.add("unmuted"); b.setAttribute("aria-label", "Matikan suara"); }
     else b.setAttribute("aria-label", "Nyalakan suara");
   }));
-  if (still) { document.querySelector(".hero-video").pause(); return; }
+  if (still) return;
 
   // Cahaya latar mengikuti kursor.
   const cl = document.getElementById("cl");

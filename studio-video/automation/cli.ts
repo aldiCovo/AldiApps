@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline/promises";
-import { makePlan, USE_API, type Plan } from "./claude";
+import { DEFAULT_MODE, makePlan, MODE_LABEL, type Plan } from "./claude";
 import { DEFAULT_CONFIG, normalizeConfig, type VideoConfig } from "./config";
 import { jobDirOf, PLATFORMS, produce, revise, uploadJob, type Reporter } from "./pipeline";
 import type { UsageEntry } from "./usage";
@@ -72,7 +72,7 @@ async function produceAndReview(plan: Plan, prompt: string, cfg: Partial<VideoCo
   log(`\nSemua file job ada di: ${jobDirOf(id)}`);
 }
 
-const modeLine = () => log(`Mode Claude: ${USE_API ? "API key (bayar per pemakaian)" : "Claude Code (langganan Anda)"}`);
+const modeLine = () => log(`Mode Claude: ${MODE_LABEL[DEFAULT_MODE]}`);
 
 async function cmdBuat(prompt: string) {
   if (!prompt) throw new Error('Tulis perintahnya, contoh: npm run buat -- "buatkan video tentang cara kerja termos"');

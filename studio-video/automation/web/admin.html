@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin Studio</title>
+<style>
+  :root { --bg: #f3f0ea; --panel: #fff; --ink: #16151b; --muted: #77736b; --line: rgba(0,0,0,0.09); --accent: #ff5a36; --ok: #1f9d55; --ok-soft: #e3f5ea; --bad: #9b2c2c; --bad-soft: #fde8e8; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 60px; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 18px; }
+  h1 { font-size: 24px; margin: 0 auto 0 0; letter-spacing: -0.02em; }
+  h2 { font-size: 17px; margin: 0 0 12px; }
+  a { color: inherit; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; margin-bottom: 16px; }
+  .chip { display: inline-flex; padding: 4px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600; background: #eee; }
+  .chip.ok { background: var(--ok-soft); color: var(--ok); } .chip.bad { background: var(--bad-soft); color: var(--bad); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  input[type=text], input[type=number], input[type=month] { border: 1px solid rgba(0,0,0,0.15); border-radius: 9px; padding: 8px 10px; font: inherit; background: #fff; }
+  button, .btn { border: 0; border-radius: 9px; padding: 8px 14px; font: inherit; font-weight: 700; cursor: pointer; background: var(--ink); color: #fff; text-decoration: none; display: inline-block; }
+  button.primary { background: var(--accent); }
+  button.ghost, .btn.ghost { background: transparent; color: var(--ink); border: 1px solid rgba(0,0,0,0.16); }
+  button:disabled { opacity: .5; cursor: default; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; font-size: 12.5px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .who { display: flex; align-items: center; gap: 8px; }
+  .who img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: #ddd; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .code { font-family: ui-monospace, Consolas, monospace; letter-spacing: .05em; }
+  .limit { width: 90px; }
+  .msg { padding: 10px 12px; border-radius: 10px; margin-bottom: 14px; }
+  .msg.err { background: var(--bad-soft); color: var(--bad); } .msg.ok { background: var(--ok-soft); color: var(--ok); }
+  .hidden { display: none !important; }
+  tfoot td { font-weight: 700; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Admin Studio</h1>
+    <span class="chip" id="apiChip">…</span>
+    <a class="btn ghost" href="/">← Kembali ke Studio</a>
+  </header>
+  <div id="msg" class="msg hidden"></div>
+
+  <section class="card">
+    <h2>Undang kreator</h2>
+    <form class="row" id="inviteForm">
+      <input type="text" id="catatan" placeholder="Catatan, mis. nama atau email kreator" maxlength="200" style="flex:1; min-width: 220px">
+      <button class="primary" type="submit">Buat link undangan</button>
+    </form>
+    <p class="muted">Setiap link hanya bisa dipakai satu akun TikTok. Kirim link ke kreator lewat email atau chat.</p>
+    <div class="scroll"><table>
+      <thead><tr><th>Kode</th><th>Catatan</th><th>Dibuat</th><th>Status</th><th></th></tr></thead>
+      <tbody id="invites"></tbody>
+    </table></div>
+  </section>
+
+  <section class="card">
+    <div class="row" style="margin-bottom:12px">
+      <h2 style="margin:0 auto 0 0">Kreator dan pemakaian</h2>
+      <input type="month" id="bulan">
+      <a class="btn ghost" id="csv">Unduh CSV</a>
+    </div>
+    <p class="muted">USD dihitung dengan harga Claude API. Untuk pemilik, video memakai langganan Claude, jadi angkanya hanya perbandingan dan tidak ditagih.</p>
+    <div class="scroll"><table>
+      <thead><tr><th>Kreator</th><th>Status</th><th class="num">Video</th><th class="num">Token</th><th class="num">USD</th><th class="num">Jam render</th><th>Batas USD/bulan</th><th></th></tr></thead>
+      <tbody id="users"></tbody>
+      <tfoot id="total"></tfoot>
+    </table></div>
+  </section>
+</main>
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const usd = (n) => "$" + (n < 1 && n > 0 ? n.toFixed(3) : n.toFixed(2));
+const tgl = (iso) => iso ? new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "";
+function say(text, ok) { const m = $("#msg"); m.textContent = text; m.className = "msg " + (ok ? "ok" : "err"); if (!text) m.classList.add("hidden"); }
+
+async function api(path, body) {
+  const r = await fetch(path, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.error) throw new Error(j.error || "HTTP " + r.status);
+  return j;
+}
+
+async function load() {
+  const bulan = $("#bulan").value;
+  const d = await api("/admin/api/data" + (bulan ? "?bulan=" + bulan : ""));
+  if (!bulan) $("#bulan").value = d.bulan;
+  $("#csv").href = "/admin/api/rekap.csv?bulan=" + d.bulan;
+  const chip = $("#apiChip");
+  chip.className = "chip " + (d.apiKeyReady ? "ok" : "bad");
+  chip.textContent = d.apiKeyReady ? "✓ API key untuk kreator siap" : "API key kreator belum diisi";
+  chip.title = d.apiKeyReady ? "" : "Isi ANTHROPIC_API_KEY di .env server agar kreator bisa membuat video";
+
+  $("#invites").innerHTML = d.invites.length ? d.invites.map((i) => {
+    const status = i.revoked ? '<span class="chip">Dicabut</span>' : i.usedBy ? `<span class="chip ok">Dipakai ${tgl(i.usedAt)}</span>` : '<span class="chip">Belum dipakai</span>';
+    const act = !i.usedBy && !i.revoked ? `<button class="ghost" data-copy="${esc(i.link)}">Salin link</button> <button class="ghost" data-revoke="${esc(i.code)}">Cabut</button>` : "";
+    return `<tr><td class="code">${esc(i.code)}</td><td>${esc(i.catatan)}</td><td>${tgl(i.createdAt)}</td><td>${status}</td><td>${act}</td></tr>`;
+  }).join("") : '<tr><td colspan="5" class="muted">Belum ada undangan.</td></tr>';
+
+  let tot = { videos: 0, tokens: 0, usd: 0, renderSeconds: 0 };
+  $("#users").innerHTML = d.users.length ? d.users.map((u) => {
+    const x = u.usage;
+    if (u.role !== "owner") { tot.videos += x.videos; tot.tokens += x.tokens; tot.usd += x.usd; tot.renderSeconds += x.renderSeconds; }
+    const owner = u.role === "owner";
+    const status = owner ? '<span class="chip ok">Pemilik</span>' : u.disabled ? '<span class="chip bad">Nonaktif</span>' : '<span class="chip">Aktif</span>';
+    const pct = !owner && u.limitUsd ? Math.min(100, Math.round(x.usd / u.limitUsd * 100)) : null;
+    const limit = owner ? '<span class="muted">tanpa batas</span>' : `<input class="limit" type="number" min="0" step="1" value="${u.limitUsd}" data-limit="${esc(u.openId)}"> <button class="ghost" data-save="${esc(u.openId)}">Simpan</button>${pct !== null ? ` <span class="muted">${pct}%</span>` : ""}`;
+    const toggle = owner ? "" : `<button class="ghost" data-toggle="${esc(u.openId)}" data-on="${u.disabled ? 1 : 0}">${u.disabled ? "Aktifkan" : "Nonaktifkan"}</button>`;
+    const avatar = u.avatar ? `<img src="${esc(u.avatar)}" alt="" referrerpolicy="no-referrer">` : "<img alt=\"\">";
+    return `<tr><td><div class="who">${avatar}<div><b>${esc(u.nama)}</b><div class="muted">sejak ${tgl(u.createdAt)}</div></div></div></td><td>${status}</td>
+      <td class="num">${x.videos}</td><td class="num">${x.tokens.toLocaleString("id-ID")}</td><td class="num">${x.usdPartial ? "≥ " : ""}${usd(x.usd)}</td>
+      <td class="num">${(x.renderSeconds / 3600).toFixed(2)}</td><td>${limit}</td><td>${toggle}</td></tr>`;
+  }).join("") : '<tr><td colspan="8" class="muted">Belum ada pengguna. Pemilik terdaftar setelah membuka /admin/klaim dan login TikTok.</td></tr>';
+  $("#total").innerHTML = `<tr><td colspan="2">Total kreator</td><td class="num">${tot.videos}</td><td class="num">${tot.tokens.toLocaleString("id-ID")}</td><td class="num">${usd(tot.usd)}</td><td class="num">${(tot.renderSeconds / 3600).toFixed(2)}</td><td colspan="2"></td></tr>`;
+}
+
+$("#inviteForm").onsubmit = async (e) => {
+  e.preventDefault();
+  try {
+    const inv = await api("/admin/api/invite", { catatan: $("#catatan").value });
+    $("#catatan").value = "";
+    try { await navigator.clipboard.writeText(inv.link); say("Link undangan dibuat dan disalin: " + inv.link, true); }
+    catch { say("Link undangan dibuat: " + inv.link, true); }
+    load();
+  } catch (err) { say(err.message); }
+};
+
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  try {
+    if (b.dataset.copy) { await navigator.clipboard.writeText(b.dataset.copy); say("Link disalin.", true); }
+    if (b.dataset.revoke) { await api("/admin/api/invite/revoke", { code: b.dataset.revoke }); say("Undangan dicabut.", true); load(); }
+    if (b.dataset.save) {
+      const v = document.querySelector(`[data-limit="${CSS.escape(b.dataset.save)}"]`).value;
+      await api("/admin/api/user", { openId: b.dataset.save, limitUsd: Number(v) }); say("Batas disimpan.", true); load();
+    }
+    if (b.dataset.toggle) { await api("/admin/api/user", { openId: b.dataset.toggle, disabled: b.dataset.on !== "1" }); load(); }
+  } catch (err) { say(err.message); }
+});
+$("#bulan").onchange = () => load().catch((e) => say(e.message));
+load().catch((e) => say("Gagal memuat: " + e.message));
+</script>
+</body>
+</html>

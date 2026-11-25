@@ -348,6 +348,23 @@ export function loadJob(id: string) {
 
 /* ---------------- Rekap pemakaian per pengguna per bulan ---------------- */
 
+export type TaggedEntry = UsageEntry & { jobId: string | null };
+
+/**
+ * Semua catatan pemakaian satu pengguna (semua bulan), dengan sumber yang sama seperti monthlyUsage:
+ * ledger prompt/storyboard (jobId null) ditambah langkah job miliknya. Untuk dasbor biaya.
+ */
+export function usageEntries(openId: string | null, ledgerKey: string): TaggedEntry[] {
+  const out: TaggedEntry[] = readLedger(DATA_DIR, ledgerKey).map((e) => ({ ...e, jobId: null }));
+  if (fs.existsSync(JOBS_DIR)) {
+    for (const d of fs.readdirSync(JOBS_DIR)) {
+      if (d.startsWith("_") || jobOwner(d) !== openId) continue;
+      for (const e of readUsage(path.join(JOBS_DIR, d))) if (!PRE_LANGKAH.includes(e.langkah)) out.push({ ...e, jobId: d });
+    }
+  }
+  return out.sort((a, b) => a.at.localeCompare(b.at));
+}
+
 export type MonthlyUsage = UsageTotal & { videos: number };
 
 /**

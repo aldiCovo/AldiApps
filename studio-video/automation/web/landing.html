@@ -250,6 +250,9 @@
   .fx.hot { background: radial-gradient(420px circle at var(--mx) var(--my), rgba(160,132,255,0.28), rgba(255,143,177,0.10) 35%, transparent 60%), rgba(255,255,255,0.9) !important; box-shadow: 0 34px 70px -24px rgba(123,77,255,0.45), 0 12px 24px -12px rgba(28,20,70,0.18) !important; border-color: transparent !important; z-index: 2; }
   .fx-edge { position: absolute; inset: 0; z-index: 3; border-radius: inherit; padding: 1.5px; pointer-events: none; opacity: 0; transition: opacity .35s; background: radial-gradient(240px circle at var(--mx) var(--my), #7b4dff, #ff8fb1 45%, rgba(123,77,255,0.15) 75%); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); }
   .fx.hot .fx-edge { opacity: 1; }
+  .fx-ripple { position: absolute; z-index: 3; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; pointer-events: none; background: radial-gradient(circle, rgba(123,77,255,0.35), rgba(255,143,177,0.18) 55%, transparent 70%); animation: fxRipple .85s cubic-bezier(.2,.7,.1,1) forwards; }
+  @keyframes fxRipple { to { transform: scale(40); opacity: 0; } }
+  .fx { -webkit-tap-highlight-color: transparent; }
   .fx-shine { position: absolute; inset: 0; z-index: 3; pointer-events: none; border-radius: inherit; background: linear-gradient(115deg, transparent 35%, rgba(255,255,255,0.55) 50%, transparent 65%); background-size: 250% 100%; background-position: 150% 0; opacity: 0; }
   .fx.hot .fx-shine { animation: shineOnce .9s var(--ease) forwards; }
   @keyframes shineOnce { 0% { opacity: 1; background-position: 150% 0; } 100% { opacity: 1; background-position: -60% 0; } }
@@ -755,6 +758,54 @@
   };
   if (!still) requestAnimationFrame(loop);
 
+  // Kartu: miring 3D mengikuti kursor (mouse) atau jari (layar sentuh), sorotan cahaya, tepi bercahaya, kilau.
+  // Dulu hanya aktif untuk "(hover: hover)" dan tidak aktif sama sekali bila sistem meminta gerak dikurangi,
+  // jadi di Android dan di komputer dengan "Animation effects" mati, kartu diam saja. Sekarang jenis pointer
+  // dicek per kejadian, dan pada gerak-dikurangi kartu tetap menyala (sorotan + tepi) tanpa miring/bergerak.
+  document.querySelectorAll(".step, .bento > div, .idea, .access li").forEach((el) => {
+    el.classList.add("fx");
+    el.insertAdjacentHTML("beforeend", '<span class="fx-edge" aria-hidden="true"></span><span class="fx-shine" aria-hidden="true"></span>');
+    const big = () => el.offsetWidth > 520;
+    const spot = (e) => {
+      const r = el.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+      el.style.setProperty("--mx", x * 100 + "%"); el.style.setProperty("--my", y * 100 + "%");
+      return [Math.min(1, Math.max(0, x)), Math.min(1, Math.max(0, y))];
+    };
+    const tilt = (x, y, k) => {
+      if (still) return;
+      const max = (big() ? 5 : 10) * k;
+      el.style.transition = "transform .15s ease-out, box-shadow .4s, background .3s";
+      el.style.transform = `perspective(1000px) rotateX(${(0.5 - y) * max}deg) rotateY(${(x - 0.5) * max}deg) translateY(${-10 * k}px) scale(${1 + (big() ? 0.012 : 0.035) * k})`;
+    };
+    const rest = () => {
+      el.classList.remove("hot");
+      el.style.transition = still ? "" : "transform .8s cubic-bezier(.34,1.56,.64,1), box-shadow .4s, background .3s";
+      el.style.transform = "";
+    };
+    // Mouse dan pena: seperti hover biasa.
+    el.addEventListener("pointerenter", (e) => { if (e.pointerType !== "touch") { spot(e); el.classList.add("hot"); } });
+    el.addEventListener("pointermove", (e) => { if (e.pointerType !== "touch") { const [x, y] = spot(e); tilt(x, y, 1); } });
+    el.addEventListener("pointerleave", (e) => { if (e.pointerType !== "touch") rest(); });
+    // Sentuhan: kartu menyala dan "tertekan" ke arah jari, riak dari titik sentuh, lalu kembali pelan.
+    let off = 0;
+    el.addEventListener("pointerdown", (e) => {
+      if (e.pointerType !== "touch") return;
+      clearTimeout(off);
+      const [x, y] = spot(e);
+      el.classList.remove("hot"); void el.offsetWidth; el.classList.add("hot");
+      tilt(x, y, 0.8);
+      if (!still) {
+        const r = el.getBoundingClientRect(), rp = document.createElement("span");
+        rp.className = "fx-ripple"; rp.setAttribute("aria-hidden", "true");
+        rp.style.left = e.clientX - r.left + "px"; rp.style.top = e.clientY - r.top + "px";
+        el.appendChild(rp); setTimeout(() => rp.remove(), 900);
+      }
+    }, { passive: true });
+    const release = (e) => { if (e.pointerType === "touch") { clearTimeout(off); off = setTimeout(rest, 900); } };
+    el.addEventListener("pointerup", release, { passive: true });
+    el.addEventListener("pointercancel", release, { passive: true }); // jari menggulir halaman
+  });
+
   if (still) return;
 
   // Ponsel sedikit miring mengikuti kursor.
@@ -762,27 +813,6 @@
     if (drag) return;
     tiltY = (e.clientX / innerWidth - 0.5) * 14; tiltX = -(e.clientY / innerHeight - 0.5) * 8;
   }, { passive: true });
-
-  // Kartu: miring 3D mengikuti kursor, sorotan cahaya, tepi bercahaya, dan kilau saat disentuh.
-  if (matchMedia("(hover: hover)").matches) {
-    document.querySelectorAll(".step, .bento > div, .idea, .access li").forEach((el) => {
-      el.classList.add("fx");
-      el.insertAdjacentHTML("beforeend", '<span class="fx-edge" aria-hidden="true"></span><span class="fx-shine" aria-hidden="true"></span>');
-      const big = el.offsetWidth > 520, max = big ? 5 : 10;
-      el.addEventListener("pointerenter", () => { el.classList.add("hot"); });
-      el.addEventListener("pointermove", (e) => {
-        const r = el.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
-        el.style.setProperty("--mx", x * 100 + "%"); el.style.setProperty("--my", y * 100 + "%");
-        el.style.transition = "transform .15s ease-out, box-shadow .4s, background .3s";
-        el.style.transform = `perspective(1000px) rotateX(${(0.5 - y) * max}deg) rotateY(${(x - 0.5) * max}deg) translateY(-10px) scale(${big ? 1.012 : 1.035})`;
-      });
-      el.addEventListener("pointerleave", () => {
-        el.classList.remove("hot");
-        el.style.transition = "transform .8s cubic-bezier(.34,1.56,.64,1), box-shadow .4s, background .3s";
-        el.style.transform = "";
-      });
-    });
-  }
 
   // Ubin mengambang bergerak sedikit mengikuti kursor.
   const tiles = [...document.querySelectorAll("[data-depth]")];

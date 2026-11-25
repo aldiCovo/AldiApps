@@ -57,18 +57,74 @@
 
   /* Area kerja */
   main { padding: 30px clamp(18px, 3vw, 44px) 90px; max-width: 1120px; width: 100%; }
-  header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 26px; }
-  header h1 { font: 500 clamp(30px, 3.4vw, 44px)/1 var(--display); letter-spacing: -0.04em; margin: 0 auto 0 0; }
+  /* Kepala halaman: status, sapaan, ilustrasi */
+  .top-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; margin-bottom: 18px; }
+  .top-bar .me { margin-left: 6px; }
+  .hello { position: relative; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 24px; padding: clamp(24px, 3vw, 36px) clamp(22px, 3vw, 40px); border-radius: 28px; overflow: hidden; isolation: isolate; color: #fff; background: radial-gradient(120% 140% at 100% 0%, #7b4dff 0%, #4a2fc0 38%, #1c1446 78%); box-shadow: 0 30px 70px -36px rgba(60,30,180,0.7); animation: stepIn .8s var(--ease) both; }
+  .hello::before { content: ""; position: absolute; inset: 0; z-index: -1; background-image: linear-gradient(rgba(255,255,255,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.07) 1px, transparent 1px); background-size: 44px 44px; -webkit-mask-image: linear-gradient(90deg, transparent, #000 60%); mask-image: linear-gradient(90deg, transparent, #000 60%); }
+  .hello::after { content: ""; position: absolute; z-index: -1; width: 380px; height: 380px; left: -120px; bottom: -220px; border-radius: 50%; background: radial-gradient(circle, rgba(255,143,177,0.55), transparent 65%); filter: blur(10px); animation: drift 14s ease-in-out infinite alternate; }
+  .hi { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 10px; padding: 5px 12px 5px 8px; border-radius: 999px; background: rgba(255,255,255,0.12); font-size: 13px; color: rgba(255,255,255,0.85); }
+  .hi .live { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 0 0 rgba(74,222,128,.6); animation: livePulse 2s infinite; }
+  @keyframes livePulse { 70% { box-shadow: 0 0 0 8px rgba(74,222,128,0); } 100% { box-shadow: 0 0 0 0 rgba(74,222,128,0); } }
+  .hello h1 { font: 600 clamp(32px, 4vw, 52px)/1 var(--display); letter-spacing: -0.04em; margin: 0; }
+  .hello h1 .arr { display: inline-block; color: rgba(255,255,255,0.45); animation: nudge 2.4s var(--ease) infinite; }
+  @keyframes nudge { 50% { transform: translateX(8px); } }
+  .hello h1 .grad { background: linear-gradient(100deg, #fff 10%, #ffd23f 45%, #ff8fb1 60%, #fff 90%); background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: sheen 5s ease-in-out infinite; padding-bottom: .1em; }
+  @keyframes sheen { 0%, 100% { background-position: 100% 0; } 50% { background-position: 0 0; } }
+  .hello .sub { margin: 12px 0 0; color: rgba(255,255,255,0.72); max-width: 34em; }
+  /* Ilustrasi: ponsel kecil dengan video yang "sedang dibuat" */
+  .art { position: relative; width: 210px; height: 170px; }
+  .art .mini { position: absolute; right: 54px; top: 0; width: 92px; height: 170px; border-radius: 18px; padding: 5px; background: linear-gradient(150deg, #6b62a0, #120d26 40%, #2d2654); box-shadow: 0 24px 40px -16px rgba(0,0,0,.6); transform: rotate(6deg); animation: floaty 6s ease-in-out infinite; }
+  .art .mini .scr { height: 100%; border-radius: 14px; overflow: hidden; position: relative; background: linear-gradient(170deg, #ff9d4d, #ff6a3d); }
+  .art .mini .sun { position: absolute; left: 50%; top: 34%; width: 34px; height: 34px; margin-left: -17px; border-radius: 50%; background: #ffd23f; box-shadow: 0 0 0 8px rgba(255,210,63,.25); animation: bounce 1.6s var(--ease) infinite; }
+  .art .mini .cap { position: absolute; left: 10px; right: 10px; height: 6px; border-radius: 3px; background: rgba(255,255,255,.9); }
+  .art .mini .cap.a { top: 12px; } .art .mini .cap.b { top: 22px; right: 30px; opacity: .7; }
+  .art .mini .wave { position: absolute; left: 10px; right: 10px; bottom: 14px; height: 22px; display: flex; align-items: flex-end; gap: 3px; }
+  .art .mini .wave i { flex: 1; border-radius: 2px; background: #fff; animation: wv 1s ease-in-out infinite; }
+  .art .mini .wave i:nth-child(2n) { animation-delay: -.3s; } .art .mini .wave i:nth-child(3n) { animation-delay: -.6s; } .art .mini .wave i:nth-child(5n) { animation-delay: -.15s; }
+  @keyframes wv { 0%, 100% { height: 20%; } 50% { height: 100%; } }
+  @keyframes bounce { 50% { transform: translateY(-10px); } }
+  @keyframes floaty { 50% { transform: rotate(4deg) translateY(-8px); } }
+  .art .bub { position: absolute; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 13px; background: rgba(255,255,255,0.95); color: var(--ink); box-shadow: 0 14px 28px -12px rgba(0,0,0,.5); animation: floaty2 5s ease-in-out infinite; }
+  .art .bub svg { width: 20px; height: 20px; }
+  .art .bub.a { left: 0; top: 18px; color: var(--accent); }
+  .art .bub.b { right: 0; top: 52px; color: #ff6a3d; animation-delay: -1.6s; }
+  .art .bub.c { left: 28px; bottom: 2px; color: #1f8a4c; animation-delay: -3.2s; }
+  @keyframes floaty2 { 50% { transform: translateY(-9px) rotate(-4deg); } }
+
+  /* Penunjuk langkah (lengket di atas) */
+  .stepper { position: sticky; top: 12px; z-index: 20; display: flex; gap: 4px; margin: 18px 0 22px; padding: 6px; border-radius: 999px; background: rgba(255,255,255,0.72); backdrop-filter: blur(16px) saturate(1.3); -webkit-backdrop-filter: blur(16px) saturate(1.3); box-shadow: inset 0 1px 0 #fff, 0 16px 40px -24px rgba(28,20,70,0.35); }
+  .stepper .fill { position: absolute; left: 6px; top: 6px; bottom: 6px; border-radius: 999px; background: linear-gradient(90deg, rgba(123,77,255,0.14), rgba(123,77,255,0.06)); transition: width .7s var(--ease); pointer-events: none; }
+  .stepper button { position: relative; flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; border: 0; background: transparent; padding: 9px 10px; border-radius: 999px; cursor: pointer; color: var(--muted); font: 500 13.5px var(--text); white-space: nowrap; transition: color .25s, background .25s; }
+  .stepper button i { width: 24px; height: 24px; flex: none; border-radius: 50%; display: grid; place-items: center; font: 600 11.5px var(--display); font-style: normal; background: rgba(28,20,70,0.07); transition: background .3s, color .3s, transform .3s var(--ease); }
+  .stepper button:hover:not(:disabled) { color: var(--ink); background: rgba(255,255,255,0.7); }
+  .stepper button:disabled { cursor: default; opacity: .5; }
+  .stepper button.done { color: var(--ink); }
+  .stepper button.done i { background: var(--ok); color: #fff; font-size: 0; }
+  .stepper button.done i::after { content: "✓"; font-size: 12px; }
+  .stepper button.cur { color: #fff; background: var(--ink); box-shadow: 0 10px 24px -10px rgba(28,20,70,0.6); }
+  .stepper button.cur i { background: var(--accent); color: #fff; transform: scale(1.06); }
+
+  .chip { transition: transform .25s var(--ease); }
+  .chip:hover { transform: translateY(-1px); }
   .chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 500; background: rgba(255,255,255,0.7); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid var(--line); }
   .chip.ok { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
   .chip.off { color: var(--muted); }
 
-  .step { position: relative; background: var(--panel); backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2); border: 1px solid var(--line); border-radius: var(--radius); padding: 26px 28px; margin-bottom: 16px; box-shadow: 0 1px 0 rgba(255,255,255,0.8) inset, 0 20px 50px -30px rgba(28,20,70,0.25); transition: opacity .5s var(--ease), transform .5s var(--ease), box-shadow .3s; animation: stepIn .7s var(--ease) both; }
+  .step { position: relative; scroll-margin-top: 90px; background: var(--panel); backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2); border: 0; border-radius: 26px; padding: 28px 30px; margin-bottom: 16px; box-shadow: 0 1px 0 rgba(255,255,255,0.8) inset, 0 20px 50px -30px rgba(28,20,70,0.25); transition: opacity .5s var(--ease), transform .5s var(--ease), box-shadow .3s; animation: stepIn .7s var(--ease) both; }
   .step:nth-of-type(2) { animation-delay: .05s; } .step:nth-of-type(3) { animation-delay: .1s; } .step:nth-of-type(4) { animation-delay: .15s; } .step:nth-of-type(5) { animation-delay: .2s; }
   @keyframes stepIn { from { opacity: 0; transform: translateY(18px); } }
-  .step.locked { opacity: .45; pointer-events: none; transform: scale(.99); filter: saturate(.6); }
+  .step.locked { opacity: .5; pointer-events: none; transform: scale(.99); filter: saturate(.5); }
+  .step.locked::after { content: "Selesaikan langkah sebelumnya"; position: absolute; top: 26px; right: 28px; padding: 5px 12px 5px 28px; border-radius: 999px; font-size: 12px; color: var(--muted); background: rgba(28,20,70,0.06) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236f6b8c' stroke-width='2' stroke-linecap='round'><rect x='5' y='11' width='14' height='10' rx='2'/><path d='M8 11V8a4 4 0 0 1 8 0v3'/></svg>") no-repeat 10px 50% / 12px; }
+  .step:not(.locked)::before { content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; background: linear-gradient(135deg, rgba(123,77,255,0.55), rgba(255,143,177,0.35) 40%, transparent 70%); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none; opacity: 0; transition: opacity .4s; }
+  .step.cur::before { opacity: 1; }
+  .step h2 .ico { margin-left: auto; width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; color: var(--accent); background: linear-gradient(145deg, #fff, var(--accent-soft)); box-shadow: inset 0 1px 0 #fff, 0 10px 22px -12px rgba(123,77,255,0.6); transition: transform .5s var(--ease); }
+  .step h2 .ico svg { width: 21px; height: 21px; }
+  .step:hover h2 .ico { transform: rotate(-8deg) scale(1.06); }
+  .step.done h2 .ico { color: var(--ok); background: linear-gradient(145deg, #fff, var(--ok-soft)); box-shadow: inset 0 1px 0 #fff, 0 10px 22px -12px rgba(31,138,76,0.5); }
+  .step.locked h2 .ico { display: none; }
   .step:not(.locked):focus-within { box-shadow: 0 1px 0 rgba(255,255,255,0.8) inset, 0 0 0 1px rgba(123,77,255,0.35), 0 24px 60px -30px rgba(123,77,255,0.35); }
-  .step h2 { display: flex; align-items: center; gap: 12px; font: 500 22px/1.2 var(--display); letter-spacing: -0.03em; margin: 0 0 4px; }
+  .step h2 { display: flex; align-items: center; gap: 12px; font: 600 23px/1.2 var(--display); letter-spacing: -0.03em; margin: 0 0 4px; }
   .num { width: 30px; height: 30px; border-radius: 50%; background: var(--ink); color: #fff; display: grid; place-items: center; font: 500 13px var(--display); flex: none; transition: background .3s, transform .3s var(--ease); }
   .step:not(.locked):not(.done) .num { background: var(--accent); box-shadow: 0 0 0 0 rgba(123,77,255,.5); animation: pulse 2s infinite; }
   .step.done .num { background: var(--ok); }
@@ -77,22 +133,35 @@
   .hint { color: var(--muted); margin: 0 0 18px 42px; font-size: 14.5px; }
   label { display: block; font-weight: 500; font-size: 13.5px; margin-bottom: 6px; }
   .opt { color: var(--muted); font-weight: 400; }
-  input[type=text], select, textarea { width: 100%; border: 1px solid rgba(28,20,70,0.13); border-radius: 12px; padding: 11px 14px; background: rgba(255,255,255,0.9); transition: border-color .2s, box-shadow .2s; }
+  input[type=text], select, textarea { width: 100%; border: 1px solid rgba(28,20,70,0.1); box-shadow: inset 0 1px 2px rgba(28,20,70,0.04); border-radius: 12px; padding: 11px 14px; background: rgba(255,255,255,0.9); transition: border-color .2s, box-shadow .2s; }
   textarea { resize: vertical; }
-  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--ink); box-shadow: 0 0 0 4px rgba(123,77,255,0.14); }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); background: #fff; box-shadow: 0 0 0 4px rgba(123,77,255,0.14); }
   .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 14px; }
   .grid .wide { grid-column: span 3; }
   .seg { display: flex; gap: 8px; }
   .seg button { flex: 1; border: 1px solid rgba(28,20,70,0.13); background: rgba(255,255,255,0.9); border-radius: 12px; padding: 10px; cursor: pointer; font-weight: 500; transition: all .25s var(--ease); }
   .seg button:hover { border-color: var(--ink); }
-  .seg button.on { border-color: var(--ink); background: var(--ink); color: #fff; }
+  .seg button.on { border-color: var(--ink); background: var(--ink); color: #fff; box-shadow: 0 10px 22px -12px rgba(28,20,70,0.6); }
+  .seg button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap; font-size: 14px; padding: 10px 8px; }
+  .seg .shape { flex: none; border: 2px solid currentColor; border-radius: 3px; opacity: .8; }
+  .seg .shape.v { width: 11px; height: 18px; } .seg .shape.h { width: 20px; height: 12px; }
+  #topik { font-size: 16.5px; line-height: 1.5; padding: 16px 18px; border-radius: 16px; min-height: 120px; }
+  .ideas { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 4px; }
+  .ideas > span { font-size: 13px; color: var(--muted); margin-right: 2px; }
+  .ideas button { border: 0; border-radius: 999px; padding: 7px 13px; font-size: 13px; cursor: pointer; background: rgba(123,77,255,0.08); color: var(--ink); transition: background .25s, transform .25s var(--ease), color .25s; }
+  .ideas button:hover { background: var(--accent); color: #fff; transform: translateY(-2px); }
+  .flash { animation: flash .7s var(--ease); }
+  @keyframes flash { 0% { box-shadow: 0 0 0 0 rgba(123,77,255,.5); } 100% { box-shadow: 0 0 0 14px rgba(123,77,255,0); } }
   .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 18px; }
 
   .btn { position: relative; overflow: hidden; isolation: isolate; border: 0; border-radius: 999px; padding: 11px 20px; font-weight: 500; cursor: pointer; background: var(--ink); color: #fff; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; transition: transform .3s var(--ease), color .3s, background .3s; }
   .btn::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--accent); transform: translateY(101%); transition: transform .45s var(--ease); }
   .btn:hover:not(:disabled) { transform: translateY(-1px); }
   .btn:hover:not(:disabled)::before { transform: none; }
-  .btn.primary { background: var(--accent); }
+  .btn.primary { background: linear-gradient(135deg, #8b5dff, #6a3cf0); box-shadow: 0 12px 26px -12px rgba(123,77,255,0.8); }
+  .btn.primary::after { content: ""; position: absolute; top: 0; bottom: 0; left: -60%; width: 40%; z-index: 1; background: linear-gradient(100deg, transparent, rgba(255,255,255,0.35), transparent); transform: skewX(-20deg); animation: shine 3.6s ease-in-out infinite; pointer-events: none; }
+  @keyframes shine { 0%, 60% { left: -60%; } 100% { left: 130%; } }
+  .btn:active:not(:disabled) { transform: scale(.97); }
   .btn.primary::before { background: var(--ink); }
   .btn.ghost { background: rgba(255,255,255,0.6); border: 1px solid rgba(28,20,70,0.16); color: var(--ink); }
   .btn.ghost::before { background: var(--ink); }
@@ -104,7 +173,7 @@
   @keyframes r { to { transform: rotate(360deg); } }
 
   .prompt-box { min-height: 340px; font-family: var(--mono); font-size: 13px; line-height: 1.6; background: rgba(250,249,246,0.95) !important; }
-  .scene { border: 1px solid var(--line); border-radius: 16px; padding: 16px; margin-top: 12px; background: rgba(255,255,255,0.75); transition: border-color .2s, box-shadow .3s; animation: stepIn .5s var(--ease) both; }
+  .scene { border: 1px solid transparent; box-shadow: 0 10px 26px -20px rgba(28,20,70,0.3); border-radius: 16px; padding: 16px; margin-top: 12px; background: rgba(255,255,255,0.75); transition: border-color .2s, box-shadow .3s; animation: stepIn .5s var(--ease) both; }
   .scene:hover { border-color: rgba(28,20,70,0.2); box-shadow: 0 14px 30px -20px rgba(28,20,70,0.25); }
   .scene-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font: 500 15px var(--display); letter-spacing: -0.01em; }
   .scene-head .tools { margin-left: auto; display: flex; gap: 4px; }
@@ -114,19 +183,49 @@
   .meter { font-size: 13px; color: var(--muted); }
   .meter.over { color: #c53030; font-weight: 600; }
 
-  .stages { display: flex; gap: 6px; margin: 4px 0 14px; flex-wrap: wrap; }
-  .stage { padding: 6px 13px; border-radius: 999px; background: rgba(28,20,70,0.05); color: var(--muted); font-size: 13px; font-weight: 500; transition: all .3s; }
-  .stage.active { background: var(--accent); color: #fff; box-shadow: 0 6px 18px -6px rgba(123,77,255,0.7); }
-  .stage.past { background: var(--ok-soft); color: var(--ok); }
-  .bar { height: 8px; background: rgba(28,20,70,0.07); border-radius: 8px; overflow: hidden; }
+  .stages { position: relative; display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; margin: 10px 0 20px; }
+  .stage { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 500; color: var(--muted); text-align: center; transition: color .3s; }
+  .stage::before { content: ""; position: absolute; top: 22px; left: calc(-50% + 26px); right: calc(50% + 26px); height: 2px; border-radius: 2px; background: rgba(28,20,70,0.1); }
+  .stage:first-child::before { display: none; }
+  .stage.past::before, .stage.active::before { background: linear-gradient(90deg, var(--ok), var(--accent)); }
+  .stage .n { position: relative; width: 46px; height: 46px; border-radius: 16px; display: grid; place-items: center; background: rgba(255,255,255,0.85); color: var(--muted); box-shadow: inset 0 1px 0 #fff, 0 8px 18px -12px rgba(28,20,70,0.4); transition: all .4s var(--ease); }
+  .stage .n svg { width: 21px; height: 21px; }
+  .stage.past { color: var(--ink); }
+  .stage.past .n { background: var(--ok-soft); color: var(--ok); }
+  .stage.active { color: var(--ink); font-weight: 600; }
+  .stage.active .n { background: linear-gradient(145deg, #8b5dff, #5b30e0); color: #fff; transform: translateY(-3px); box-shadow: 0 14px 28px -10px rgba(123,77,255,0.8); }
+  .stage.active .n::after { content: ""; position: absolute; inset: -6px; border-radius: 20px; border: 2px solid rgba(123,77,255,0.45); animation: ring 1.6s ease-out infinite; }
+  @keyframes ring { from { transform: scale(.85); opacity: 1; } to { transform: scale(1.25); opacity: 0; } }
+  .stage.active .n svg { animation: wob 1.2s ease-in-out infinite; }
+  @keyframes wob { 50% { transform: scale(1.12) rotate(-6deg); } }
+  .idle-art { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-radius: 16px; background: rgba(123,77,255,0.06); color: var(--muted); font-size: 14px; margin-bottom: 14px; }
+  .idle-art .film { display: flex; gap: 4px; }
+  .idle-art .film i { width: 18px; height: 26px; border-radius: 4px; background: linear-gradient(160deg, var(--lilac), var(--accent)); opacity: .35; animation: fr 1.8s ease-in-out infinite; }
+  .idle-art .film i:nth-child(2) { animation-delay: .2s; } .idle-art .film i:nth-child(3) { animation-delay: .4s; } .idle-art .film i:nth-child(4) { animation-delay: .6s; }
+  @keyframes fr { 40% { opacity: 1; transform: translateY(-4px); } }
+  #s4.running .idle-art { display: none; }
+  .bar { height: 10px; box-shadow: inset 0 1px 2px rgba(28,20,70,0.08); background: rgba(28,20,70,0.07); border-radius: 8px; overflow: hidden; }
   .bar > div { height: 100%; width: 0; border-radius: 8px; background: linear-gradient(90deg, var(--accent), var(--peach), var(--accent)); background-size: 200% 100%; animation: flow 2.2s linear infinite; transition: width .4s var(--ease); }
   @keyframes flow { to { background-position: -200% 0; } }
   .log { margin-top: 14px; background: #1c1446; color: #d9d6e4; font-family: var(--mono); font-size: 12.5px; border-radius: 14px; padding: 14px 16px; height: 220px; overflow: auto; white-space: pre-wrap; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06); }
 
   .result { display: grid; grid-template-columns: minmax(240px, 360px) 1fr; gap: 24px; align-items: start; }
   .result.landscape { grid-template-columns: 1fr; }
+  .result:not(.landscape) video { border-radius: 30px; border: 7px solid #0d0920; outline: 1px solid #3d3760; outline-offset: -1px; }
+  .confetti { position: fixed; z-index: 100; top: -14px; width: 9px; height: 14px; border-radius: 2px; pointer-events: none; animation: fall linear forwards; }
+  @keyframes fall { to { transform: translate(var(--dx), 110vh) rotate(var(--r)); } }
+  .job { display: grid; grid-template-columns: auto 1fr; gap: 0 11px; align-items: start; }
+  .job .th { grid-row: span 2; width: 34px; height: 46px; border-radius: 9px; display: grid; place-items: center; background: linear-gradient(160deg, var(--h1, #8b5dff), var(--h2, #ff8fb1)); color: #fff; box-shadow: 0 8px 16px -10px rgba(0,0,0,.6); transition: transform .3s var(--ease); }
+  .job .th.h { width: 46px; height: 30px; margin-top: 6px; }
+  .job .th svg { width: 14px; height: 14px; }
+  .job .th.no { background: rgba(243,243,248,0.1); color: var(--side-muted); }
+  .job:hover .th { transform: scale(1.08) rotate(-4deg); }
+  .job.empty { display: block; text-align: center; padding: 26px 14px; color: var(--side-muted); font-size: 13px; cursor: default; }
+  .job.empty:hover { background: none; transform: none; }
+  .job.empty b { display: block; color: var(--side-ink); font: 600 15px var(--display); margin: 10px 0 4px; }
+  .job.empty .th { margin: 0 auto; width: 40px; height: 54px; animation: floaty 5s ease-in-out infinite; }
   video { width: 100%; border-radius: 18px; background: #000; display: block; box-shadow: 0 30px 60px -30px rgba(28,20,70,0.55), 0 0 0 1px rgba(28,20,70,0.08); }
-  .box { border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; margin-bottom: 12px; background: rgba(255,255,255,0.7); }
+  .box { border: 0; box-shadow: inset 0 1px 0 #fff, 0 14px 32px -22px rgba(28,20,70,0.3); border-radius: 16px; padding: 16px 18px; margin-bottom: 12px; background: rgba(255,255,255,0.7); }
   .box h3 { margin: 0 0 12px; font: 500 16px var(--display); letter-spacing: -0.02em; }
   .plat { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
   .plat small { color: var(--muted); }
@@ -158,6 +257,11 @@
     .two, .result { grid-template-columns: 1fr; }
     .hint, .biaya { margin-left: 0; }
     .step { padding: 20px 18px; }
+    .hello { grid-template-columns: 1fr; } .art { display: none; }
+    .stepper { overflow-x: auto; border-radius: 18px; } .stepper button span { display: none; } .stepper button.cur span { display: inline; }
+    .top-bar { justify-content: flex-start; }
+    .stage { font-size: 11px; } .stage .n { width: 38px; height: 38px; border-radius: 13px; } .stage::before { top: 18px; }
+    .step.locked::after { position: static; display: inline-block; margin: 0 0 10px; }
   }
 </style>
 </head>
@@ -173,26 +277,54 @@
 
   <main>
     <header>
-      <h1>Gagasan → Video</h1>
+      <div class="top-bar">
       <span class="chip" id="modeChip">…</span>
-      <span class="chip hidden" id="usageChip"></span>
-      <span class="chip" id="renderChip">…</span>
-      <span id="platChips"></span>
-      <span class="me hidden" id="me"><img id="meAvatar" alt="" referrerpolicy="no-referrer"><b id="meName"></b><a class="link hidden" id="adminLink" href="/admin">Admin</a><form method="post" action="/keluar"><button class="link" type="submit">Keluar</button></form></span>
+        <span class="chip hidden" id="usageChip"></span>
+        <span class="chip" id="renderChip">…</span>
+        <span id="platChips"></span>
+        <span class="me hidden" id="me"><img id="meAvatar" alt="" referrerpolicy="no-referrer"><b id="meName"></b><a class="link hidden" id="adminLink" href="/admin">Admin</a><form method="post" action="/keluar"><button class="link" type="submit">Keluar</button></form></span>
+      </div>
+      <div class="hello">
+        <div>
+          <p class="hi"><span class="live"></span><span id="hiText">Studio siap dipakai</span></p>
+          <h1>Gagasan <span class="arr">→</span> <span class="grad">Video</span></h1>
+          <p class="sub">Dari satu kalimat ide sampai video animasi bersuara yang siap diposting. Ikuti lima langkah di bawah.</p>
+        </div>
+        <div class="art" aria-hidden="true">
+          <div class="mini"><div class="scr"><span class="cap a"></span><span class="cap b"></span><span class="sun"></span><span class="wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div></div>
+          <span class="bub a"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.4 1 1.1 1 1.8V16h5v-.3c0-.7.4-1.4 1-1.8A6 6 0 0 0 12 3z"/></svg></span>
+          <span class="bub b"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span>
+          <span class="bub c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 8.6v6.8l5.6-3.4z" fill="currentColor" stroke="none"/></svg></span>
+        </div>
+      </div>
     </header>
+    <nav class="stepper" id="stepper" aria-label="Langkah">
+      <span class="fill" id="stepFill"></span>
+      <button data-s="1"><i>1</i><span>Gagasan</span></button>
+      <button data-s="2"><i>2</i><span>Prompt</span></button>
+      <button data-s="3"><i>3</i><span>Storyboard</span></button>
+      <button data-s="4"><i>4</i><span>Produksi</span></button>
+      <button data-s="5"><i>5</i><span>Hasil</span></button>
+    </nav>
     <div id="banner" class="banner err hidden"></div>
 
     <!-- 1. Gagasan -->
     <section class="step" id="s1">
-      <h2><span class="num">1</span> Gagasan</h2>
+      <h2><span class="num">1</span> Gagasan<span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.4 1 1.1 1 1.8V16h5v-.3c0-.7.4-1.4 1-1.8A6 6 0 0 0 12 3z"/></svg></span></h2>
       <p class="hint">Tulis ide Anda sebebasnya. AI akan mengubahnya menjadi master prompt yang lengkap.</p>
       <label for="topik">Gagasan / ide video</label>
       <textarea id="topik" rows="4" placeholder="Contoh: kenapa kucing suka tidur di kotak kardus, jelaskan dengan fakta ilmiah yang lucu"></textarea>
+      <div class="ideas" id="ideaChips"><span>Coba ide:</span>
+        <button type="button" data-i="Kenapa kucing selalu mendarat pakai kaki? Jelaskan dengan fakta ilmiah yang lucu">🐱 Kucing mendarat</button>
+        <button type="button" data-i="Tiga fakta tentang badak Jawa, hewan langka yang hanya tinggal di Ujung Kulon">🦏 Badak Jawa</button>
+        <button type="button" data-i="Kenapa langit berwarna biru di siang hari dan oranye saat senja?">🌅 Warna langit</button>
+        <button type="button" data-i="Bagaimana lebah membuat madu, dijelaskan untuk anak-anak">🐝 Lebah &amp; madu</button>
+      </div>
       <div class="grid">
         <div class="wide"><label for="judul">Judul <span class="opt">(opsional, kosongkan agar dibuat AI)</span></label><input type="text" id="judul" /></div>
         <div>
           <label>Rasio</label>
-          <div class="seg" id="rasio"><button data-v="9:16" class="on">9:16 Shorts/TikTok</button><button data-v="16:9">16:9 YouTube</button></div>
+          <div class="seg" id="rasio"><button data-v="9:16" class="on"><span class="shape v"></span>9:16 TikTok</button><button data-v="16:9"><span class="shape h"></span>16:9 YouTube</button></div>
         </div>
         <div>
           <label for="durasi">Durasi target</label>
@@ -212,7 +344,7 @@
 
     <!-- 2. Master prompt -->
     <section class="step locked" id="s2">
-      <h2><span class="num">2</span> Master prompt</h2>
+      <h2><span class="num">2</span> Master prompt<span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h9M4 12h6M4 18h9M17.5 8l1.1 2.4L21 11.5l-2.4 1.1L17.5 15l-1.1-2.4L14 11.5l2.4-1.1z"/></svg></span></h2>
       <p class="hint">Periksa dan edit sesuka Anda. Prompt inilah yang dijalankan AI untuk membuat storyboard.</p>
       <textarea id="prompt" class="prompt-box"></textarea>
       <div class="row">
@@ -224,7 +356,7 @@
 
     <!-- 3. Storyboard -->
     <section class="step locked" id="s3">
-      <h2><span class="num">3</span> Storyboard</h2>
+      <h2><span class="num">3</span> Storyboard<span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="8" height="7" rx="2"/><rect x="13" y="4" width="8" height="7" rx="2"/><rect x="3" y="13" width="8" height="7" rx="2"/><rect x="13" y="13" width="8" height="7" rx="2"/></svg></span></h2>
       <p class="hint">Edit narasi (dibacakan suara AI) dan arahan visual per scene. Setelah itu AI menulis kode animasi lalu dirender di laptop.</p>
       <div class="two">
         <div><label for="pJudul">Judul</label><input type="text" id="pJudul" /></div>
@@ -245,8 +377,9 @@
 
     <!-- 4. Produksi -->
     <section class="step locked" id="s4">
-      <h2><span class="num">4</span> Produksi di laptop</h2>
+      <h2><span class="num">4</span> Produksi di laptop<span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h16v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM4 9l1.5-4.2 14.3 0L20 9M9.5 5l-1.5 4M15 5l-1.5 4"/></svg></span></h2>
       <p class="hint">Suara → kode animasi oleh AI → cek kode → render. Kalau kode error, AI memperbaikinya sendiri (maks 4×).</p>
+      <div class="idle-art"><span class="film"><i></i><i></i><i></i><i></i></span>Belum ada produksi berjalan. Setelah Anda menekan <b>Produksi video</b>, setiap tahap tampil di sini.</div>
       <div class="stages" id="stages"></div>
       <div class="bar"><div id="barFill"></div></div>
       <div class="meter" id="barText" style="margin-top:6px"></div>
@@ -255,7 +388,7 @@
 
     <!-- 5. Hasil -->
     <section class="step locked" id="s5">
-      <h2><span class="num">5</span> Hasil</h2>
+      <h2><span class="num">5</span> Hasil<span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 8.6v6.8l5.6-3.4z" fill="currentColor" stroke="none"/></svg></span></h2>
       <p class="hint" id="resTitle"></p>
       <div class="biaya hidden" id="biaya"></div>
       <div class="result" id="result">
@@ -318,6 +451,7 @@
 
 <script>
 const $ = (s) => document.querySelector(s);
+const STAGE_ICON = { suara: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3"/></svg>`, kode: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 8l-5 4 5 4M16 8l5 4-5 4M13.5 5l-3 14"/></svg>`, cek: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>`, render: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h16v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM4 9l1.5-4.2 14.3 0L20 9M9.5 5l-1.5 4M15 5l-1.5 4"/></svg>`, selesai: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>` };
 const STAGES = [["suara","Suara"],["kode","Kode AI"],["cek","Cek kode"],["render","Render"],["selesai","Selesai"]];
 let status = null, currentJob = null, cfgRasio = "9:16";
 const store = { get(k){ try { return JSON.parse(localStorage.getItem("studio."+k)); } catch { return null; } }, set(k,v){ try { localStorage.setItem("studio."+k, JSON.stringify(v)); } catch {} } };
@@ -325,8 +459,31 @@ const store = { get(k){ try { return JSON.parse(localStorage.getItem("studio."+k
 function showError(msg) { const b = $("#banner"); b.textContent = msg; b.className = "banner err"; if (!msg) b.classList.add("hidden"); window.scrollTo({ top: 0, behavior: "smooth" }); }
 function info(msg) { const b = $("#banner"); b.textContent = msg; b.className = "banner info"; }
 function clearBanner() { $("#banner").classList.add("hidden"); }
-function unlock(n) { for (let i = 1; i <= 5; i++) $("#s"+i).classList.toggle("locked", i > n); }
-function markDone(n) { for (let i = 1; i <= 5; i++) $("#s"+i).classList.toggle("done", i <= n); }
+function unlock(n) { for (let i = 1; i <= 5; i++) $("#s"+i).classList.toggle("locked", i > n); updStepper(); }
+function markDone(n) { for (let i = 1; i <= 5; i++) $("#s"+i).classList.toggle("done", i <= n); updStepper(); }
+/** Penunjuk langkah di atas: selesai, sedang dikerjakan, terkunci. */
+function updStepper() {
+  let cur = 0, done = 0;
+  for (let i = 1; i <= 5; i++) { const sec = $("#s"+i); if (sec.classList.contains("done")) done = i; if (!sec.classList.contains("locked") && !sec.classList.contains("done") && !cur) cur = i; }
+  if (!cur) cur = Math.min(5, done + 1);
+  document.querySelectorAll("#stepper button").forEach(b => { const i = +b.dataset.s, sec = $("#s"+i);
+    b.disabled = sec.classList.contains("locked"); b.classList.toggle("done", sec.classList.contains("done") && i !== cur); b.classList.toggle("cur", i === cur); sec.classList.toggle("cur", i === cur); });
+  const bar = $("#stepper"), btn = bar.querySelector(`button[data-s="${cur}"]`);
+  if (btn) $("#stepFill").style.width = (btn.offsetLeft + btn.offsetWidth - 6) + "px";
+}
+document.querySelectorAll("#stepper button").forEach(b => b.onclick = () => $("#s"+b.dataset.s).scrollIntoView({ behavior: "smooth", block: "start" }));
+addEventListener("resize", () => updStepper());
+document.querySelectorAll("#ideaChips button").forEach(b => b.onclick = () => { const t = $("#topik"); t.value = b.dataset.i; t.classList.remove("flash"); void t.offsetWidth; t.classList.add("flash"); t.focus(); saveDraft(); });
+/** Konfeti kecil saat video selesai. */
+function confetti() {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const cols = ["#7b4dff","#a084ff","#ffd23f","#ff8fb1","#3d7bff","#4ade80","#ff6a3d"];
+  for (let k = 0; k < 90; k++) { const c = document.createElement("i"); c.className = "confetti";
+    c.style.left = Math.random() * 100 + "vw"; c.style.background = cols[k % cols.length];
+    c.style.setProperty("--dx", (Math.random() * 200 - 100) + "px"); c.style.setProperty("--r", (Math.random() * 1080 - 540) + "deg");
+    c.style.animationDuration = (2.2 + Math.random() * 1.8) + "s"; c.style.animationDelay = Math.random() * .5 + "s";
+    document.body.appendChild(c); setTimeout(() => c.remove(), 5000); }
+}
 async function api(path, body) {
   const r = await fetch(path, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   if (r.status === 401) { location.href = "/"; throw new Error("Sesi berakhir, silakan login lagi."); }
@@ -440,7 +597,7 @@ $("#toProduce").onclick = (e) => busyBtn(e.currentTarget, "Memulai…", async ()
 function resetProgress() { $("#log").textContent = ""; setStage(null); setBar(null); }
 function setStage(st) {
   const order = STAGES.map(s => s[0]); const idx = st === "perbaikan" ? order.indexOf("kode") : order.indexOf(st);
-  $("#stages").innerHTML = STAGES.map(([k, l], i) => `<span class="stage ${i < idx || st === "selesai" ? "past" : i === idx ? "active" : ""}">${st === "perbaikan" && k === "kode" ? "AI memperbaiki" : l}</span>`).join("");
+  $("#stages").innerHTML = STAGES.map(([k, l], i) => `<span class="stage ${i < idx || st === "selesai" ? "past" : i === idx ? "active" : ""}"><span class="n">${STAGE_ICON[k]}</span>${st === "perbaikan" && k === "kode" ? "AI memperbaiki" : l}</span>`).join("");
 }
 function setBar(p) {
   if (!p) { $("#barFill").style.width = "0"; $("#barText").textContent = ""; return; }
@@ -449,7 +606,7 @@ function setBar(p) {
   $("#barText").textContent = p.stage === "render" ? `Render frame ${p.done.toLocaleString("id-ID")} / ${p.total.toLocaleString("id-ID")} (${pct}%)` : `Encoding ${pct}%`;
 }
 function appendLog(line) { const l = $("#log"); l.textContent += line + "\n"; l.scrollTop = l.scrollHeight; }
-function lockActions(on) { ["#toProduce","#reviseBtn","#uploadBtn","#rerenderBtn"].forEach(s => $(s).disabled = on); if (on) $("#ttPost").disabled = true; else updateTT(); }
+function lockActions(on) { $("#s4").classList.toggle("running", on); ["#toProduce","#reviseBtn","#uploadBtn","#rerenderBtn"].forEach(s => $(s).disabled = on); if (on) $("#ttPost").disabled = true; else updateTT(); }
 
 /* ---------- status laptop render ---------- */
 async function refreshRender() {
@@ -472,7 +629,7 @@ function connect() {
     if (e.type === "progress") setBar(e);
     if (e.type === "queue") info(e.position ? `Menunggu giliran render (antrean ke-${e.position}). Halaman ini boleh ditutup.` : "Giliran Anda, produksi dimulai.");
     if (e.type === "done" || e.type === "error") ttBusy = false;
-    if (e.type === "done") { lockActions(false); loadJobs(); api("/api/status").then(s => showUsage(s.usage)).catch(() => {}); if (e.jobId) openJob(e.jobId, true); }
+    if (e.type === "done") { confetti(); lockActions(false); loadJobs(); api("/api/status").then(s => showUsage(s.usage)).catch(() => {}); if (e.jobId) openJob(e.jobId, true); }
     if (e.type === "error") { lockActions(false); showError("Gagal: " + e.message); loadJobs(); }
   };
   es.onerror = () => { es.close(); setTimeout(connect, 2000); };
@@ -623,8 +780,10 @@ function showUsage(u) {
 
 async function loadJobs() {
   const jobs = await api("/api/jobs");
-  $("#jobs").innerHTML = jobs.map(j => `<button class="job" data-id="${j.id}"><div class="t">${j.judul.replace(/</g,"&lt;")}</div>
-    <div class="s">${new Date(j.created).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })} · ${j.rasio}${j.hasVideo ? "" : " · tanpa video"}${Object.keys(j.uploads).length ? " · terupload" : ""}${j.biaya ? " · " + (j.biaya.partial ? "≥ " : "") + usd(j.biaya.usd) : ""}</div></button>`).join("") || `<div class="job s">Belum ada video.</div>`;
+  const TH = [["#8b5dff","#ff8fb1"],["#3d7bff","#a084ff"],["#ff6a3d","#ffd23f"],["#1f8a4c","#7be0a8"],["#c040ff","#3d7bff"]];
+  const play = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>`;
+  $("#jobs").innerHTML = jobs.map((j, n) => `<button class="job" data-id="${j.id}"><span class="th ${j.rasio === "16:9" ? "h" : ""} ${j.hasVideo ? "" : "no"}" style="--h1:${TH[n % 5][0]};--h2:${TH[n % 5][1]}">${play}</span><div class="t">${j.judul.replace(/</g,"&lt;")}</div>
+    <div class="s">${new Date(j.created).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })} · ${j.rasio}${j.hasVideo ? "" : " · tanpa video"}${Object.keys(j.uploads).length ? " · terupload" : ""}${j.biaya ? " · " + (j.biaya.partial ? "≥ " : "") + usd(j.biaya.usd) : ""}</div></button>`).join("") || `<div class="job empty"><span class="th">${play}</span><b>Belum ada video</b>Tulis gagasan pertama Anda di langkah 1.</div>`;
   document.querySelectorAll(".job[data-id]").forEach(b => b.onclick = () => openJob(b.dataset.id, true).catch(e => showError(e.message)));
 }
 
@@ -645,6 +804,8 @@ $("#newBtn").onclick = () => {
     $("#platChips").innerHTML = status.platforms.map(p => `<span class="chip ${p.ready ? "ok" : "off"}">${p.ready ? "✓" : "○"} ${p.name}</span>`).join(" ");
     if (status.me && status.me.openId !== "lokal") {
       $("#me").classList.remove("hidden"); $("#meName").textContent = status.me.nama;
+      const h = new Date().getHours(), waktu = h < 11 ? "pagi" : h < 15 ? "siang" : h < 19 ? "sore" : "malam";
+      $("#hiText").textContent = `Selamat ${waktu}, ${String(status.me.nama || "").split(" ")[0] || "kreator"}`;
       if (status.me.avatar) $("#meAvatar").src = status.me.avatar; else $("#meAvatar").classList.add("hidden");
       if (status.me.role === "owner") $("#adminLink").classList.remove("hidden");
     }
@@ -662,7 +823,7 @@ $("#newBtn").onclick = () => {
     }
     const pesan = new URLSearchParams(location.search).get("masuk");
     if (pesan) { history.replaceState(null, "", "/"); showError(pesan); }
-    connect();
+    connect(); updStepper();
     refreshRender(); setInterval(refreshRender, 10000);
   } catch (e) { showError("Tidak bisa terhubung ke server Studio: " + e.message); }
 })();

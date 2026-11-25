@@ -76,10 +76,10 @@
   @keyframes pillIn { from { transform: rotate(-18deg) scale(.3); opacity: 0; } to { transform: rotate(-4deg); opacity: 1; } }
 
   .stage { position: relative; display: grid; grid-template-columns: 1fr auto 1fr; gap: clamp(20px, 3vw, 48px); align-items: end; margin-top: clamp(28px, 4vw, 48px); }
-  .stage .left { padding-bottom: 56px; }
+  .stage .left { padding-bottom: 120px; }
   .stage .left p { font: 600 clamp(22px, 2.1vw, 28px)/1.2 var(--display); letter-spacing: -0.02em; margin: 0; max-width: 11em; }
   .stage .left small { display: block; margin-top: 14px; color: var(--muted); font-size: 14px; }
-  .stage .right { padding-bottom: 56px; justify-self: end; max-width: 360px; }
+  .stage .right { padding-bottom: 120px; justify-self: end; max-width: 360px; }
   .stage .right p { color: var(--muted); font-size: 15px; margin: 0 0 18px; }
   .stage .right p b { color: var(--ink); font-weight: 600; }
   .invite { display: flex; gap: 8px; margin-top: 12px; }
@@ -90,10 +90,28 @@
   .invite button:hover { background: var(--ink); color: #fff; }
   .note { margin: 10px 0 0; font-size: 13px; color: var(--faint); }
 
-  .phone-zone { position: relative; width: clamp(230px, 21vw, 290px); }
-  .phone { position: relative; aspect-ratio: 9/18.5; margin-bottom: -60px; border-radius: 42px 42px 0 0; background: #15102e; padding: 10px 10px 0; box-shadow: 0 40px 80px -24px rgba(28,20,70,0.55), inset 0 0 0 2px #2c2457; opacity: 0; animation: phoneUp 1.3s var(--ease) .35s forwards; }
+  /* Ponsel 3D utuh yang bisa diputar dengan digeser */
+  .phone-zone { position: relative; width: clamp(230px, 21vw, 290px); margin-bottom: 64px; perspective: 1600px; touch-action: pan-y; cursor: grab; -webkit-user-select: none; user-select: none; }
+  .phone-zone.dragging { cursor: grabbing; }
+  .phone-in { opacity: 0; animation: phoneUp 1.3s var(--ease) .35s forwards; transform-style: preserve-3d; }
   @keyframes phoneUp { from { opacity: 0; transform: translateY(120px); } to { opacity: 1; transform: none; } }
-  .screen { position: relative; height: 100%; border-radius: 33px 33px 0 0; overflow: hidden; background: #000; }
+  .phone { position: relative; aspect-ratio: 9/19; transform-style: preserve-3d; transform: rotateY(-14deg) rotateX(5deg); will-change: transform; }
+  .phone .face, .phone .slab { position: absolute; inset: 0; border-radius: 44px; -webkit-backface-visibility: hidden; backface-visibility: hidden; }
+  .phone .slab { background: #0d0920; backface-visibility: visible; -webkit-backface-visibility: visible; transform: translateZ(var(--z)); }
+  .phone .front { transform: translateZ(6px); padding: 10px; background: #15102e; box-shadow: inset 0 0 0 2px #2c2457, inset 0 0 0 4px #0d0920; }
+  .phone .back { transform: rotateY(180deg) translateZ(6px); background: linear-gradient(150deg, #3a2d80, #1c1446 55%, #120d30); box-shadow: inset 0 0 0 2px rgba(255,255,255,0.08); overflow: hidden; }
+  .phone .back::after { content: ""; position: absolute; inset: 0; background: linear-gradient(115deg, transparent 35%, rgba(255,255,255,0.12) 50%, transparent 65%); }
+  .phone .cam { position: absolute; left: 16px; top: 16px; width: 46%; aspect-ratio: 1; border-radius: 30px; background: rgba(255,255,255,0.07); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12), 0 10px 24px rgba(0,0,0,0.35); }
+  .phone .cam i { position: absolute; width: 40%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #4b3f8f, #07051a 55%); box-shadow: 0 0 0 4px #1a1540, 0 0 0 5px rgba(255,255,255,0.12); }
+  .phone .cam i:nth-child(1) { left: 8%; top: 8%; } .phone .cam i:nth-child(2) { left: 8%; bottom: 8%; } .phone .cam i:nth-child(3) { right: 8%; top: 30%; width: 26%; }
+  .phone .mark { position: absolute; left: 50%; top: 58%; translate: -50% -50%; text-align: center; color: rgba(255,255,255,0.9); font: 700 34px/1 var(--display); letter-spacing: -0.02em; }
+  .phone .mark small { display: block; margin-top: 8px; font: 500 12px var(--text); letter-spacing: .08em; text-transform: uppercase; color: rgba(255,255,255,0.45); }
+  .phone-shadow { position: absolute; left: 10%; right: 10%; bottom: -34px; height: 26px; border-radius: 50%; background: radial-gradient(closest-side, rgba(28,20,70,0.35), transparent); filter: blur(6px); pointer-events: none; }
+  .rotate-hint { position: absolute; left: 50%; bottom: -66px; translate: -50% 0; display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 999px; background: #fff; box-shadow: var(--shadow); font-size: 13px; color: var(--muted); white-space: nowrap; pointer-events: none; opacity: 0; animation: tileIn .8s var(--spring) 2s forwards; transition: opacity .4s; }
+  .rotate-hint svg { width: 16px; height: 16px; color: var(--purple); animation: spinHint 2.4s var(--ease) infinite; }
+  @keyframes spinHint { 0%, 30% { transform: rotate(0); } 70%, 100% { transform: rotate(360deg); } }
+  .phone-zone.used .rotate-hint { opacity: 0 !important; animation: none; }
+  .screen { position: relative; height: 100%; border-radius: 34px; overflow: hidden; background: #000; }
   .screen::before { content: ""; position: absolute; z-index: 5; top: 10px; left: 50%; width: 30%; height: 22px; translate: -50% 0; background: #000; border-radius: 999px; }
   .screen video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 
@@ -119,7 +137,7 @@
   .snd .off { display: inline-flex; align-items: center; gap: 7px; }
   .snd:not(.unmuted) { animation: nudge 2.6s ease-in-out 3s infinite; }
   @keyframes nudge { 0%,80%,100% { transform: none; } 85% { transform: scale(1.08); } 90% { transform: scale(.98); } }
-  .phone .snd { bottom: 86px; }
+  .phone .snd { bottom: 16px; }
   .play-ov { position: absolute; inset: 0; z-index: 5; display: grid; place-items: center; border: 0; padding: 0; background: rgba(28,20,70,0.22); opacity: 0; pointer-events: none; transition: opacity .3s; cursor: pointer; }
   .paused .play-ov { opacity: 1; pointer-events: auto; }
   .play-ov span { width: 64px; height: 64px; border-radius: 50%; background: #fff; box-shadow: 0 10px 30px rgba(0,0,0,0.3); display: grid; place-items: center; transition: transform .25s var(--spring); }
@@ -308,14 +326,14 @@
 
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
-    .reveal, .stagger > *, .split .w, h1 .w, .phone, .tile, .toast { opacity: 1 !important; transform: none !important; filter: none !important; }
+    .reveal, .stagger > *, .split .w, h1 .w, .phone-in, .tile, .toast, .rotate-hint { opacity: 1 !important; transform: none !important; filter: none !important; }
     html { scroll-behavior: auto; }
   }
   @media (max-width: 1080px) {
     .stage { grid-template-columns: 1fr; justify-items: center; text-align: center; }
     .stage .left, .stage .right { padding-bottom: 0; justify-self: center; }
     .stage .left p { margin: 0 auto; }
-    .stage .phone-zone { order: 3; margin-top: 30px; }
+    .stage .phone-zone { order: 3; margin-top: 30px; margin-bottom: 90px; }
     .invite { justify-content: center; }
     .b-stat { grid-column: span 4; } .b-post { grid-column: span 8; grid-template-columns: 1fr; }
     .b-rev, .b-voice, .b-cost, .b-ctrl { grid-column: span 6; }
@@ -386,11 +404,18 @@
         <span class="tile t3" data-depth="10" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#1fc98e" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 10.5a2 2 0 1 0 0 3M16 10.5a2 2 0 1 0 0 3"/></svg></span>
         <span class="tile t4 face" data-depth="-20" aria-hidden="true">🐱</span>
         <div class="toast" aria-hidden="true"><i>✓</i><span><b>Terposting</b><br><small>ke akun TikTok Anda</small></span></div>
-        <div class="phone">
-          <div class="screen vbox">
-            <video src="/showcase/kucing.mp4" poster="/showcase/kucing.jpg" autoplay muted loop playsinline preload="auto"></video>
+        <div class="phone-in">
+          <div class="phone" id="phone">
+            <div class="face back" aria-hidden="true"><span class="cam"><i></i><i></i><i></i></span><span class="mark">AB<small>Aldi Studio</small></span></div>
+            <div class="face front">
+              <div class="screen vbox">
+                <video src="/showcase/kucing.mp4" poster="/showcase/kucing.jpg" autoplay muted loop playsinline preload="auto"></video>
+              </div>
+            </div>
           </div>
         </div>
+        <span class="phone-shadow" aria-hidden="true"></span>
+        <span class="rotate-hint" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></svg>Geser untuk memutar</span>
       </div>
 
       <div class="right">
@@ -682,7 +707,54 @@
   }, { threshold: [0, 0.2, 0.35, 0.5, 0.7, 0.9, 1] });
   vids.forEach((v) => vio.observe(v));
 
+  // ---------- Ponsel 3D: geser untuk memutar ----------
+  const zone = document.getElementById("phoneZone"), phone = document.getElementById("phone");
+  for (let z = -5; z <= 5; z++) { const sl = document.createElement("div"); sl.className = "slab"; sl.style.setProperty("--z", z + "px"); phone.prepend(sl); }
+  const HOME_Y = -14, HOME_X = 5;
+  let ry = HOME_Y, rx = HOME_X, vy = 0, tiltY = 0, tiltX = 0, drag = null, moved = false, lastMove = 0;
+  const paint = () => { phone.style.transform = `rotateY(${ry + tiltY}deg) rotateX(${rx + tiltX}deg)`; };
+  zone.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0 || e.target.closest(".snd")) return;
+    drag = { x: e.clientX, y: e.clientY, ry, rx, t: performance.now(), px: e.clientX }; moved = false; vy = 0;
+  });
+  addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (!moved) {
+      if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+      if (e.pointerType === "touch" && Math.abs(dy) > Math.abs(dx)) { drag = null; return; }
+      moved = true; zone.classList.add("dragging", "used");
+    }
+    const now = performance.now();
+    vy = (e.clientX - drag.px) * 0.55 / Math.max(1, (now - drag.t) / 16); drag.px = e.clientX; drag.t = now;
+    ry = drag.ry + dx * 0.55; rx = Math.max(-30, Math.min(30, drag.rx - dy * 0.3)); lastMove = now; paint();
+  }, { passive: true });
+  const end = () => { if (!drag) return; drag = null; zone.classList.remove("dragging"); lastMove = performance.now(); };
+  addEventListener("pointerup", end); addEventListener("pointercancel", end);
+  // Klik setelah menggeser tidak dihitung sebagai klik video.
+  zone.addEventListener("click", (e) => { if (moved) { e.stopPropagation(); e.preventDefault(); moved = false; } }, true);
+  const loop = () => {
+    if (!drag) {
+      if (Math.abs(vy) > 0.05) { ry += vy; vy *= 0.94; lastMove = performance.now(); }
+      else if (performance.now() - lastMove > 2200) {
+        // Kembali menghadap depan (sudut terdekat) supaya videonya terlihat lagi.
+        const target = HOME_Y + Math.round((ry - HOME_Y) / 360) * 360;
+        ry += (target - ry) * 0.06; rx += (HOME_X - rx) * 0.06;
+        if (Math.abs(target - ry) < 0.05) { ry = HOME_Y; }
+      }
+      paint();
+    }
+    requestAnimationFrame(loop);
+  };
+  if (!still) requestAnimationFrame(loop);
+
   if (still) return;
+
+  // Ponsel sedikit miring mengikuti kursor.
+  addEventListener("pointermove", (e) => {
+    if (drag) return;
+    tiltY = (e.clientX / innerWidth - 0.5) * 14; tiltX = -(e.clientY / innerHeight - 0.5) * 8;
+  }, { passive: true });
 
   // Ubin mengambang bergerak sedikit mengikuti kursor.
   const tiles = [...document.querySelectorAll("[data-depth]")];

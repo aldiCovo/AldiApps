@@ -7,605 +7,689 @@
 <meta name="description" content="Aldi Studio mengubah gagasan menjadi video animasi pendek dengan narasi, lalu memostingnya ke akun TikTok Anda.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bone: #f5f4f0; --paper: #fff; --ink: #0a0a0a;
-    --muted: rgba(10,10,10,0.62); --faint: rgba(10,10,10,0.42); --line: rgba(10,10,10,0.11);
-    --on-dark: #f5f4f0; --on-dark-muted: rgba(245,244,240,0.62); --dark-line: rgba(245,244,240,0.14);
-    --accent: #ff5a36; --peach: #ffb38a; --lilac: #b9a7ff;
-    --display: "Inter", system-ui, sans-serif; --text: "Instrument Sans", system-ui, sans-serif;
-    --ease: cubic-bezier(.2,.7,.1,1);
+    --bg: #f3f3f8; --card: #fff; --soft: #f7f7fb;
+    --ink: #1c1446; --ink-2: #2d2366; --muted: #6f6b8c; --faint: #a7a4bd; --line: rgba(28,20,70,0.08);
+    --purple: #7b4dff; --purple-2: #a084ff; --lilac: #eee9ff;
+    --orange: #ff7a2f; --green: #1fc98e; --yellow: #ffd23f; --blue: #3d7bff; --red: #ff4d5e; --pink: #ff8fb1;
+    --display: "Urbanist", system-ui, sans-serif; --text: "Inter", system-ui, sans-serif;
+    --ease: cubic-bezier(.2,.7,.1,1); --spring: cubic-bezier(.34,1.56,.64,1);
+    --shadow: 0 1px 2px rgba(28,20,70,0.04), 0 18px 40px -18px rgba(28,20,70,0.18);
   }
   * { box-sizing: border-box; }
-  html { background: var(--bone); scroll-behavior: smooth; }
-  body { margin: 0; color: var(--ink); font: 17px/1.55 var(--text); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  html { background: var(--bg); scroll-behavior: smooth; }
+  body { margin: 0; color: var(--ink); font: 16px/1.6 var(--text); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
   a { color: inherit; }
-  .wrap { max-width: 1280px; margin: 0 auto; padding: 0 clamp(16px, 3vw, 40px); position: relative; }
-
-  /* ---------- Latar: kisi halus, cahaya warna yang bergerak, dan grain ---------- */
-  .bg { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
-  .bg .grid { position: absolute; inset: -2px; background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px); background-size: 88px 88px; -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 20%, #000 20%, transparent 75%); mask-image: radial-gradient(ellipse 80% 60% at 50% 20%, #000 20%, transparent 75%); opacity: .55; }
-  .orb { position: absolute; border-radius: 50%; filter: blur(90px); opacity: .55; will-change: transform; }
-  .orb.a { width: 46vw; height: 46vw; left: 52%; top: -14vw; background: radial-gradient(circle, var(--accent), transparent 65%); animation: driftA 22s ease-in-out infinite alternate; }
-  .orb.b { width: 38vw; height: 38vw; left: -10vw; top: 22vh; background: radial-gradient(circle, var(--lilac), transparent 65%); animation: driftB 26s ease-in-out infinite alternate; }
-  .orb.c { width: 30vw; height: 30vw; left: 30%; top: 60vh; background: radial-gradient(circle, var(--peach), transparent 65%); animation: driftC 30s ease-in-out infinite alternate; opacity: .45; }
-  @keyframes driftA { to { transform: translate(-12vw, 10vh) scale(1.15); } }
-  @keyframes driftB { to { transform: translate(14vw, -6vh) scale(.9); } }
-  @keyframes driftC { to { transform: translate(-10vw, -14vh) scale(1.2); } }
-  .grain { position: absolute; inset: -50%; opacity: .07; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); animation: grain 1.2s steps(6) infinite; }
-  @keyframes grain { 0%{transform:translate(0,0)} 20%{transform:translate(-3%,2%)} 40%{transform:translate(2%,-4%)} 60%{transform:translate(-4%,-1%)} 80%{transform:translate(3%,3%)} 100%{transform:translate(0,0)} }
-
-  /* Bilah progres scroll */
-  .progress { position: fixed; left: 0; top: 0; height: 2px; width: 100%; background: var(--accent); transform-origin: 0 50%; transform: scaleX(0); z-index: 50; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 0 clamp(14px, 2.6vw, 32px); }
+  .card { background: var(--card); border-radius: 28px; box-shadow: var(--shadow); }
 
   /* ---------- Navigasi ---------- */
-  nav { position: sticky; top: 12px; z-index: 40; display: flex; align-items: center; gap: 28px; padding: 10px 10px 10px 16px; margin-top: 12px; border-radius: 999px; transition: background .4s, box-shadow .4s, backdrop-filter .4s; }
-  nav.solid { background: rgba(245,244,240,0.72); backdrop-filter: blur(14px) saturate(1.4); -webkit-backdrop-filter: blur(14px) saturate(1.4); box-shadow: 0 1px 0 var(--line), 0 10px 30px rgba(10,10,10,0.06); }
-  .logo { display: flex; align-items: center; gap: 10px; font: 600 17px var(--display); letter-spacing: -0.02em; text-decoration: none; }
-  .logo svg { width: 32px; height: 32px; border-radius: 9px; }
-  nav .sp { flex: 1; }
-  nav .link { color: var(--muted); text-decoration: none; font-size: 15px; position: relative; transition: color .2s; }
-  nav .link::after { content: ""; position: absolute; left: 0; right: 0; bottom: -4px; height: 1px; background: var(--ink); transform: scaleX(0); transform-origin: right; transition: transform .35s var(--ease); }
-  nav .link:hover { color: var(--ink); }
-  nav .link:hover::after { transform: scaleX(1); transform-origin: left; }
+  nav { position: sticky; top: 12px; z-index: 40; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; padding: 10px 12px 10px 16px; margin-top: 12px; border-radius: 20px; transition: background .35s, box-shadow .35s; }
+  nav.solid { background: rgba(255,255,255,0.8); backdrop-filter: blur(16px) saturate(1.4); -webkit-backdrop-filter: blur(16px) saturate(1.4); box-shadow: var(--shadow); }
+  .logo { display: inline-flex; align-items: center; gap: 10px; font: 700 19px var(--display); letter-spacing: -0.02em; text-decoration: none; }
+  .logo svg { width: 32px; height: 32px; border-radius: 10px; }
+  .links { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(255,255,255,0.7); border: 1px solid var(--line); }
+  .links a { padding: 7px 16px; border-radius: 999px; font-size: 14px; color: var(--muted); text-decoration: none; transition: background .2s, color .2s; }
+  .links a:hover { background: var(--lilac); color: var(--ink); }
+  nav .end { justify-self: end; }
 
-  .pill { position: relative; display: inline-flex; align-items: center; gap: 10px; border-radius: 999px; padding: 12px 20px; font: 500 15px var(--text); text-decoration: none; border: 0; cursor: pointer; overflow: hidden; transition: transform .3s var(--ease), background .2s; isolation: isolate; }
-  .pill.dark { background: var(--ink); color: var(--on-dark); }
-  .pill.dark::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--accent); transform: translateY(101%); border-radius: inherit; transition: transform .45s var(--ease); }
-  .pill.dark:hover::before { transform: none; }
-  .pill.light { background: var(--on-dark); color: var(--ink); }
-  .pill svg { width: 18px; height: 18px; }
-  .pill .arr { display: inline-block; transition: transform .3s var(--ease); }
-  .pill:hover .arr { transform: translateX(4px); }
+  .btn { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 10px; border-radius: 999px; padding: 13px 22px; font: 600 15px var(--text); text-decoration: none; border: 0; cursor: pointer; overflow: hidden; isolation: isolate; transition: transform .3s var(--ease), box-shadow .3s, color .3s; }
+  .btn svg { width: 18px; height: 18px; flex: none; }
+  .btn.ink { background: var(--ink); color: #fff; }
+  .btn.ink::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--purple); transform: scale(0); border-radius: inherit; transition: transform .45s var(--ease); }
+  .btn.ink:hover { box-shadow: 0 14px 30px -10px rgba(123,77,255,0.6); transform: translateY(-2px); }
+  .btn.ink:hover::before { transform: scale(1.02); }
+  .btn.line { background: transparent; color: var(--ink); border: 1.5px solid var(--ink); padding: 9px 18px; }
+  .btn.line:hover { background: var(--ink); color: #fff; }
+  .btn.white { background: #fff; color: var(--ink); }
+  .btn.white:hover { transform: translateY(-2px); box-shadow: 0 14px 30px -12px rgba(0,0,0,0.45); }
+  .btn .arr { transition: transform .3s var(--ease); }
+  .btn:hover .arr { transform: translateX(4px); }
 
-  .tag { font-size: 14px; color: var(--faint); letter-spacing: 0.01em; }
-  .tag::before { content: "( "; } .tag::after { content: " )"; }
+  /* ---------- Kata dalam pil ungu ---------- */
+  .pw { position: relative; display: inline-block; padding: 0 .28em .06em; margin: 0 .04em; color: #fff; background: linear-gradient(135deg, var(--purple-2), var(--purple) 60%); border-radius: .26em; transform: rotate(-4deg); box-shadow: 0 .18em .5em -.12em rgba(123,77,255,0.55); isolation: isolate; }
+  .pw::before, .pw::after { content: ""; position: absolute; left: 50%; top: 50%; width: 2.4em; height: 2.4em; margin: -1.2em 0 0 -1.2em; border-radius: 50%; z-index: -1; border: .09em solid rgba(123,77,255,0.25); box-shadow: 0 0 0 .32em rgba(123,77,255,0.08); animation: ripple 3.2s var(--ease) infinite; pointer-events: none; }
+  .pw::after { animation-delay: 1.6s; }
+  @keyframes ripple { from { transform: scale(.5); opacity: 1; } to { transform: scale(1.7); opacity: 0; } }
+  .js .pw.pop { transform: rotate(-16deg) scale(.4); opacity: 0; transition: transform .9s var(--spring), opacity .4s; }
+  .js .in .pw.pop, .js .pw.pop.in { transform: rotate(-4deg); opacity: 1; }
 
   /* ---------- Hero ---------- */
-  .hero { position: relative; padding: clamp(40px, 7vw, 96px) 0 clamp(32px, 4vw, 56px); }
-  .msg { background: #fff3ef; border: 1px solid #ffc9bb; color: #8a2a12; border-radius: 12px; padding: 12px 16px; margin: 0 0 28px; font-size: 15px; max-width: 640px; }
-  .badge { display: inline-flex; align-items: center; gap: 10px; padding: 6px 14px 6px 6px; border-radius: 999px; background: rgba(255,255,255,0.6); border: 1px solid var(--line); backdrop-filter: blur(8px); font-size: 14px; color: var(--muted); }
-  .badge b { background: var(--ink); color: var(--on-dark); font: 500 12px var(--text); padding: 4px 10px; border-radius: 999px; }
-  h1 { font: 500 clamp(50px, 9.4vw, 136px)/0.9 var(--display); letter-spacing: -0.045em; margin: 22px 0 0; position: relative; z-index: 2; }
-  h1 .ln { display: block; overflow: hidden; padding-bottom: .16em; margin-bottom: -.16em; }
-  h1 .ln > span { display: inline-block; transform: translateY(110%); animation: rise 1.1s var(--ease) forwards; }
-  h1 .ln:nth-child(2) > span { animation-delay: .12s; }
-  h1 .ln:nth-child(3) > span { animation-delay: .24s; }
-  h1 .ln:nth-child(4) > span { animation-delay: .36s; }
-  @keyframes rise { to { transform: none; } }
-  h1 .soft { color: rgba(10,10,10,0.26); }
-  h1 .grad { background: linear-gradient(100deg, var(--ink) 20%, var(--accent) 50%, var(--ink) 80%); background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; padding-bottom: .16em; margin-bottom: -.16em; animation: rise 1.1s var(--ease) .24s forwards, sheen 6s ease-in-out 1.4s infinite; }
-  @keyframes sheen { 0%,100% { background-position: 100% 0; } 50% { background-position: 0 0; } }
-  .fade-up { opacity: 0; transform: translateY(16px); animation: fadeUp .9s var(--ease) forwards; }
-  @keyframes fadeUp { to { opacity: 1; transform: none; } }
+  .hero { position: relative; margin-top: 14px; padding: clamp(40px, 6vw, 80px) clamp(20px, 4vw, 56px) 0; overflow: hidden; overflow: clip; isolation: isolate; }
+  .hero .rings { position: absolute; z-index: -1; left: 50%; top: 58%; width: 1500px; height: 1500px; translate: -50% -50%; pointer-events: none; }
+  .hero .rings circle { fill: none; stroke: rgba(28,20,70,0.07); stroke-width: 1.2; }
+  .hero .rings .pulse { stroke: rgba(123,77,255,0.25); stroke-width: 2; transform-origin: 750px 750px; animation: wave 6s var(--ease) infinite; }
+  .hero .rings .pulse.b { animation-delay: 3s; }
+  @keyframes wave { from { transform: scale(.15); opacity: 1; } to { transform: scale(1); opacity: 0; } }
+  .msg { max-width: 640px; margin: 0 auto 24px; padding: 12px 16px; border-radius: 14px; background: #fff1f2; color: #9f1239; border: 1px solid #fecdd3; font-size: 15px; text-align: center; }
+  .eyebrow { display: flex; justify-content: center; }
+  .eyebrow span { display: inline-flex; align-items: center; gap: 10px; padding: 6px 14px 6px 6px; border-radius: 999px; background: #fff; box-shadow: var(--shadow); font-size: 14px; color: var(--muted); }
+  .eyebrow b { padding: 3px 10px; border-radius: 999px; background: var(--lilac); color: var(--purple); font: 600 12px var(--text); }
+  h1 { font: 600 clamp(48px, 8.6vw, 124px)/0.98 var(--display); letter-spacing: -0.035em; margin: 24px 0 0; text-align: center; }
+  h1 .l { display: block; }
+  h1 .l2 { padding-left: clamp(0px, 14vw, 220px); }
+  h1 .w { display: inline-block; opacity: 0; transform: translateY(50%); filter: blur(10px); animation: wordIn 1s var(--ease) forwards; }
+  @keyframes wordIn { to { opacity: 1; transform: none; filter: none; } }
+  h1 .pw { animation: pillIn 1.1s var(--spring) .55s both; }
+  @keyframes pillIn { from { transform: rotate(-18deg) scale(.3); opacity: 0; } to { transform: rotate(-4deg); opacity: 1; } }
 
-  /* Ponsel dengan video animasi */
-  .hero-top { display: grid; grid-template-columns: 1fr auto; gap: clamp(24px, 4vw, 64px); align-items: center; }
-  .hero-copy { min-width: 0; }
-  .phone-zone { position: relative; width: clamp(220px, 19vw, 280px); margin-right: clamp(40px, 5vw, 90px); z-index: 1; perspective: 1200px; }
-  .phone { aspect-ratio: 9/19; border-radius: 44px; background: #0a0a0a; padding: 10px; box-shadow: 0 50px 100px -20px rgba(10,10,10,0.45), 0 0 0 1px rgba(10,10,10,0.9), inset 0 0 0 2px #2a2a2a; transform: rotateY(-14deg) rotateX(6deg) rotateZ(2deg); transition: transform .6s var(--ease); transform-style: preserve-3d; animation: float 7s ease-in-out infinite; opacity: 0; animation: phoneIn 1.2s var(--ease) .5s forwards, float 7s ease-in-out 1.7s infinite; }
-  @keyframes phoneIn { from { opacity: 0; transform: translateY(60px) rotateY(-30deg) rotateX(10deg); } to { opacity: 1; } }
-  @keyframes float { 0%,100% { translate: 0 0; } 50% { translate: 0 -14px; } }
-  .screen { position: relative; width: 100%; height: 100%; border-radius: 34px; overflow: hidden; background: radial-gradient(120% 70% at 30% 10%, #3a1d14, #120c0a 55%, #0a0a0a); color: #fff; }
-  .screen::before { content: ""; position: absolute; top: 10px; left: 50%; width: 32%; height: 22px; translate: -50% 0; background: #000; border-radius: 999px; z-index: 5; }
-  .side { position: absolute; right: 10px; bottom: 76px; display: flex; flex-direction: column; gap: 14px; z-index: 4; }
-  .side i { width: 30px; height: 30px; border-radius: 50%; background: rgba(255,255,255,0.14); display: grid; place-items: center; font-style: normal; font-size: 13px; }
-  .side i.heart { animation: beat 2.8s ease-in-out infinite; }
-  @keyframes beat { 0%,70%,100% { transform: scale(1); } 76% { transform: scale(1.25); background: var(--accent); } }
-  .meta { position: absolute; left: 14px; right: 14px; bottom: 18px; font-size: 11.5px; line-height: 1.35; z-index: 4; }
-  .meta b { font-size: 12.5px; }
-  .meta .ai { display: inline-block; margin-top: 5px; padding: 2px 7px; border-radius: 4px; background: rgba(255,255,255,0.16); font-size: 10.5px; }
-  .float-chip { position: absolute; z-index: 3; display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 14px; background: rgba(255,255,255,0.78); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--line); box-shadow: 0 14px 30px rgba(10,10,10,0.08); font-size: 13.5px; white-space: nowrap; opacity: 0; animation: fadeUp .8s var(--ease) forwards, bob 5s ease-in-out infinite; }
-  .float-chip i { width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; font-style: normal; font-size: 12px; color: #fff; }
-  .float-chip.c1 { left: -62%; top: 18%; animation-delay: 1.1s, 1.9s; }
-  .float-chip.c2 { left: -42%; top: 84%; animation-delay: 1.3s, 2.6s; }
-  .float-chip.c3 { right: -18%; bottom: -4%; animation-delay: 1.5s, 3.1s; }
-  @keyframes bob { 0%,100% { translate: 0 0; } 50% { translate: 0 -8px; } }
+  .stage { position: relative; display: grid; grid-template-columns: 1fr auto 1fr; gap: clamp(20px, 3vw, 48px); align-items: end; margin-top: clamp(28px, 4vw, 48px); }
+  .stage .left { padding-bottom: 56px; }
+  .stage .left p { font: 600 clamp(22px, 2.1vw, 28px)/1.2 var(--display); letter-spacing: -0.02em; margin: 0; max-width: 11em; }
+  .stage .left small { display: block; margin-top: 14px; color: var(--muted); font-size: 14px; }
+  .stage .right { padding-bottom: 56px; justify-self: end; max-width: 360px; }
+  .stage .right p { color: var(--muted); font-size: 15px; margin: 0 0 18px; }
+  .stage .right p b { color: var(--ink); font-weight: 600; }
+  .invite { display: flex; gap: 8px; margin-top: 12px; }
+  .invite input { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--soft); border-radius: 999px; padding: 11px 16px; font: inherit; font-size: 14px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink); outline: none; transition: border-color .2s, box-shadow .2s; }
+  .invite input::placeholder { letter-spacing: 0; text-transform: none; color: var(--faint); }
+  .invite input:focus { border-color: var(--purple); box-shadow: 0 0 0 4px rgba(123,77,255,0.14); }
+  .invite button { border: 1.5px solid var(--ink); background: transparent; color: var(--ink); border-radius: 999px; padding: 0 18px; font: 600 14px var(--text); cursor: pointer; transition: background .2s, color .2s; }
+  .invite button:hover { background: var(--ink); color: #fff; }
+  .note { margin: 10px 0 0; font-size: 13px; color: var(--faint); }
 
-  .hero-foot { position: relative; z-index: 2; display: grid; grid-template-columns: 1.1fr 1fr; gap: 40px; align-items: end; margin-top: clamp(36px, 5vw, 64px); padding-top: 28px; border-top: 1px solid var(--line); }
-  .lead { font-size: clamp(18px, 1.6vw, 22px); line-height: 1.45; color: var(--muted); margin: 0; max-width: 30em; letter-spacing: -0.01em; }
-  .lead b { color: var(--ink); font-weight: 500; }
-  .cta { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; justify-self: end; }
-  .note { color: var(--faint); font-size: 14px; margin: 0; }
-  .invite { display: flex; gap: 8px; width: min(400px, 100%); }
-  .invite input { flex: 1; min-width: 0; background: rgba(255,255,255,0.8); border: 1px solid var(--line); color: var(--ink); border-radius: 999px; padding: 11px 18px; font: inherit; font-size: 15px; letter-spacing: 0.08em; text-transform: uppercase; outline: none; transition: border-color .2s, box-shadow .2s; }
-  .invite input:focus { border-color: var(--ink); box-shadow: 0 0 0 4px rgba(255,90,54,0.15); }
-  .invite input::placeholder { text-transform: none; letter-spacing: 0; color: var(--faint); }
-  .invite button { background: transparent; color: var(--ink); border: 1px solid var(--ink); border-radius: 999px; padding: 0 20px; font: 500 15px var(--text); cursor: pointer; transition: background .2s, color .2s; }
-  .invite button:hover { background: var(--ink); color: var(--on-dark); }
+  .phone-zone { position: relative; width: clamp(230px, 21vw, 290px); }
+  .phone { position: relative; aspect-ratio: 9/18.5; margin-bottom: -60px; border-radius: 42px 42px 0 0; background: #15102e; padding: 10px 10px 0; box-shadow: 0 40px 80px -24px rgba(28,20,70,0.55), inset 0 0 0 2px #2c2457; opacity: 0; animation: phoneUp 1.3s var(--ease) .35s forwards; }
+  @keyframes phoneUp { from { opacity: 0; transform: translateY(120px); } to { opacity: 1; transform: none; } }
+  .screen { position: relative; height: 100%; border-radius: 33px 33px 0 0; overflow: hidden; background: #000; }
+  .screen::before { content: ""; position: absolute; z-index: 5; top: 10px; left: 50%; width: 30%; height: 22px; translate: -50% 0; background: #000; border-radius: 999px; }
+  .screen video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 
-  /* ---------- Marquee ---------- */
-  .marquee { margin: clamp(28px, 4vw, 48px) calc(-1 * clamp(16px, 3vw, 40px)); padding: 22px 0; border-block: 1px solid var(--line); overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent); mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent); }
-  .marquee .track { display: flex; width: max-content; gap: 44px; animation: marq 38s linear infinite; }
-  .marquee:hover .track { animation-play-state: paused; }
-  .marquee span { font: 500 clamp(26px, 3vw, 40px)/1 var(--display); letter-spacing: -0.03em; white-space: nowrap; display: flex; align-items: center; gap: 44px; }
-  .marquee span::after { content: "✦"; font-size: .55em; color: var(--accent); }
-  .marquee span:nth-child(even) { color: rgba(10,10,10,0.3); }
-  @keyframes marq { to { transform: translateX(-50%); } }
+  .tile { position: absolute; z-index: 3; display: grid; place-items: center; width: 64px; height: 64px; border-radius: 20px; background: #fff; box-shadow: 0 20px 40px -14px rgba(28,20,70,0.35); opacity: 0; animation: tileIn .9s var(--spring) forwards, bob 6s ease-in-out infinite; }
+  .tile svg { width: 30px; height: 30px; }
+  .tile.face { background: linear-gradient(140deg, #ffb48a, var(--orange)); font-size: 34px; }
+  .tile.t1 { left: -130px; top: 16%; rotate: -10deg; animation-delay: .9s, 1.8s; }
+  .tile.t2 { right: -112px; top: 2%; rotate: 8deg; animation-delay: 1.05s, 2.3s; }
+  .tile.t3 { left: -96px; top: 42%; rotate: 6deg; width: 56px; height: 56px; animation-delay: 1.2s, 2.9s; }
+  .tile.t4 { right: -44px; top: 25%; rotate: -6deg; width: 58px; height: 58px; font-size: 30px; animation-delay: 1.35s, 3.3s; }
+  @keyframes tileIn { from { opacity: 0; scale: .3; } to { opacity: 1; scale: 1; } }
+  @keyframes bob { 0%,100% { translate: 0 0; } 50% { translate: 0 -10px; } }
+  .toast { position: absolute; z-index: 4; left: -84px; bottom: 150px; display: flex; align-items: center; gap: 10px; padding: 10px 14px 10px 10px; border-radius: 16px; background: #fff; box-shadow: 0 20px 40px -14px rgba(28,20,70,0.35); font-size: 13px; line-height: 1.25; white-space: nowrap; opacity: 0; animation: tileIn .9s var(--spring) 1.6s forwards, bob 7s ease-in-out 2.5s infinite; }
+  .toast i { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; background: var(--green); color: #fff; font-style: normal; font-weight: 700; }
+  .toast small { color: var(--muted); }
 
-  /* ---------- Panel gelap ---------- */
-  .stage { background: var(--ink); color: var(--on-dark); border-radius: 22px; padding: clamp(24px, 4vw, 48px); display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; position: relative; overflow: hidden; }
-  .stage::before { content: ""; position: absolute; width: 140%; aspect-ratio: 1; left: -20%; top: -70%; background: conic-gradient(from 0deg, transparent 0 60%, rgba(255,90,54,0.35) 72%, rgba(185,167,255,0.25) 82%, transparent 92%); animation: spin 14s linear infinite; filter: blur(40px); pointer-events: none; }
-  @keyframes spin { to { transform: rotate(1turn); } }
-  .stage .head { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 18px; position: relative; }
-  .stage .head .tag { color: var(--on-dark-muted); }
-  .live { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--on-dark-muted); }
-  .live i { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 1.8s infinite; }
-  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255,90,54,.6); } 70% { box-shadow: 0 0 0 10px rgba(255,90,54,0); } 100% { box-shadow: 0 0 0 0 rgba(255,90,54,0); } }
-  .card { --x: 50%; --y: 50%; border: 1px solid var(--dark-line); border-radius: 14px; padding: 20px; background: radial-gradient(400px circle at var(--x) var(--y), rgba(245,244,240,0.09), rgba(245,244,240,0.02) 40%); position: relative; min-height: 220px; display: flex; flex-direction: column; transition: transform .4s var(--ease), border-color .3s; backdrop-filter: blur(6px); }
-  .card:hover { transform: translateY(-4px); border-color: rgba(245,244,240,0.3); }
-  .card small { color: var(--on-dark-muted); font-size: 13px; }
-  .card .big { font: 500 clamp(22px, 2.2vw, 30px)/1.08 var(--display); letter-spacing: -0.03em; margin: 12px 0 auto; }
-  .card .row { display: flex; justify-content: space-between; font-size: 13px; color: var(--on-dark-muted); margin-top: 18px; }
-  .bar { height: 3px; border-radius: 3px; background: var(--dark-line); margin-top: 10px; overflow: hidden; }
-  .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--peach), var(--on-dark)); transition: width 2.6s var(--ease); }
-  .stage.in .bar i { width: 68%; }
-  .card.go { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .card.go small, .card.go .row { color: rgba(255,255,255,0.82); }
-  .card.go::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.35) 50%, transparent 70%); background-size: 250% 100%; animation: shine 3.5s ease-in-out infinite; pointer-events: none; }
-  @keyframes shine { 0% { background-position: 150% 0; } 60%,100% { background-position: -50% 0; } }
+  /* ---------- Kontrol video ---------- */
+  .vbox { cursor: pointer; }
+  .snd { position: absolute; z-index: 6; right: 12px; bottom: 12px; display: inline-flex; align-items: center; gap: 7px; height: 38px; padding: 0 14px 0 11px; border: 0; border-radius: 999px; background: rgba(28,20,70,0.6); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); color: #fff; font: 600 13px var(--text); cursor: pointer; transition: background .2s, transform .2s; }
+  .snd:hover { background: var(--purple); transform: scale(1.05); }
+  .snd svg { width: 18px; height: 18px; }
+  .snd .on, .snd.unmuted .off { display: none; } .snd.unmuted .on { display: inline-flex; }
+  .snd .off { display: inline-flex; align-items: center; gap: 7px; }
+  .snd:not(.unmuted) { animation: nudge 2.6s ease-in-out 3s infinite; }
+  @keyframes nudge { 0%,80%,100% { transform: none; } 85% { transform: scale(1.08); } 90% { transform: scale(.98); } }
+  .phone .snd { bottom: 86px; }
+  .play-ov { position: absolute; inset: 0; z-index: 5; display: grid; place-items: center; border: 0; padding: 0; background: rgba(28,20,70,0.22); opacity: 0; pointer-events: none; transition: opacity .3s; cursor: pointer; }
+  .paused .play-ov { opacity: 1; pointer-events: auto; }
+  .play-ov span { width: 64px; height: 64px; border-radius: 50%; background: #fff; box-shadow: 0 10px 30px rgba(0,0,0,0.3); display: grid; place-items: center; transition: transform .25s var(--spring); }
+  .play-ov:hover span { transform: scale(1.1); }
+  .play-ov span::after { content: ""; margin-left: 5px; border-style: solid; border-width: 11px 0 11px 18px; border-color: transparent transparent transparent var(--ink); }
+  .eq { display: inline-flex; gap: 2px; align-items: flex-end; height: 14px; }
+  .eq i { width: 3px; background: currentColor; border-radius: 2px; animation: eq 1s ease-in-out infinite; }
+  .eq i:nth-child(2) { animation-delay: .2s; } .eq i:nth-child(3) { animation-delay: .4s; }
+  @keyframes eq { 0%,100% { height: 4px; } 50% { height: 14px; } }
 
-  /* ---------- Angka ---------- */
-  .stats { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: clamp(56px, 8vw, 110px); border-top: 1px solid var(--line); }
-  .stats div { padding: 26px 24px 0 0; }
-  .stats div + div { padding-left: 24px; border-left: 1px solid var(--line); }
-  .stats b { display: block; font: 500 clamp(44px, 5.5vw, 80px)/1 var(--display); letter-spacing: -0.05em; }
-  .stats b sup { font-size: .4em; vertical-align: top; margin-left: 2px; color: var(--accent); }
-  .stats div > span { color: var(--muted); font-size: 15px; }
+  /* ---------- Bagian umum ---------- */
+  section { margin-top: 16px; }
+  .panel { padding: clamp(40px, 6vw, 88px) clamp(20px, 4vw, 56px); }
+  h2 { font: 600 clamp(38px, 5.4vw, 76px)/1.02 var(--display); letter-spacing: -0.03em; margin: 0; }
+  h2 .soft { color: #b4b1c8; }
+  .center { text-align: center; }
+  .intro { max-width: 560px; margin: 18px auto 0; color: var(--muted); font-size: 16px; text-align: center; }
+  .reveal { opacity: 0; transform: translateY(36px); transition: opacity .9s var(--ease), transform .9s var(--ease); }
+  .reveal.in { opacity: 1; transform: none; }
+  .stagger > * { opacity: 0; transform: translateY(28px) scale(.98); transition: opacity .8s var(--ease), transform .8s var(--ease); }
+  .stagger.in > * { opacity: 1; transform: none; }
+  .stagger.in > :nth-child(2) { transition-delay: .08s; } .stagger.in > :nth-child(3) { transition-delay: .16s; }
+  .stagger.in > :nth-child(4) { transition-delay: .24s; } .stagger.in > :nth-child(5) { transition-delay: .32s; } .stagger.in > :nth-child(6) { transition-delay: .4s; }
+  .split .w { display: inline-block; opacity: 0; transform: translateY(40%); filter: blur(8px); transition: opacity .8s var(--ease), transform .8s var(--ease), filter .8s var(--ease); transition-delay: calc(var(--i) * 60ms); }
+  .split.in .w, .in .split .w { opacity: 1; transform: none; filter: none; }
+  .ic { width: 56px; height: 56px; border-radius: 18px; display: grid; place-items: center; background: #fff; box-shadow: 0 14px 30px -12px rgba(28,20,70,0.3); flex: none; }
+  .ic svg { width: 26px; height: 26px; }
 
-  /* ---------- Bagian ---------- */
-  section { padding: clamp(64px, 9vw, 128px) 0 0; }
-  .sec-head { display: grid; grid-template-columns: 1fr 2fr; gap: 40px; align-items: end; padding-bottom: 28px; border-bottom: 1px solid var(--line); }
-  h2 { font: 500 clamp(38px, 5.6vw, 80px)/0.95 var(--display); letter-spacing: -0.04em; margin: 0; }
-  h2 .soft { color: rgba(10,10,10,0.28); }
-  h2 .w { display: inline-block; opacity: 0; transform: translateY(40%); filter: blur(8px); transition: opacity .8s var(--ease), transform .8s var(--ease), filter .8s var(--ease); transition-delay: calc(var(--i) * 70ms); }
-  .in h2 .w, h2.in .w { opacity: 1; transform: none; filter: none; }
+  /* ---------- Cara kerja ---------- */
+  .how-title { position: relative; display: flex; justify-content: center; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .how-title .ic { rotate: -10deg; width: 72px; height: 72px; border-radius: 22px; }
+  .how-title .ic svg { width: 34px; height: 34px; }
+  .steps { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: clamp(40px, 5vw, 64px); }
+  .steps .track { position: absolute; left: 6%; right: 6%; top: 46px; height: 2px; background: var(--line); border-radius: 2px; overflow: hidden; }
+  .steps .track i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--purple-2), var(--purple)); transition: width 2.2s var(--ease) .3s; }
+  .steps.in .track i { width: 100%; }
+  .step { position: relative; padding: 24px; border-radius: 24px; background: var(--soft); border: 1px solid var(--line); transition: transform .4s var(--ease), box-shadow .4s, background .3s; }
+  .step:hover { transform: translateY(-6px); background: #fff; box-shadow: var(--shadow); }
+  .step .ic { margin-bottom: 26px; transition: transform .5s var(--spring); }
+  .step:hover .ic { transform: rotate(-8deg) scale(1.08); }
+  .step .n { position: absolute; right: 22px; top: 24px; font: 600 14px var(--display); color: var(--faint); }
+  .step b { display: block; font: 600 22px/1.15 var(--display); letter-spacing: -0.02em; margin-bottom: 8px; }
+  .step p { margin: 0; color: var(--muted); font-size: 14.5px; }
 
-  .rows { list-style: none; margin: 0; padding: 0; }
-  .rows li { position: relative; display: grid; grid-template-columns: 80px 1fr 1.2fr 40px; gap: 24px; align-items: baseline; padding: 30px 0; border-bottom: 1px solid var(--line); overflow: hidden; transition: padding .4s var(--ease), color .3s; }
-  .rows li::before { content: ""; position: absolute; inset: 0; background: var(--ink); transform: scaleY(0); transform-origin: bottom; transition: transform .45s var(--ease); z-index: -1; border-radius: 12px; }
-  .rows li:hover { padding-inline: 20px; color: var(--on-dark); }
-  .rows li:hover::before { transform: none; }
-  .rows li:hover p, .rows li:hover .n { color: var(--on-dark-muted); }
-  .rows .n { font: 500 14px var(--display); color: var(--faint); font-variant-numeric: tabular-nums; }
-  .rows b { font: 500 clamp(22px, 2.4vw, 32px)/1.1 var(--display); letter-spacing: -0.03em; }
-  .rows p { margin: 0; color: var(--muted); transition: color .3s; }
-  .rows .go { justify-self: end; font-size: 22px; transform: translateX(-10px) rotate(-45deg); opacity: 0; transition: transform .4s var(--ease), opacity .3s; }
-  .rows li:hover .go { opacity: 1; transform: none; color: var(--accent); }
-  .rows { isolation: isolate; }
+  /* ---------- Bento ---------- */
+  .bento { display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px; margin-top: clamp(36px, 5vw, 56px); }
+  .bento > div { position: relative; overflow: hidden; padding: 28px; border-radius: 24px; background: var(--soft); border: 1px solid var(--line); min-height: 280px; transition: transform .45s var(--ease), box-shadow .45s, background .3s; }
+  .bento > div:hover { transform: translateY(-4px); background: #fff; box-shadow: var(--shadow); }
+  .bento > div::after { content: ""; position: absolute; width: 640px; height: 640px; right: -320px; top: -320px; border-radius: 50%; background: repeating-radial-gradient(circle, transparent 0 79px, rgba(28,20,70,0.06) 79px 80px); -webkit-mask-image: radial-gradient(circle, #000 30%, transparent 70%); mask-image: radial-gradient(circle, #000 30%, transparent 70%); pointer-events: none; }
+  .b-stat { grid-column: span 3; display: flex; flex-direction: column; align-items: center; justify-content: space-between; text-align: center; }
+  .b-stat .k { font: 600 22px var(--display); }
+  .b-stat .big { font: 600 clamp(72px, 8vw, 112px)/1 var(--display); letter-spacing: -0.04em; color: var(--purple); }
+  .b-stat .big sup { font-size: .38em; vertical-align: top; position: relative; top: .25em; margin-left: 2px; }
+  .b-stat small { color: var(--muted); font-size: 14px; }
+  .b-post { grid-column: span 9; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .b-head b { display: block; font: 600 clamp(26px, 2.6vw, 34px)/1.08 var(--display); letter-spacing: -0.025em; }
+  .b-head b .soft { color: #b4b1c8; display: block; }
+  .b-head p { color: var(--muted); font-size: 14.5px; margin: 14px 0 0; max-width: 26em; }
+  .mock { position: relative; z-index: 1; align-self: end; margin-bottom: -28px; padding: 18px; border-radius: 20px 20px 0 0; background: #fff; box-shadow: 0 30px 60px -24px rgba(28,20,70,0.35); font-size: 12.5px; }
+  .mock .acc { display: flex; align-items: center; gap: 10px; }
+  .mock .av { width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(140deg, #ffb48a, var(--orange)); display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 13px; }
+  .mock .acc b { font-size: 13px; } .mock .acc small { color: var(--muted); display: block; font-size: 11.5px; }
+  .mock .cap { margin: 12px 0; padding: 10px 12px; border-radius: 12px; background: var(--soft); color: var(--muted); line-height: 1.45; }
+  .mock .cap .typed::after { content: "|"; color: var(--purple); animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .mock .sel { display: flex; justify-content: space-between; padding: 9px 12px; border-radius: 12px; border: 1px solid var(--line); }
+  .mock .tg { display: flex; gap: 14px; margin: 12px 0; color: var(--muted); }
+  .mock .tg span { display: inline-flex; align-items: center; gap: 6px; }
+  .mock .tg i { width: 26px; height: 15px; border-radius: 999px; background: #dcdae8; position: relative; }
+  .mock .tg i::after { content: ""; position: absolute; left: 2px; top: 2px; width: 11px; height: 11px; border-radius: 50%; background: #fff; transition: left .3s var(--ease); }
+  .mock .tg i.on { background: var(--purple); } .mock .tg i.on::after { left: 13px; }
+  .mock .go { display: block; width: 100%; padding: 10px; border-radius: 999px; background: var(--ink); color: #fff; text-align: center; font-weight: 600; }
+  .mock .done { position: absolute; right: -14px; top: -20px; display: flex; align-items: center; gap: 8px; padding: 8px 12px 8px 8px; border-radius: 14px; background: #fff; box-shadow: 0 18px 36px -14px rgba(28,20,70,0.4); font-weight: 600; transform: scale(0); transition: transform .7s var(--spring) 1.2s; }
+  .in .mock .done, .mock .done.in { transform: scale(1); }
+  .mock .done i { width: 24px; height: 24px; border-radius: 8px; background: var(--green); color: #fff; display: grid; place-items: center; font-style: normal; }
+  .b-rev { grid-column: span 5; }
+  .b-voice, .b-ctrl { min-height: 220px !important; }
+  .b-voice { grid-column: span 4; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  .b-voice .ic, .b-ctrl .ic { margin-bottom: 22px; }
+  .b-voice b, .b-ctrl b, .b-rev b { display: block; font: 600 22px/1.15 var(--display); letter-spacing: -0.02em; }
+  .b-voice p, .b-ctrl p, .b-rev p { color: var(--muted); font-size: 14.5px; margin: 10px 0 0; }
+  .b-cost { grid-column: span 7; display: flex; flex-direction: column; }
+  .bubble { position: relative; z-index: 1; max-width: 260px; margin-top: 22px; padding: 12px 14px; border-radius: 18px 18px 18px 6px; background: #fff; box-shadow: var(--shadow); font-size: 14px; }
+  .bubble.me { margin-left: auto; border-radius: 18px 18px 6px 18px; background: var(--ink); color: #fff; }
+  .bubble small { display: block; color: var(--faint); font-size: 11.5px; margin-top: 4px; }
+  .bubble.me small { color: rgba(255,255,255,0.55); }
+  .b-ctrl { grid-column: span 8; display: flex; gap: 24px; align-items: center; }
+  .b-ctrl .ic { margin-bottom: 0 !important; width: 72px; height: 72px; border-radius: 22px; } .b-ctrl .ic svg { width: 34px; height: 34px; }
+  .b-ctrl p { max-width: 34em; }
+  .bars { position: relative; z-index: 1; display: flex; align-items: flex-end; gap: 8px; height: 150px; margin-top: auto; padding-top: 24px; }
+  .bars div { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+  .bars span { font: 600 11px var(--text); padding: 2px 6px; border-radius: 6px; background: #fff; box-shadow: 0 4px 10px rgba(28,20,70,0.08); margin-bottom: 6px; opacity: 0; transition: opacity .5s 1.2s; }
+  .bars i { width: 100%; height: 0; border-radius: 10px 10px 4px 4px; transition: height 1.4s var(--spring); }
+  .in .bars i { height: var(--h); } .in .bars span { opacity: 1; }
+  .bars div:nth-child(2) i { transition-delay: .1s; } .bars div:nth-child(3) i { transition-delay: .2s; } .bars div:nth-child(4) i { transition-delay: .3s; } .bars div:nth-child(5) i { transition-delay: .4s; }
+  .bars em { font-style: normal; font-size: 11px; color: var(--muted); margin-top: 6px; }
+  .cost-chip { position: absolute; z-index: 2; right: 22px; top: 22px; padding: 10px 12px; border-radius: 14px; background: #fff; box-shadow: var(--shadow); font-size: 12px; color: var(--muted); }
+  .cost-chip b { display: block; font: 700 20px var(--display); color: var(--ink); }
 
-  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 40px; }
-  .grid div { --x: 50%; --y: 50%; position: relative; background: rgba(255,255,255,0.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 18px; padding: 28px; min-height: 210px; overflow: hidden; transition: transform .45s var(--ease), box-shadow .45s var(--ease), border-color .3s; }
-  .grid div::before { content: ""; position: absolute; inset: 0; background: radial-gradient(320px circle at var(--x) var(--y), rgba(255,90,54,0.13), transparent 60%); opacity: 0; transition: opacity .3s; pointer-events: none; }
-  .grid div:hover { transform: translateY(-6px); box-shadow: 0 24px 50px -20px rgba(10,10,10,0.18); border-color: rgba(10,10,10,0.2); }
-  .grid div:hover::before { opacity: 1; }
-  .grid .ic { width: 44px; height: 44px; border-radius: 12px; background: var(--ink); color: var(--on-dark); display: grid; place-items: center; transition: transform .5s var(--ease), background .3s; }
-  .grid div:hover .ic { transform: rotate(-8deg) scale(1.08); background: var(--accent); }
-  .grid .ic svg { width: 22px; height: 22px; }
-  .grid b { display: block; font: 500 21px/1.2 var(--display); letter-spacing: -0.02em; margin: 26px 0 8px; }
-  .grid p { margin: 0; color: var(--muted); font-size: 15.5px; }
+  /* ---------- Showcase ---------- */
+  .showcase { position: relative; overflow: hidden; overflow: clip; isolation: isolate; padding: clamp(40px, 6vw, 88px) clamp(20px, 4vw, 56px); border-radius: 28px; background: var(--ink); color: #fff; display: grid; grid-template-columns: 1fr auto; gap: clamp(28px, 5vw, 72px); align-items: center; }
+  .showcase .rings { position: absolute; z-index: -1; right: -300px; top: 50%; width: 1100px; height: 1100px; translate: 0 -50%; }
+  .showcase .rings circle { fill: none; stroke: rgba(255,255,255,0.07); }
+  .showcase .rings .pulse { stroke: rgba(160,132,255,0.45); stroke-width: 2; transform-origin: 550px 550px; animation: wave 6s var(--ease) infinite; }
+  .showcase .rings .pulse.b { animation-delay: 3s; }
+  .showcase .glow { position: absolute; z-index: -1; width: 600px; height: 600px; left: -200px; bottom: -300px; border-radius: 50%; background: radial-gradient(circle, rgba(123,77,255,0.55), transparent 65%); filter: blur(40px); }
+  .showcase h2 .soft { color: rgba(255,255,255,0.4); }
+  .showcase .lbl { display: inline-block; padding: 6px 14px; border-radius: 999px; background: rgba(255,255,255,0.1); font-size: 13px; color: rgba(255,255,255,0.75); margin-bottom: 18px; }
+  .showcase p { color: rgba(255,255,255,0.68); max-width: 26em; margin: 18px 0 28px; }
+  .sound-hint { display: inline-flex; align-items: center; gap: 10px; margin: -8px 0 28px; padding: 8px 14px; border-radius: 999px; background: rgba(123,77,255,0.25); color: #fff; font-size: 14px; }
+  .reels { display: flex; gap: clamp(14px, 2vw, 24px); align-items: flex-start; }
+  .reel { margin: 0; width: clamp(200px, 19vw, 270px); }
+  .reel.two { margin-top: 72px; }
+  .frame { position: relative; aspect-ratio: 9/16; border-radius: 24px; overflow: hidden; background: #000; box-shadow: 0 40px 80px -24px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.12); transition: transform .6s var(--ease), box-shadow .6s; }
+  .reel:hover .frame { transform: translateY(-8px) rotate(-1deg); box-shadow: 0 50px 90px -20px rgba(123,77,255,0.55), 0 0 0 1px rgba(255,255,255,0.25); }
+  .frame video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .reel figcaption { padding: 14px 4px 0; }
+  .reel figcaption b { display: block; font: 600 17px/1.3 var(--display); }
+  .reel figcaption small { color: rgba(255,255,255,0.55); font-size: 13px; }
 
-  .access { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; margin-top: 40px; }
-  .access ul { margin: 0; padding: 0; list-style: none; }
-  .access li { padding: 16px 0; border-bottom: 1px solid var(--line); color: var(--muted); }
-  .access li:first-child { padding-top: 0; }
-  .access li b { color: var(--ink); font-weight: 500; }
-  .en { color: var(--muted); margin: 0; font-size: 16px; }
-  .en-box { background: rgba(255,255,255,0.65); backdrop-filter: blur(10px); border-radius: 18px; padding: 28px; border: 1px solid var(--line); }
-  .en-box .tag { display: block; margin-bottom: 14px; }
+  /* ---------- Contoh gagasan (carousel) ---------- */
+  .ideas-head { display: flex; justify-content: space-between; align-items: end; gap: 20px; }
+  .arrows { display: flex; gap: 8px; }
+  .arrows button { width: 46px; height: 46px; border-radius: 14px; border: 1px solid var(--line); background: #fff; color: var(--ink); font-size: 18px; cursor: pointer; transition: background .2s, color .2s, transform .2s; }
+  .arrows button:hover { background: var(--ink); color: #fff; transform: translateY(-2px); }
+  .ideas { display: flex; gap: 14px; margin-top: 36px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; padding: 6px 2px 24px; }
+  .ideas::-webkit-scrollbar { display: none; }
+  .idea { flex: 0 0 clamp(260px, 30%, 360px); scroll-snap-align: start; display: flex; flex-direction: column; padding: 26px; border-radius: 24px; background: var(--soft); border: 1px solid var(--line); min-height: 250px; transition: transform .4s var(--ease), background .3s, box-shadow .4s; }
+  .idea:nth-child(even) { margin-top: 28px; }
+  .idea:hover { transform: translateY(-6px); background: #fff; box-shadow: var(--shadow); }
+  .idea .q { font: 700 46px/0.6 var(--display); color: #d9d6ea; height: 26px; }
+  .idea p { font: 600 19px/1.35 var(--display); letter-spacing: -0.01em; margin: 10px 0 auto; }
+  .idea .meta { display: flex; align-items: center; gap: 12px; margin-top: 22px; }
+  .idea .meta .ic { width: 40px; height: 40px; border-radius: 13px; }
+  .idea .meta .ic svg { width: 20px; height: 20px; }
+  .idea .meta b { display: block; font-size: 14px; } .idea .meta small { color: var(--muted); font-size: 12.5px; }
+  .prog { display: flex; align-items: center; gap: 16px; font: 600 13px var(--display); color: var(--muted); }
+  .prog .bar { width: 220px; height: 3px; border-radius: 3px; background: var(--line); overflow: hidden; }
+  .prog .bar i { display: block; height: 100%; width: 20%; background: var(--ink); border-radius: 3px; transition: width .4s var(--ease); }
+
+  /* ---------- Akses ---------- */
+  .access { display: grid; grid-template-columns: 1.1fr 1fr; gap: 14px; margin-top: clamp(36px, 5vw, 56px); }
+  .access ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .access li { display: flex; gap: 16px; align-items: flex-start; padding: 20px; border-radius: 20px; background: var(--soft); border: 1px solid var(--line); color: var(--muted); font-size: 15px; }
+  .access li .ic { width: 44px; height: 44px; border-radius: 14px; }
+  .access li .ic svg { width: 22px; height: 22px; }
+  .access li b { display: block; color: var(--ink); font: 600 18px var(--display); margin-bottom: 2px; }
+  .access li a { color: var(--purple); }
+  .en-box { position: relative; overflow: hidden; padding: 32px; border-radius: 24px; background: var(--lilac); }
+  .en-box .lbl { display: inline-block; padding: 5px 12px; border-radius: 999px; background: #fff; font-size: 12.5px; font-weight: 600; color: var(--purple); margin-bottom: 16px; }
+  .en-box p { margin: 0; color: var(--ink-2); font-size: 16px; line-height: 1.65; }
 
   /* ---------- Penutup ---------- */
-  .closing { position: relative; overflow: hidden; margin: clamp(64px, 9vw, 128px) 0 16px; background: var(--ink); color: var(--on-dark); border-radius: 24px; padding: clamp(32px, 6vw, 80px) clamp(24px, 4vw, 56px) 28px; isolation: isolate; }
-  .closing .glow { position: absolute; z-index: -1; width: 70%; aspect-ratio: 1; right: -15%; top: -40%; background: radial-gradient(circle, rgba(255,90,54,0.55), transparent 60%); filter: blur(60px); animation: driftA 16s ease-in-out infinite alternate; }
-  .closing .glow.b { left: -20%; right: auto; top: 30%; background: radial-gradient(circle, rgba(185,167,255,0.35), transparent 60%); animation: driftB 20s ease-in-out infinite alternate; }
-  .closing .lines { position: absolute; inset: 0; z-index: -1; background-image: linear-gradient(var(--dark-line) 1px, transparent 1px), linear-gradient(90deg, var(--dark-line) 1px, transparent 1px); background-size: 72px 72px; -webkit-mask-image: radial-gradient(ellipse at 30% 30%, #000, transparent 70%); mask-image: radial-gradient(ellipse at 30% 30%, #000, transparent 70%); opacity: .5; }
-  .closing h2 { font-size: clamp(44px, 8vw, 120px); }
-  .closing h2 .soft { color: rgba(245,244,240,0.3); }
-  .closing .actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 36px 0 clamp(48px, 7vw, 96px); }
-  .pill.ghost { background: transparent; color: var(--on-dark); border: 1px solid var(--dark-line); }
-  .pill.ghost:hover { border-color: var(--on-dark); }
-  .pill.light::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--accent); transform: translateY(101%); transition: transform .45s var(--ease); }
-  .pill.light:hover { color: #fff; }
-  .pill.light:hover::before { transform: none; }
-  .big-word { font: 600 clamp(80px, 19vw, 290px)/.8 var(--display); letter-spacing: -0.06em; color: transparent; -webkit-text-stroke: 1px rgba(245,244,240,0.18); white-space: nowrap; margin: 0 0 24px; user-select: none; }
-  footer { display: flex; flex-wrap: wrap; gap: 10px 28px; padding-top: 24px; border-top: 1px solid var(--dark-line); font-size: 14px; color: var(--on-dark-muted); }
-  footer a { text-decoration: none; color: var(--on-dark); }
-  footer a:hover { text-decoration: underline; }
-  footer .sp { flex: 1; }
+  .closing { position: relative; overflow: hidden; overflow: clip; isolation: isolate; text-align: center; }
+  .closing h2 { font-size: clamp(46px, 7.4vw, 110px); line-height: 1.02; }
+  .closing h2 .l { display: block; }
+  .closing .ftile { position: absolute; z-index: 1; }
+  .closing .f1 { left: 10%; top: 26%; rotate: -12deg; }
+  .closing .f2 { right: 12%; top: 18%; rotate: 10deg; }
+  .closing .f3 { right: 7%; bottom: 30%; rotate: -6deg; }
+  .closing .f4 { left: 16%; bottom: 20%; rotate: 8deg; }
+  .closing .ic { width: 72px; height: 72px; border-radius: 22px; animation: bob 6s ease-in-out infinite; }
+  .closing .ic svg { width: 34px; height: 34px; }
+  .closing .face { font-size: 38px; background: linear-gradient(140deg, #ffb48a, var(--orange)); }
+  .closing .actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; margin-top: 40px; }
 
-
-  /* ---------- Latar tambahan: aurora, cahaya kursor ---------- */
-  .bg .aurora { position: absolute; width: 140vmax; height: 140vmax; left: 50%; top: -95vmax; translate: -50% 0; background: conic-gradient(from 0deg, #ff5a36, #ffb38a, #f7d774, #b9a7ff, #7cc6ff, #ff7aa8, #ff5a36); filter: blur(110px); opacity: .42; border-radius: 50%; animation: spin 48s linear infinite; }
-  .orb { opacity: .7; }
-  .orb.d { width: 34vw; height: 34vw; right: -8vw; top: 120vh; background: radial-gradient(circle, #7cc6ff, transparent 65%); animation: driftB 24s ease-in-out infinite alternate-reverse; }
-  .bg .cursor-light { position: absolute; width: 640px; height: 640px; left: 0; top: 0; translate: -50% -50%; border-radius: 50%; background: radial-gradient(circle, rgba(255,90,54,0.16), rgba(185,167,255,0.10) 40%, transparent 70%); transition: transform .25s ease-out; will-change: transform; }
-  .bg .beams { position: absolute; inset: 0; background: repeating-linear-gradient(115deg, transparent 0 140px, rgba(255,255,255,0.35) 140px 141px, transparent 141px 280px); -webkit-mask-image: linear-gradient(180deg, #000, transparent 70%); mask-image: linear-gradient(180deg, #000, transparent 70%); animation: beams 18s linear infinite; opacity: .6; }
-  @keyframes beams { to { background-position: 560px 0; } }
-
-  /* Video di ponsel hero */
-  .hero-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-  .screen::after { content: ""; position: absolute; inset: auto 0 0 0; height: 30%; background: linear-gradient(transparent, rgba(0,0,0,0.75)); z-index: 3; pointer-events: none; }
-  .side { bottom: 36% !important; }
-
-  .frame, .screen { cursor: pointer; }
-  .play-ov { position: absolute; inset: 0; z-index: 4; display: grid; place-items: center; border: 0; padding: 0; background: rgba(0,0,0,0.18); opacity: 0; pointer-events: none; transition: opacity .3s; cursor: pointer; }
-  .paused .play-ov { opacity: 1; pointer-events: auto; }
-  .play-ov span { width: 64px; height: 64px; border-radius: 50%; background: rgba(255,255,255,0.92); box-shadow: 0 10px 30px rgba(0,0,0,0.35); display: grid; place-items: center; transition: transform .25s; }
-  .play-ov:hover span { transform: scale(1.08); }
-  .play-ov span::after { content: ""; margin-left: 5px; border-style: solid; border-width: 11px 0 11px 18px; border-color: transparent transparent transparent #0a0a0a; }
-  .snd { z-index: 5; }
-  /* ---------- Showcase video asli ---------- */
-  .showcase { position: relative; overflow: hidden; isolation: isolate; margin-top: clamp(28px, 4vw, 48px); padding: clamp(36px, 5vw, 72px); background: #0b0b0d; color: var(--on-dark); border-radius: 26px; display: grid; grid-template-columns: 1fr auto; gap: clamp(32px, 5vw, 72px); align-items: center; }
-  .showcase .aurora { position: absolute; z-index: -1; inset: -40%; background: conic-gradient(from 90deg at 60% 50%, transparent 0 25%, rgba(255,90,54,0.45) 35%, rgba(185,167,255,0.35) 48%, rgba(124,198,255,0.25) 58%, transparent 70%); filter: blur(70px); animation: spin 30s linear infinite; }
-  .showcase::after { content: ""; position: absolute; inset: 0; z-index: -1; background-image: linear-gradient(var(--dark-line) 1px, transparent 1px), linear-gradient(90deg, var(--dark-line) 1px, transparent 1px); background-size: 64px 64px; -webkit-mask-image: radial-gradient(ellipse at 70% 50%, #000, transparent 70%); mask-image: radial-gradient(ellipse at 70% 50%, #000, transparent 70%); opacity: .45; }
-  .showcase + .stage { margin-top: 16px; }
-  .showcase .tag { color: var(--on-dark-muted); }
-  .showcase h2 { margin: 16px 0 20px; }
-  .showcase h2 .soft { color: rgba(245,244,240,0.32); }
-  .sc-copy p { color: var(--on-dark-muted); margin: 0 0 28px; max-width: 26em; font-size: 18px; }
-  .reels { display: flex; gap: clamp(16px, 2vw, 28px); align-items: flex-start; }
-  .reel { margin: 0; width: clamp(220px, 20vw, 290px); }
-  .reel.two { margin-top: 64px; }
-  .frame { position: relative; aspect-ratio: 9/16; border-radius: 22px; overflow: hidden; background: #000; box-shadow: 0 40px 80px -24px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.1); transition: transform .6s var(--ease), box-shadow .6s var(--ease); }
-  .reel:hover .frame { transform: translateY(-8px) scale(1.02); box-shadow: 0 50px 90px -20px rgba(255,90,54,0.35), 0 0 0 1px rgba(255,255,255,0.2); }
-  .frame video { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .snd { position: absolute; right: 12px; bottom: 12px; width: 40px; height: 40px; border-radius: 50%; border: 0; cursor: pointer; background: rgba(10,10,10,0.55); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); color: #fff; font-size: 16px; display: grid; place-items: center; transition: transform .2s, background .2s; }
-  .snd:hover { transform: scale(1.1); background: var(--accent); }
-  .snd .on, .snd.unmuted .off { display: none; } .snd.unmuted .on { display: inline; }
-  .rec { position: absolute; left: 12px; top: 12px; display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; background: rgba(10,10,10,0.55); backdrop-filter: blur(8px); font-size: 12px; }
-  .rec i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: pulse 1.8s infinite; }
-  .reel figcaption { padding: 16px 4px 0; }
-  .reel figcaption .tag { font-size: 12px; }
-  .reel figcaption b { display: block; font: 500 17px/1.3 var(--display); letter-spacing: -0.01em; margin: 6px 0 6px; }
-  .reel figcaption small { color: var(--on-dark-muted); font-size: 13px; }
-
-  /* Muncul saat discroll */
-  .reveal { opacity: 0; transform: translateY(40px); transition: opacity 1s var(--ease), transform 1s var(--ease); }
-  .reveal.in { opacity: 1; transform: none; }
-  .stagger > * { opacity: 0; transform: translateY(24px); transition: opacity .8s var(--ease), transform .8s var(--ease); }
-  .stagger.in > * { opacity: 1; transform: none; }
-  .stagger.in > *:nth-child(2) { transition-delay: .08s; } .stagger.in > *:nth-child(3) { transition-delay: .16s; }
-  .stagger.in > *:nth-child(4) { transition-delay: .24s; } .stagger.in > *:nth-child(5) { transition-delay: .32s; } .stagger.in > *:nth-child(6) { transition-delay: .4s; }
+  /* ---------- Footer ---------- */
+  footer.card { margin: 16px 0; padding: clamp(32px, 5vw, 56px) clamp(20px, 4vw, 56px) 28px; }
+  .f-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; padding-bottom: 28px; border-bottom: 1px solid var(--line); }
+  .f-top b { font: 600 clamp(26px, 3vw, 38px) var(--display); letter-spacing: -0.02em; }
+  .f-top a { font: 500 clamp(22px, 2.8vw, 36px) var(--display); letter-spacing: -0.02em; text-decoration: none; transition: color .2s; }
+  .f-top a:hover { color: var(--purple); }
+  .f-mid { display: grid; grid-template-columns: repeat(3, auto) 1fr; gap: clamp(24px, 5vw, 72px); padding: 28px 0; }
+  .f-mid h4 { margin: 0 0 12px; font: 600 15px var(--display); }
+  .f-mid a { display: block; color: var(--muted); text-decoration: none; font-size: 14px; padding: 3px 0; transition: color .2s; }
+  .f-mid a:hover { color: var(--ink); }
+  .f-app { justify-self: end; display: flex; align-items: center; gap: 18px; padding: 20px 22px; border-radius: 22px; background: var(--soft); border: 1px solid var(--line); max-width: 380px; }
+  .f-app b { font: 600 19px/1.2 var(--display); }
+  .f-app a.sq { flex: none; width: 56px; height: 56px; border-radius: 16px; background: var(--ink); color: #fff; display: grid; place-items: center; transition: background .25s, transform .3s var(--spring); }
+  .f-app a.sq:hover { background: var(--purple); transform: rotate(-6deg) scale(1.06); }
+  .f-app a.sq svg { width: 24px; height: 24px; }
+  .f-bot { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 16px; }
+  .wordmark { font: 600 clamp(64px, 12vw, 168px)/.85 var(--display); letter-spacing: -0.045em; margin: 0; }
+  .wordmark span { color: var(--purple); }
+  .f-bot small { color: var(--faint); font-size: 13px; }
 
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
-    .reveal, .stagger > *, h2 .w, h1 .ln > span, .fade-up, .phone, .float-chip { opacity: 1 !important; transform: none !important; filter: none !important; }
+    .reveal, .stagger > *, .split .w, h1 .w, .phone, .tile, .toast { opacity: 1 !important; transform: none !important; filter: none !important; }
     html { scroll-behavior: auto; }
   }
-
-  @media (max-width: 1100px) {
-    .phone-zone { width: 220px; }
-    .float-chip.c1 { left: -60%; } .float-chip.c2 { left: -50%; }
+  @media (max-width: 1080px) {
+    .stage { grid-template-columns: 1fr; justify-items: center; text-align: center; }
+    .stage .left, .stage .right { padding-bottom: 0; justify-self: center; }
+    .stage .left p { margin: 0 auto; }
+    .stage .phone-zone { order: 3; margin-top: 30px; }
+    .invite { justify-content: center; }
+    .b-stat { grid-column: span 4; } .b-post { grid-column: span 8; grid-template-columns: 1fr; }
+    .b-rev, .b-voice, .b-cost, .b-ctrl { grid-column: span 6; }
+    .b-cost { grid-column: span 12; }
+    .closing .ftile { display: none; }
   }
-  @media (max-width: 900px) {
-    .showcase { grid-template-columns: 1fr; }
-    .reels { justify-content: center; }
-    .hero-top { grid-template-columns: 1fr; }
-    .phone-zone { margin: 32px auto 0; width: 240px; }
-    .float-chip.c1 { left: -40%; } .float-chip.c2 { left: -44%; } .float-chip.c3 { right: -30%; }
-    .hero-foot, .sec-head, .access { grid-template-columns: 1fr; }
-    .cta { justify-self: start; }
-    .stage { grid-template-columns: 1fr; }
-    .card { min-height: 0; }
-    .grid { grid-template-columns: 1fr 1fr; }
-    .stats { grid-template-columns: 1fr 1fr; }
-    .stats div:nth-child(3) { padding-left: 0; border-left: 0; }
-    .rows li { grid-template-columns: 48px 1fr; }
-    .rows p { grid-column: 2; }
-    .rows .go { display: none; }
+  @media (max-width: 820px) {
+    nav { grid-template-columns: 1fr auto; } .links { display: none; }
+    h1 .l2 { padding-left: 0; }
+    .steps { grid-template-columns: 1fr 1fr; } .steps .track { display: none; }
+    .showcase { grid-template-columns: 1fr; } .reels { justify-content: center; }
+    .access { grid-template-columns: 1fr; }
+    .f-mid { grid-template-columns: repeat(3, 1fr); } .f-app { grid-column: 1 / -1; justify-self: stretch; max-width: none; }
+    .bento > div { grid-column: 1 / -1 !important; min-height: 0; }
   }
   @media (max-width: 560px) {
-    .showcase { padding: 28px 18px; }
-    .reel { width: calc(50% - 8px); }
-    .reel.two { margin-top: 40px; }
+    .tile.t1 { left: -70px; } .tile.t2 { right: -64px; } .tile.t3 { left: -58px; } .tile.t4 { right: -60px; }
+    .tile { width: 52px; height: 52px; border-radius: 16px; } .tile svg { width: 24px; height: 24px; } .tile.face { font-size: 26px; }
+    .toast { left: -40px; }
+    .steps { grid-template-columns: 1fr; }
+    .reel { width: calc(50% - 7px); } .reel.two { margin-top: 40px; }
     .reel figcaption b { font-size: 14px; }
-    nav { gap: 14px; }
-    nav .link { display: none; }
-    .grid { grid-template-columns: 1fr; }
-    .float-chip { font-size: 12px; padding: 8px 10px; }
-    .float-chip.c1 { left: -16%; } .float-chip.c2 { left: -18%; top: 70%; } .float-chip.c3 { right: -10%; }
+    .ideas-head { flex-direction: column; align-items: flex-start; }
+    .idea { flex-basis: 82%; } .idea:nth-child(even) { margin-top: 0; }
+    .f-mid { grid-template-columns: 1fr 1fr; }
   }
 </style>
 </head>
 <body>
-<div class="bg" aria-hidden="true"><div class="aurora"></div><div class="beams"></div><div class="grid"></div><div class="orb a"></div><div class="orb b"></div><div class="orb c"></div><div class="orb d"></div><div class="cursor-light" id="cl"></div><div class="grain"></div></div>
-<div class="progress" aria-hidden="true"></div>
 
 <div class="wrap">
   <nav id="nav">
     <a class="logo" href="/">
-      <svg viewBox="0 0 1024 1024" aria-hidden="true"><rect width="1024" height="1024" fill="#0a0a0a"/><text x="512" y="610" text-anchor="middle" font-family="Inter, Helvetica, sans-serif" font-weight="600" font-size="400" letter-spacing="-20" fill="#f5f4f0">AB</text><path d="M220 690 L220 750 L272 720 Z" fill="#ff5a36"/></svg>
+      <svg viewBox="0 0 1024 1024" aria-hidden="true"><rect width="1024" height="1024" fill="#1c1446"/><text x="512" y="610" text-anchor="middle" font-family="Urbanist, Inter, Helvetica, sans-serif" font-weight="700" font-size="400" letter-spacing="-10" fill="#fff">AB</text><path d="M220 690 L220 750 L272 720 Z" fill="#a084ff"/></svg>
       Aldi Studio
     </a>
-    <span class="sp"></span>
-    <a class="link" href="#contoh">Contoh</a>
-    <a class="link" href="#cara">Cara kerja</a>
-    <a class="link" href="#fitur">Fitur</a>
-    <a class="link" href="#akses">Akses &amp; biaya</a>
-    <a class="pill dark magnet" href="/api/tiktok/login">Masuk <span class="arr">→</span></a>
+    <div class="links">
+      <a href="#contoh">Contoh</a>
+      <a href="#cara">Cara kerja</a>
+      <a href="#fitur">Fitur</a>
+      <a href="#akses">Akses &amp; biaya</a>
+    </div>
+    <a class="btn line end" href="/api/tiktok/login">Masuk</a>
   </nav>
 
-  <header class="hero">
+  <!-- ---------- Hero ---------- -->
+  <header class="hero card">
+    <svg class="rings" viewBox="0 0 1500 1500" aria-hidden="true">
+      <circle cx="750" cy="750" r="180"/><circle cx="750" cy="750" r="300"/><circle cx="750" cy="750" r="430"/><circle cx="750" cy="750" r="570"/><circle cx="750" cy="750" r="720"/>
+      <circle class="pulse" cx="750" cy="750" r="720"/><circle class="pulse b" cx="750" cy="750" r="720"/>
+    </svg>
     <div class="msg" id="msg" hidden></div>
-    <div class="hero-top">
-    <div class="hero-copy">
-    <span class="badge fade-up"><b>Baru</b> Studio video AI untuk kreator TikTok</span>
+    <div class="eyebrow"><span><b>Baru</b> Studio video AI untuk kreator TikTok</span></div>
     <h1>
-      <span class="ln"><span>Gagasan.</span></span>
-      <span class="ln"><span class="soft">Animasi.</span></span>
-      <span class="ln"><span class="grad">Langsung ke</span></span>
-      <span class="ln"><span>TikTok.</span></span>
+      <span class="l"><span class="w">Satu</span> <span class="w" style="animation-delay:.08s">gagasan.</span></span>
+      <span class="l l2"><span class="w" style="animation-delay:.18s">Jadi</span> <span class="pw">video</span> <span class="w" style="animation-delay:.3s">TikTok.</span></span>
     </h1>
-    </div>
 
-    <div class="phone-zone" aria-hidden="true">
-      <div class="float-chip c1"><i style="background:#0a0a0a">✦</i>Naskah &amp; storyboard</div>
-      <div class="float-chip c2"><i style="background:#7c5cff">◉</i>Narasi suara AI</div>
-      <div class="float-chip c3"><i style="background:#ff5a36">↑</i>Posting ke TikTok</div>
-      <div class="phone" id="phone">
-        <div class="screen">
-          <video class="hero-video" src="/showcase/kucing.mp4" poster="/showcase/kucing.jpg" autoplay muted loop playsinline preload="auto"></video>
-          <div class="side"><i class="heart">♥</i><i>💬</i><i>↗</i></div>
-          <div class="meta"><b>@kreator</b> · Jurus salto si oren 🐱<br><span class="ai">Dibuat dengan AI</span></div>
+    <div class="stage">
+      <div class="left">
+        <p>Naskah, suara, animasi, dan subtitle. Sekaligus.</p>
+        <small>Dari satu kalimat sampai siap diposting.</small>
+      </div>
+
+      <div class="phone-zone" id="phoneZone">
+        <span class="tile t1" data-depth="18" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="#1c1446" d="M16.6 5.82A4.28 4.28 0 0 1 15.54 3h-3.09v12.4a2.59 2.59 0 0 1-2.59 2.5 2.6 2.6 0 0 1 0-5.2c.27 0 .53.04.77.12V9.66a5.7 5.7 0 0 0-.77-.05 5.69 5.69 0 1 0 5.69 5.69V9.01a7.35 7.35 0 0 0 4.3 1.38V7.3a4.3 4.3 0 0 1-3.25-1.48z"/></svg></span>
+        <span class="tile t2" data-depth="-14" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#7b4dff" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span>
+        <span class="tile t3" data-depth="10" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#1fc98e" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 10.5a2 2 0 1 0 0 3M16 10.5a2 2 0 1 0 0 3"/></svg></span>
+        <span class="tile t4 face" data-depth="-20" aria-hidden="true">🐱</span>
+        <div class="toast" aria-hidden="true"><i>✓</i><span><b>Terposting</b><br><small>ke akun TikTok Anda</small></span></div>
+        <div class="phone">
+          <div class="screen vbox">
+            <video src="/showcase/kucing.mp4" poster="/showcase/kucing.jpg" autoplay muted loop playsinline preload="auto"></video>
+          </div>
         </div>
       </div>
-    </div>
 
-    </div>
-
-    <div class="hero-foot">
-      <p class="lead fade-up" style="animation-delay:.6s">Tulis satu kalimat ide. <b>Aldi Studio</b> menyusun naskah dan storyboard, membuat narasi suara, menganimasikan setiap scene, lalu membantu Anda memosting ke akun TikTok Anda sendiri.</p>
-      <div class="cta fade-up" style="animation-delay:.75s">
-        <a class="pill dark magnet" href="/api/tiktok/login">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16.6 5.82A4.28 4.28 0 0 1 15.54 3h-3.09v12.4a2.59 2.59 0 0 1-2.59 2.5 2.6 2.6 0 0 1 0-5.2c.27 0 .53.04.77.12V9.66a5.7 5.7 0 0 0-.77-.05 5.690 5.690 0 1 0 5.69 5.69V9.01a7.35 7.35 0 0 0 4.3 1.38V7.3a4.3 4.3 0 0 1-3.25-1.48z"/></svg>
+      <div class="right">
+        <p>Tulis satu kalimat ide. <b>Aldi Studio</b> menyusun naskah dan storyboard, membuat narasi suara, menganimasikan setiap scene, lalu membantu Anda memosting ke akun TikTok Anda sendiri.</p>
+        <a class="btn ink" href="/api/tiktok/login">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16.6 5.82A4.28 4.28 0 0 1 15.54 3h-3.09v12.4a2.59 2.59 0 0 1-2.59 2.5 2.6 2.6 0 0 1 0-5.2c.27 0 .53.04.77.12V9.66a5.7 5.7 0 0 0-.77-.05 5.69 5.69 0 1 0 5.69 5.69V9.01a7.35 7.35 0 0 0 4.3 1.38V7.3a4.3 4.3 0 0 1-3.25-1.48z"/></svg>
           Masuk dengan TikTok <span class="arr">→</span>
         </a>
-        <p class="note">Khusus kreator undangan. Sudah terdaftar? Langsung masuk.</p>
         <form class="invite" action="/masuk" method="get">
           <input name="undangan" placeholder="Kode undangan" aria-label="Kode undangan" autocomplete="off" required maxlength="20">
           <button type="submit">Daftar</button>
         </form>
+        <p class="note">Khusus kreator undangan. Sudah terdaftar? Langsung masuk.</p>
       </div>
     </div>
   </header>
 
-  <div class="marquee" aria-hidden="true">
-    <div class="track">
-      <span>Motion graphics</span><span>Narasi suara AI</span><span>Subtitle otomatis</span><span>9:16 &amp; 16:9</span><span>Storyboard per scene</span><span>Revisi dengan kata-kata</span><span>Label konten AI</span><span>Posting ke TikTok</span>
-      <span>Motion graphics</span><span>Narasi suara AI</span><span>Subtitle otomatis</span><span>9:16 &amp; 16:9</span><span>Storyboard per scene</span><span>Revisi dengan kata-kata</span><span>Label konten AI</span><span>Posting ke TikTok</span>
+  <!-- ---------- Cara kerja ---------- -->
+  <section id="cara" class="card panel reveal">
+    <div class="how-title">
+      <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="#ff7a2f"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></span>
+      <h2 class="split">Begini cara <span class="pw pop">kerjanya</span></h2>
     </div>
-  </div>
-
-
-  <section class="showcase reveal" id="contoh">
-    <div class="aurora" aria-hidden="true"></div>
-    <div class="sc-copy">
-      <span class="tag">Dibuat dengan Aldi Studio</span>
-      <h2 class="split">Video asli. <span class="soft">Dari satu gagasan.</span></h2>
-      <p>Dua video ini dibuat oleh Aldi Studio dari satu kalimat gagasan: naskah, narasi suara, animasi, dan subtitle. Putar dan nyalakan suaranya.</p>
-      <a class="pill light magnet" href="/api/tiktok/login">Buat video Anda <span class="arr">→</span></a>
+    <p class="intro">Empat langkah dari gagasan ke TikTok. Anda memegang kendali di setiap langkah.</p>
+    <div class="steps stagger">
+      <div class="track" aria-hidden="true"><i></i></div>
+      <div class="step"><span class="n">01</span><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#7b4dff" stroke-width="2" stroke-linecap="round"><path d="M4 20l4-1L19 8l-3-3L5 16z"/><path d="M14 7l3 3"/></svg></span><b>Tulis gagasan</b><p>Satu atau dua kalimat tentang video yang Anda mau, plus durasi, rasio, dan gaya.</p></div>
+      <div class="step"><span class="n">02</span><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#ff7a2f" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="8" height="7" rx="2"/><rect x="13" y="4" width="8" height="7" rx="2"/><rect x="3" y="13" width="8" height="7" rx="2"/><rect x="13" y="13" width="8" height="7" rx="2"/></svg></span><b>Periksa storyboard</b><p>AI menyusun naskah per scene. Anda bebas mengedit narasi dan arahan visual.</p></div>
+      <div class="step"><span class="n">03</span><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1fc98e" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9l5 3-5 3z"/></svg></span><b>Produksi</b><p>Narasi suara dibuat, animasi ditulis dan dirender menjadi MP4 dengan subtitle.</p></div>
+      <div class="step"><span class="n">04</span><span class="ic"><svg viewBox="0 0 24 24"><path fill="#1c1446" d="M16.6 5.82A4.28 4.28 0 0 1 15.54 3h-3.09v12.4a2.59 2.59 0 0 1-2.59 2.5 2.6 2.6 0 0 1 0-5.2c.27 0 .53.04.77.12V9.66a5.7 5.7 0 0 0-.77-.05 5.69 5.69 0 1 0 5.69 5.69V9.01a7.35 7.35 0 0 0 4.3 1.38V7.3a4.3 4.3 0 0 1-3.25-1.48z"/></svg></span><b>Posting ke TikTok</b><p>Pilih privasi, izin komentar, duet, dan stitch, lalu posting ke akun TikTok Anda.</p></div>
     </div>
-    <div class="reels">
-      <figure class="reel">
-        <div class="frame">
-          <video data-src="/showcase/kucing.mp4" poster="/showcase/kucing.jpg" muted loop playsinline preload="none"></video>
-          <button class="snd" type="button" aria-label="Nyalakan suara"><span class="off">🔇</span><span class="on">🔊</span></button>
-          <span class="rec"><i></i>9:16</span>
+  </section>
+
+  <!-- ---------- Fitur (bento) ---------- -->
+  <section id="fitur" class="card panel reveal">
+    <h2 class="split center">Satu studio. <br><span class="soft">Tanpa tim produksi.</span></h2>
+    <p class="intro">Semua yang biasanya butuh penulis naskah, pengisi suara, dan animator, dikerjakan dari satu halaman.</p>
+    <div class="bento stagger">
+      <div class="b-stat">
+        <span class="k">Hingga</span>
+        <span class="big"><span class="count" data-to="90">0</span><sup>dtk</sup></span>
+        <small>durasi per video, 9:16 atau 16:9</small>
+      </div>
+      <div class="b-post">
+        <div class="b-head">
+          <b>Posting dengan kontrol penuh. <span class="soft">Langsung dari sini.</span></b>
+          <p>Pilih privasi, izin komentar, duet, dan stitch. Tidak ada yang dikirim ke TikTok sebelum Anda menekan Posting. Konten diberi label buatan AI.</p>
         </div>
-        <figcaption><span class="tag">Gagasan</span><b>“Kenapa kucing selalu mendarat pakai kaki?”</b><small>Motion graphics · Narasi · Subtitle</small></figcaption>
-      </figure>
-      <figure class="reel two">
-        <div class="frame">
-          <video data-src="/showcase/badak.mp4" poster="/showcase/badak.jpg" muted loop playsinline preload="none"></video>
-          <button class="snd" type="button" aria-label="Nyalakan suara"><span class="off">🔇</span><span class="on">🔊</span></button>
-          <span class="rec"><i></i>9:16</span>
+        <div class="mock" aria-hidden="true">
+          <div class="done"><i>✓</i>Terposting</div>
+          <div class="acc"><span class="av">A</span><span><b>Akun TikTok Anda</b><small>@kreator</small></span></div>
+          <div class="cap"><span class="typed" id="typed"></span></div>
+          <div class="sel"><span>Siapa yang bisa menonton</span><b>Hanya saya ▾</b></div>
+          <div class="tg"><span><i class="on"></i>Komentar</span><span><i id="tgDuet"></i>Duet</span><span><i></i>Stitch</span></div>
+          <span class="go">Posting ke TikTok</span>
         </div>
-        <figcaption><span class="tag">Gagasan</span><b>“Semua badak Jawa tinggal di satu tempat. Kenapa butuh rumah kedua?”</b><small>Motion graphics · Narasi · Subtitle</small></figcaption>
-      </figure>
-    </div>
-  </section>
-
-  <div class="stage reveal" aria-hidden="true">
-    <div class="head"><span class="tag">Di studio sekarang</span><span class="live"><i></i>Produksi berjalan</span></div>
-    <div class="card spot">
-      <small>01 — Gagasan</small>
-      <span class="big">Kenapa kucing suka tidur di kardus?</span>
-      <div class="row"><span>45 detik · 9:16</span><span>Motion graphics</span></div>
-    </div>
-    <div class="card spot">
-      <small>02 — Storyboard &amp; render</small>
-      <span class="big">6 scene, narasi, subtitle</span>
-      <div class="bar"><i></i></div>
-      <div class="row"><span>Render</span><span class="count" data-to="68" data-suffix="%">0%</span></div>
-    </div>
-    <div class="card go">
-      <small>03 — Posting</small>
-      <span class="big">Siap diposting ke TikTok Anda</span>
-      <div class="row"><span>Privasi pilihan Anda</span><span>Label AI</span></div>
-    </div>
-  </div>
-
-  <div class="stats stagger">
-    <div><b><span class="count" data-to="4">0</span></b><span>langkah dari ide ke posting</span></div>
-    <div><b><span class="count" data-to="90">0</span><sup>dtk</sup></b><span>durasi video maksimal</span></div>
-    <div><b><span class="count" data-to="2">0</span></b><span>rasio: 9:16 dan 16:9</span></div>
-    <div><b><span class="count" data-to="100">0</span><sup>%</sup></b><span>Anda yang menekan Posting</span></div>
-  </div>
-
-  <section id="cara" class="reveal">
-    <div class="sec-head">
-      <span class="tag">Empat langkah</span>
-      <h2 class="split">Cara kerjanya. <span class="soft">Sederhana.</span></h2>
-    </div>
-    <ol class="rows">
-      <li><span class="n">001</span><b>Tulis gagasan</b><p>Satu atau dua kalimat tentang video yang Anda mau, plus durasi, rasio, dan gaya.</p><span class="go">→</span></li>
-      <li><span class="n">002</span><b>Periksa storyboard</b><p>AI menyusun naskah per scene. Anda bebas mengedit narasi dan arahan visual.</p><span class="go">→</span></li>
-      <li><span class="n">003</span><b>Produksi</b><p>Narasi suara dibuat, animasi ditulis dan dirender menjadi MP4 dengan subtitle.</p><span class="go">→</span></li>
-      <li><span class="n">004</span><b>Posting ke TikTok</b><p>Pilih privasi, izin komentar, duet, dan stitch, lalu posting ke akun TikTok Anda.</p><span class="go">→</span></li>
-    </ol>
-  </section>
-
-  <section id="fitur" class="reveal">
-    <div class="sec-head">
-      <span class="tag">Yang Anda dapat</span>
-      <h2 class="split">Satu studio. <span class="soft">Tanpa tim produksi.</span></h2>
-    </div>
-    <div class="grid stagger">
-      <div class="spot"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 4h10l4 4v12H5z"/><path d="M9 12h6M9 16h4"/></svg></span><b>Naskah dan storyboard</b><p>Disusun dari gagasan Anda, berbahasa Indonesia, dan bisa diedit sebelum produksi.</p></div>
-      <div class="spot"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg></span><b>Narasi dan subtitle</b><p>Suara narator dengan timing per kata, plus file subtitle .srt.</p></div>
-      <div class="spot"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9l5 3-5 3z"/></svg></span><b>Animasi motion graphics</b><p>Teks kinetik, kartu, angka, dan ilustrasi 2D, dalam rasio 9:16 atau 16:9.</p></div>
-      <div class="spot"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20l4-1L19 8l-3-3L5 16z"/><path d="M14 7l3 3"/></svg></span><b>Revisi dengan kata-kata</b><p>Tulis apa yang ingin diubah, dan animasinya dirender ulang.</p></div>
-      <div class="spot"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg></span><b>Posting dengan kontrol penuh</b><p>Tidak ada yang dikirim ke TikTok sebelum Anda menekan Posting. Konten diberi label buatan AI.</p></div>
-      <div class="spot"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg></span><b>Biaya transparan</b><p>Setiap video menampilkan token AI dan waktu render yang dipakai.</p></div>
-    </div>
-  </section>
-
-  <section id="akses" class="reveal">
-    <div class="sec-head">
-      <span class="tag">Akses &amp; biaya</span>
-      <h2 class="split">Dengan undangan. <span class="soft">Bayar sesuai pakai.</span></h2>
-    </div>
-    <div class="access">
-      <ul class="stagger">
-        <li><b>Undangan.</b> Aldi Studio terbuka untuk kreator yang diundang. Minta undangan lewat <a href="mailto:studio@aldiab.ai.id">studio@aldiab.ai.id</a>.</li>
-        <li><b>Masuk dengan TikTok.</b> Studio hanya memakai profil dasar dan izin memosting video yang Anda setujui.</li>
-        <li><b>Biaya.</b> Dihitung dari pemakaian, yaitu token AI dan waktu render, dengan batas bulanan per kreator. Tagihan dikirim lewat email.</li>
-        <li><b>Kendali Anda.</b> Izin Studio bisa dicabut kapan saja dari aplikasi TikTok.</li>
-      </ul>
-      <div class="en-box">
-        <span class="tag">In English</span>
-        <p class="en">Aldi Studio turns an idea into a short animated video with narration and subtitles, then lets invited creators post it to their own TikTok account. Creators sign in with TikTok, review the storyboard, and choose privacy and interaction settings before anything is posted. Access is by invitation, and usage is billed by AI tokens and render time.</p>
+      </div>
+      <div class="b-rev">
+        <b>Revisi dengan kata-kata</b>
+        <p>Tulis apa yang ingin diubah, dan animasinya dirender ulang.</p>
+        <div class="bubble me">Scene 2 terlalu ramai, buat teksnya lebih besar.<small>Anda</small></div>
+        <div class="bubble">Siap. Scene 2 dirender ulang ✓<small>Aldi Studio</small></div>
+      </div>
+      <div class="b-cost">
+        <div class="cost-chip">Contoh biaya<b>$2,23</b>per video</div>
+        <b style="font:600 22px/1.15 var(--display);letter-spacing:-.02em;max-width:9em;position:relative;z-index:1">Biaya transparan</b>
+        <p style="color:var(--muted);font-size:14.5px;margin:10px 0 0;max-width:15em;position:relative;z-index:1">Token AI dan waktu render terlihat di setiap video.</p>
+        <div class="bars" aria-hidden="true">
+          <div><span>8%</span><i style="--h:22%;background:var(--yellow)"></i><em>Naskah</em></div>
+          <div><span>34%</span><i style="--h:88%;background:var(--orange)"></i><em>Animasi</em></div>
+          <div><span>14%</span><i style="--h:40%;background:var(--blue)"></i><em>Suara</em></div>
+          <div><span>26%</span><i style="--h:70%;background:var(--purple)"></i><em>Render</em></div>
+          <div><span>18%</span><i style="--h:52%;background:var(--green)"></i><em>Revisi</em></div>
+        </div>
+      </div>
+      <div class="b-voice">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1fc98e" stroke-width="2.2" stroke-linecap="round"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg></span>
+        <b>Narasi dan subtitle</b>
+        <p>Suara narator dengan timing per kata, plus file subtitle .srt.</p>
+      </div>
+      <div class="b-ctrl">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#7b4dff" stroke-width="2" stroke-linecap="round"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg></span>
+        <span><b>Data Anda tetap milik Anda</b>
+        <p>Studio hanya memakai profil dasar dan izin memosting video yang Anda setujui. Izin bisa dicabut kapan saja dari aplikasi TikTok.</p></span>
       </div>
     </div>
   </section>
 
-  <div class="closing reveal">
-    <div class="glow"></div><div class="glow b"></div><div class="lines"></div>
-    <h2 class="split">Buat video berikutnya. <span class="soft">Hari ini.</span></h2>
-    <div class="actions">
-      <a class="pill light magnet" href="/api/tiktok/login">Masuk dengan TikTok <span class="arr">→</span></a>
-      <a class="pill ghost magnet" href="mailto:studio@aldiab.ai.id">Minta undangan</a>
+  <!-- ---------- Video asli ---------- -->
+  <section class="showcase reveal" id="contoh">
+    <svg class="rings" viewBox="0 0 1100 1100" aria-hidden="true"><circle cx="550" cy="550" r="160"/><circle cx="550" cy="550" r="280"/><circle cx="550" cy="550" r="400"/><circle cx="550" cy="550" r="530"/><circle class="pulse" cx="550" cy="550" r="530"/><circle class="pulse b" cx="550" cy="550" r="530"/></svg>
+    <div class="glow" aria-hidden="true"></div>
+    <div>
+      <span class="lbl">Dibuat dengan Aldi Studio</span>
+      <h2 class="split">Video asli. <span class="soft">Dari satu kalimat.</span></h2>
+      <p>Dua video ini dibuat oleh Aldi Studio dari satu kalimat gagasan: naskah, narasi suara, animasi, dan subtitle.</p>
+      <div class="sound-hint"><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>Ketuk tombol Suara untuk mendengar narasinya</div><br>
+      <a class="btn white" href="/api/tiktok/login">Buat video Anda <span class="arr">→</span></a>
     </div>
-    <div class="big-word" aria-hidden="true">Aldi Studio</div>
-    <footer>
-      <span>© 2026 Aldi AB</span>
-      <span class="sp"></span>
-      <a href="/terms">Terms of Service</a>
-      <a href="/privacy">Privacy Policy</a>
-      <a href="mailto:studio@aldiab.ai.id">studio@aldiab.ai.id</a>
-    </footer>
-  </div>
+    <div class="reels">
+      <figure class="reel">
+        <div class="frame vbox"><video data-src="/showcase/kucing.mp4" poster="/showcase/kucing.jpg" muted loop playsinline preload="none"></video></div>
+        <figcaption><b>“Kenapa kucing selalu mendarat pakai kaki?”</b><small>Motion graphics · Narasi · Subtitle</small></figcaption>
+      </figure>
+      <figure class="reel two">
+        <div class="frame vbox"><video data-src="/showcase/badak.mp4" poster="/showcase/badak.jpg" muted loop playsinline preload="none"></video></div>
+        <figcaption><b>“Semua badak Jawa tinggal di satu tempat. Kenapa butuh rumah kedua?”</b><small>Motion graphics · Narasi · Subtitle</small></figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ---------- Contoh gagasan ---------- -->
+  <section class="card panel reveal">
+    <div class="ideas-head">
+      <h2 class="split">Mulai dari <span class="pw pop">satu</span> kalimat</h2>
+      <div class="arrows"><button type="button" id="prev" aria-label="Sebelumnya">‹</button><button type="button" id="next" aria-label="Berikutnya">›</button></div>
+    </div>
+    <div class="ideas" id="ideas">
+      <div class="idea"><span class="q">“</span><p>Kenapa kucing selalu mendarat pakai kaki?</p><div class="meta"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#ff7a2f" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M3 12h18"/></svg></span><span><b>Sains sehari-hari</b><small>30 detik · 9:16</small></span></div></div>
+      <div class="idea"><span class="q">“</span><p>Semua badak Jawa tinggal di satu tempat. Kenapa butuh rumah kedua?</p><div class="meta"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1fc98e" stroke-width="2" stroke-linecap="round"><path d="M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg></span><span><b>Alam Indonesia</b><small>35 detik · 9:16</small></span></div></div>
+      <div class="idea"><span class="q">“</span><p>Kenapa kucing suka tidur di dalam kardus?</p><div class="meta"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#7b4dff" stroke-width="2" stroke-linecap="round"><path d="M3 8l9-5 9 5-9 5z"/><path d="M3 8v8l9 5 9-5V8"/></svg></span><span><b>Fakta hewan</b><small>45 detik · 9:16</small></span></div></div>
+      <div class="idea"><span class="q">“</span><p>Tiga cara menyimpan uang jajan supaya tidak habis sebelum akhir bulan.</p><div class="meta"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#3d7bff" stroke-width="2" stroke-linecap="round"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg></span><span><b>Tips praktis</b><small>60 detik · 9:16</small></span></div></div>
+      <div class="idea"><span class="q">“</span><p>Kenapa langit sore berwarna oranye, padahal siang hari biru?</p><div class="meta"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#ffb400" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2"/></svg></span><span><b>Penjelasan singkat</b><small>40 detik · 16:9</small></span></div></div>
+    </div>
+    <div class="prog"><span id="pn">01/05</span><span class="bar"><i id="pb"></i></span></div>
+  </section>
+
+  <!-- ---------- Akses ---------- -->
+  <section id="akses" class="card panel reveal">
+    <h2 class="split center">Dengan <span class="pw pop">undangan.</span> <br><span class="soft">Bayar sesuai pakai.</span></h2>
+    <div class="access">
+      <ul class="stagger">
+        <li><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#7b4dff" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 8l9 6 9-6"/></svg></span><span><b>Undangan</b>Aldi Studio terbuka untuk kreator yang diundang. Minta undangan lewat <a href="mailto:studio@aldiab.ai.id">studio@aldiab.ai.id</a>.</span></li>
+        <li><span class="ic"><svg viewBox="0 0 24 24"><path fill="#1c1446" d="M16.6 5.82A4.28 4.28 0 0 1 15.54 3h-3.09v12.4a2.59 2.59 0 0 1-2.59 2.5 2.6 2.6 0 0 1 0-5.2c.27 0 .53.04.77.12V9.66a5.7 5.7 0 0 0-.77-.05 5.69 5.69 0 1 0 5.69 5.69V9.01a7.35 7.35 0 0 0 4.3 1.38V7.3a4.3 4.3 0 0 1-3.25-1.48z"/></svg></span><span><b>Masuk dengan TikTok</b>Studio hanya memakai profil dasar dan izin memosting video yang Anda setujui.</span></li>
+        <li><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#ff7a2f" stroke-width="2" stroke-linecap="round"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg></span><span><b>Biaya</b>Dihitung dari pemakaian, yaitu token AI dan waktu render, dengan batas bulanan per kreator. Tagihan dikirim lewat email.</span></li>
+        <li><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1fc98e" stroke-width="2" stroke-linecap="round"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg></span><span><b>Kendali Anda</b>Izin Studio bisa dicabut kapan saja dari aplikasi TikTok.</span></li>
+      </ul>
+      <div class="en-box">
+        <span class="lbl">In English</span>
+        <p>Aldi Studio turns an idea into a short animated video with narration and subtitles, then lets invited creators post it to their own TikTok account. Creators sign in with TikTok, review the storyboard, and choose privacy and interaction settings before anything is posted. Access is by invitation, and usage is billed by AI tokens and render time.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---------- Penutup ---------- -->
+  <section class="card panel closing reveal">
+    <span class="ftile f1" aria-hidden="true"><span class="ic face">🐱</span></span>
+    <span class="ftile f2" aria-hidden="true"><span class="ic"><svg viewBox="0 0 24 24"><path fill="#1c1446" d="M16.6 5.82A4.28 4.28 0 0 1 15.54 3h-3.09v12.4a2.59 2.59 0 0 1-2.59 2.5 2.6 2.6 0 0 1 0-5.2c.27 0 .53.04.77.12V9.66a5.7 5.7 0 0 0-.77-.05 5.69 5.69 0 1 0 5.69 5.69V9.01a7.35 7.35 0 0 0 4.3 1.38V7.3a4.3 4.3 0 0 1-3.25-1.48z"/></svg></span></span>
+    <span class="ftile f3" aria-hidden="true"><span class="ic"><svg viewBox="0 0 24 24" fill="#ff7a2f"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></span></span>
+    <span class="ftile f4" aria-hidden="true"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#7b4dff" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span></span>
+    <h2 class="split"><span class="l">Video</span><span class="l"><span class="pw pop">berikutnya</span></span><span class="l">dimulai hari ini.</span></h2>
+    <div class="actions">
+      <a class="btn ink" href="/api/tiktok/login">Masuk dengan TikTok <span class="arr">→</span></a>
+      <a class="btn line" href="mailto:studio@aldiab.ai.id">Minta undangan</a>
+    </div>
+  </section>
+
+  <footer class="card">
+    <div class="f-top"><b>Hubungi kami</b><a href="mailto:studio@aldiab.ai.id">studio@aldiab.ai.id</a></div>
+    <div class="f-mid">
+      <div><h4>Halaman</h4><a href="#contoh">Contoh</a><a href="#cara">Cara kerja</a><a href="#fitur">Fitur</a><a href="#akses">Akses &amp; biaya</a></div>
+      <div><h4>Legal</h4><a href="/terms">Terms of Service</a><a href="/privacy">Privacy Policy</a></div>
+      <div><h4>Akun</h4><a href="/api/tiktok/login">Masuk</a><a href="mailto:studio@aldiab.ai.id">Minta undangan</a></div>
+      <div class="f-app"><b>Mulai dengan akun TikTok Anda</b><a class="sq" href="/api/tiktok/login" aria-label="Masuk dengan TikTok"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M16.6 5.82A4.28 4.28 0 0 1 15.54 3h-3.09v12.4a2.59 2.59 0 0 1-2.59 2.5 2.6 2.6 0 0 1 0-5.2c.27 0 .53.04.77.12V9.66a5.7 5.7 0 0 0-.77-.05 5.69 5.69 0 1 0 5.69 5.69V9.01a7.35 7.35 0 0 0 4.3 1.38V7.3a4.3 4.3 0 0 1-3.25-1.48z"/></svg></a></div>
+    </div>
+    <div class="f-bot"><p class="wordmark">Aldi Studio<span>.</span></p><small>© 2026 Aldi AB</small></div>
+  </footer>
 </div>
 
 <script>
 (() => {
+  document.documentElement.classList.add("js");
   const m = new URLSearchParams(location.search).get("masuk");
   if (m) { const el = document.getElementById("msg"); el.textContent = m; el.hidden = false; history.replaceState(null, "", "/"); }
-
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  // Judul bagian: pecah per kata supaya muncul satu per satu.
-  document.querySelectorAll("h2.split").forEach((h) => {
+  // Judul bagian: pecah per kata supaya muncul satu per satu (pil ungu tetap utuh).
+  document.querySelectorAll(".split").forEach((h) => {
     let i = 0;
-    const wrap = (node) => {
-      [...node.childNodes].forEach((c) => {
-        if (c.nodeType === 3) {
-          const frag = document.createDocumentFragment();
-          c.textContent.split(/(\s+)/).forEach((t) => {
-            if (!t) return;
-            if (/^\s+$/.test(t)) { frag.append(t); return; }
-            const s = document.createElement("span"); s.className = "w"; s.style.setProperty("--i", i++); s.textContent = t; frag.append(s);
-          });
-          c.replaceWith(frag);
-        } else if (c.nodeType === 1) wrap(c);
-      });
-    };
+    const wrap = (node) => [...node.childNodes].forEach((c) => {
+      if (c.nodeType === 3) {
+        const frag = document.createDocumentFragment();
+        c.textContent.split(/(\s+)/).forEach((t) => {
+          if (!t) return;
+          if (/^\s+$/.test(t)) { frag.append(t); return; }
+          const s = document.createElement("span"); s.className = "w"; s.style.setProperty("--i", i++); s.textContent = t; frag.append(s);
+        });
+        c.replaceWith(frag);
+      } else if (c.nodeType === 1 && !c.classList.contains("pw") && c.tagName !== "BR") wrap(c);
+      else if (c.nodeType === 1 && c.classList.contains("pw")) { c.style.transitionDelay = (i++ * 60 + 150) + "ms"; }
+    });
     wrap(h);
   });
 
-  // Angka yang menghitung naik.
   const countUp = (el) => {
-    const to = +el.dataset.to, suf = el.dataset.suffix || "", t0 = performance.now(), d = 1600;
-    const step = (t) => { const p = Math.min(1, (t - t0) / d), e = 1 - Math.pow(1 - p, 3); el.textContent = Math.round(to * e) + suf; if (p < 1) requestAnimationFrame(step); };
-    still ? (el.textContent = to + suf) : requestAnimationFrame(step);
+    const to = +el.dataset.to, t0 = performance.now(), d = 1600;
+    const step = (t) => { const p = Math.min(1, (t - t0) / d); el.textContent = Math.round(to * (1 - Math.pow(1 - p, 3))); if (p < 1) requestAnimationFrame(step); };
+    still ? (el.textContent = to) : requestAnimationFrame(step);
   };
 
-  // Muncul saat discroll.
+  // Mengetik caption di kotak posting contoh.
+  const typed = document.getElementById("typed"), duet = document.getElementById("tgDuet");
+  const caption = "Kucing jatuh terbalik, kok bisa mendarat pakai kaki? 🐱 #sains #kucing";
+  let typedOnce = false;
+  const typeIt = () => {
+    if (typedOnce) return; typedOnce = true;
+    if (still) { typed.textContent = caption; return; }
+    let k = 0; const tick = () => { typed.textContent = caption.slice(0, ++k); if (k < caption.length) setTimeout(tick, 32); else duet.classList.add("on"); }; tick();
+  };
+
   const io = new IntersectionObserver((es) => es.forEach((e) => {
     if (!e.isIntersecting) return;
     e.target.classList.add("in");
     e.target.querySelectorAll(".count").forEach(countUp);
+    if (e.target.querySelector("#typed")) typeIt();
     io.unobserve(e.target);
   }), { threshold: 0.15 });
-  document.querySelectorAll(".reveal, .stagger, h2.split").forEach((el) => io.observe(el));
+  document.querySelectorAll(".reveal, .stagger, .split, .pw.pop").forEach((el) => io.observe(el));
 
-  // Navigasi jadi kaca saat discroll, plus bilah progres.
-  const nav = document.getElementById("nav"), bar = document.querySelector(".progress");
-  const onScroll = () => {
-    nav.classList.toggle("solid", scrollY > 20);
-    const h = document.documentElement.scrollHeight - innerHeight;
-    bar.style.transform = `scaleX(${h > 0 ? scrollY / h : 0})`;
-  };
+  const nav = document.getElementById("nav");
+  const onScroll = () => nav.classList.toggle("solid", scrollY > 20);
   addEventListener("scroll", onScroll, { passive: true }); onScroll();
 
-  // Sorotan cahaya mengikuti kursor di kartu.
-  document.querySelectorAll(".spot").forEach((c) => c.addEventListener("pointermove", (e) => {
-    const r = c.getBoundingClientRect();
-    c.style.setProperty("--x", e.clientX - r.left + "px"); c.style.setProperty("--y", e.clientY - r.top + "px");
-  }));
+  // Carousel contoh gagasan.
+  const ideas = document.getElementById("ideas"), pn = document.getElementById("pn"), pb = document.getElementById("pb");
+  const cards = [...ideas.children], n = cards.length, pad = (x) => String(x).padStart(2, "0");
+  const upd = () => {
+    const max = ideas.scrollWidth - ideas.clientWidth, p = max > 0 ? ideas.scrollLeft / max : 0;
+    pn.textContent = pad(Math.min(n, 1 + Math.round(p * (n - 1)))) + "/" + pad(n);
+    pb.style.width = (100 / n + p * (100 - 100 / n)) + "%";
+  };
+  const by = (d) => ideas.scrollBy({ left: d * (cards[0].offsetWidth + 14), behavior: still ? "auto" : "smooth" });
+  document.getElementById("prev").onclick = () => by(-1);
+  document.getElementById("next").onclick = () => by(1);
+  ideas.addEventListener("scroll", upd, { passive: true }); upd();
 
-  // Video: diputar otomatis tanpa suara saat terlihat. Kalau browser menolak autoplay
-  // (Mode Hemat Daya, Penghemat Data), tombol ▶ muncul dan video bisa diketuk.
-  const boxes = [...document.querySelectorAll(".frame, .screen")];
-  const vidOf = (box) => box.querySelector("video");
+  // ---------- Video dan suara ----------
+  // Browser hanya mengizinkan autoplay tanpa suara. Setelah pengunjung menyalakan suara
+  // (tombol 🔊 atau ketukan pertama di video), suara mengikuti video yang paling terlihat.
+  const boxes = [...document.querySelectorAll(".vbox")];
+  const vids = boxes.map((b) => b.querySelector("video"));
+  const ratio = new Map(vids.map((v) => [v, 0]));
+  let soundOn = false;
   const load = (v) => { if (!v.getAttribute("src") && v.dataset.src) v.src = v.dataset.src; };
-  const tryPlay = (v) => { load(v); const p = v.play(); if (p) p.catch(() => {}); };
-  boxes.forEach((box) => {
-    const v = vidOf(box);
+  const tryPlay = (v) => { load(v); const p = v.play(); return p ? p.catch(() => { if (!v.muted) { v.muted = true; return v.play().catch(() => {}); } }) : Promise.resolve(); };
+  const svgOff = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9l4 6M21 9l-4 6"/></svg>';
+  const svgOn = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>';
+  const active = () => { let best = null, r = 0.35; ratio.forEach((x, v) => { if (x > r) { r = x; best = v; } }); return best; };
+  const render = () => {
+    const a = soundOn ? active() : null;
+    vids.forEach((v) => {
+      const want = v !== a;
+      if (v.muted !== want) { v.muted = want; if (!want) tryPlay(v); }
+      const b = v.parentElement.querySelector(".snd");
+      b.classList.toggle("unmuted", !v.muted);
+      b.setAttribute("aria-label", v.muted ? "Nyalakan suara" : "Matikan suara");
+    });
+  };
+  boxes.forEach((box, i) => {
+    const v = vids[i];
     box.classList.add("paused");
     const ov = document.createElement("button");
     ov.type = "button"; ov.className = "play-ov"; ov.setAttribute("aria-label", "Putar video"); ov.innerHTML = "<span></span>";
-    box.appendChild(ov);
+    const snd = document.createElement("button");
+    snd.type = "button"; snd.className = "snd"; snd.setAttribute("aria-label", "Nyalakan suara");
+    snd.innerHTML = '<span class="off">' + svgOff + 'Suara</span><span class="on">' + svgOn + '<span class="eq"><i></i><i></i><i></i></span></span>';
+    box.append(ov, snd);
     v.addEventListener("playing", () => box.classList.remove("paused"));
     v.addEventListener("pause", () => box.classList.add("paused"));
+    snd.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (v.muted) { soundOn = true; ratio.set(v, Math.max(ratio.get(v), 0.99)); vids.forEach((o) => { if (o !== v) o.muted = true; }); v.muted = false; tryPlay(v); }
+      else { soundOn = false; }
+      render();
+    });
     box.addEventListener("click", (e) => {
       if (e.target.closest(".snd")) return;
-      v.paused ? tryPlay(v) : v.pause();
+      if (v.paused) { if (!soundOn) { soundOn = true; ratio.set(v, Math.max(ratio.get(v), 0.99)); } tryPlay(v).then(render); render(); }
+      else if (v.muted && !soundOn) { soundOn = true; ratio.set(v, Math.max(ratio.get(v), 0.99)); render(); }
+      else v.pause();
     });
   });
-  const vio = new IntersectionObserver((es) => es.forEach((e) => {
-    const v = e.target;
-    if (e.isIntersecting) tryPlay(v); else if (!v.paused) v.pause();
-  }), { threshold: 0.35 });
-  boxes.forEach((box) => vio.observe(vidOf(box)));
-  const vids = boxes.map(vidOf);
-  document.querySelectorAll(".snd").forEach((b) => b.addEventListener("click", () => {
-    const v = b.parentElement.querySelector("video");
-    const turnOn = v.muted;
-    vids.forEach((o) => { o.muted = true; }); document.querySelectorAll(".snd").forEach((o) => o.classList.remove("unmuted"));
-    if (turnOn) { v.muted = false; tryPlay(v); b.classList.add("unmuted"); b.setAttribute("aria-label", "Matikan suara"); }
-    else b.setAttribute("aria-label", "Nyalakan suara");
-  }));
+  const vio = new IntersectionObserver((es) => {
+    es.forEach((e) => {
+      const v = e.target; ratio.set(v, e.isIntersecting ? e.intersectionRatio : 0);
+      if (e.isIntersecting && e.intersectionRatio >= 0.35) tryPlay(v); else if (!v.paused) v.pause();
+    });
+    render();
+  }, { threshold: [0, 0.2, 0.35, 0.5, 0.7, 0.9, 1] });
+  vids.forEach((v) => vio.observe(v));
+
   if (still) return;
 
-  // Cahaya latar mengikuti kursor.
-  const cl = document.getElementById("cl");
-  addEventListener("pointermove", (e) => { cl.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`; }, { passive: true });
-
-  // Tombol magnetis.
-  document.querySelectorAll(".magnet").forEach((b) => {
-    b.addEventListener("pointermove", (e) => { const r = b.getBoundingClientRect(); b.style.transform = `translate(${(e.clientX - r.left - r.width / 2) * 0.2}px, ${(e.clientY - r.top - r.height / 2) * 0.3}px)`; });
-    b.addEventListener("pointerleave", () => { b.style.transform = ""; });
-  });
-
-  // Ponsel miring mengikuti kursor.
-  const phone = document.getElementById("phone");
+  // Ubin mengambang bergerak sedikit mengikuti kursor.
+  const tiles = [...document.querySelectorAll("[data-depth]")];
   addEventListener("pointermove", (e) => {
     const x = e.clientX / innerWidth - 0.5, y = e.clientY / innerHeight - 0.5;
-    phone.style.transform = `rotateY(${-14 + x * 16}deg) rotateX(${6 - y * 10}deg) rotateZ(2deg)`;
-  });
-
+    tiles.forEach((t) => { const d = +t.dataset.depth; t.style.transform = `translate(${x * d}px, ${y * d}px)`; });
+  }, { passive: true });
 })();
 </script>
 </body>

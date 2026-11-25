@@ -44,8 +44,9 @@
   aside::before { content: ""; position: absolute; z-index: -1; inset: -30% -60% auto -20%; height: 60%; background: radial-gradient(circle at 30% 30%, rgba(123,77,255,0.35), transparent 60%), radial-gradient(circle at 80% 60%, rgba(185,167,255,0.25), transparent 60%); filter: blur(40px); animation: drift 18s ease-in-out infinite alternate; pointer-events: none; }
   .brand { display: flex; align-items: center; gap: 10px; font: 600 17px var(--display); letter-spacing: -0.02em; margin: 2px 8px 22px; text-decoration: none; }
   .brand svg { width: 32px; height: 32px; border-radius: 9px; box-shadow: 0 0 0 1px rgba(243,243,248,0.18); }
-  .side-title { color: var(--side-muted); font-size: 12px; letter-spacing: .02em; margin: 22px 10px 8px; }
-  .side-title::before { content: "( "; } .side-title::after { content: " )"; }
+  .side-title { display: flex; align-items: center; gap: 6px; width: calc(100% - 20px); border: 0; background: none; padding: 0; cursor: default; color: var(--side-muted); font-size: 12px; letter-spacing: .02em; margin: 22px 10px 8px; text-align: left; }
+  .side-title::before { content: "( "; white-space: pre; } .side-title .cnt::after { content: " )"; white-space: pre; }
+  .side-title .chev { display: none; width: 16px; height: 16px; margin-left: auto; transition: transform .3s var(--ease); }
   .new-btn { position: relative; overflow: hidden; isolation: isolate; width: 100%; background: var(--side-ink); color: var(--ink); border: 0; border-radius: 999px; padding: 12px; font: 600 15px var(--text); cursor: pointer; transition: color .3s, transform .3s var(--ease); }
   .new-btn::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--accent); transform: translateY(101%); transition: transform .45s var(--ease); }
   .new-btn:hover { color: #fff; transform: translateY(-1px); }
@@ -326,15 +327,41 @@
   ::selection { background: var(--accent); color: #fff; }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
   @media (max-width: 900px) {
-    .app { grid-template-columns: minmax(0, 1fr); } main { min-width: 0; } aside { position: static; height: auto; }
-    main { padding: 20px 16px 60px; } .grid { grid-template-columns: 1fr; } .grid .wide { grid-column: auto; }
+    .app { grid-template-columns: minmax(0, 1fr); } main { min-width: 0; }
+    /* Sidebar jadi bar atas yang ringkas: merek + tombol baru, menu mendatar, riwayat bisa dibuka-tutup */
+    aside { position: static; height: auto; overflow: visible; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px 10px; padding: 14px 16px 12px; border-radius: 0 0 24px 24px; }
+    aside .brand { margin: 0; }
+    aside .new-btn { width: auto; padding: 10px 18px; font-size: 14px; }
+    aside .side-nav { grid-column: 1 / -1; display: flex; gap: 6px; margin: 0; }
+    aside .side-nav a { flex: 1; justify-content: center; padding: 9px 10px; font-size: 13.5px; background: rgba(243,243,248,0.05); }
+    aside .side-nav a.on { box-shadow: inset 0 -2px 0 var(--accent); }
+    aside .side-title { grid-column: 1 / -1; width: 100%; margin: 0; padding: 11px 14px; border-radius: 12px; background: rgba(243,243,248,0.06); color: var(--side-ink); font-size: 13.5px; font-weight: 500; cursor: pointer; }
+    aside .side-title::before { content: none; } aside .side-title .cnt { color: var(--side-muted); font-weight: 400; } aside .side-title .cnt::after { content: none; }
+    aside .side-title .chev { display: block; }
+    aside.hist-open .side-title .chev { transform: rotate(180deg); }
+    aside #jobs { grid-column: 1 / -1; display: none; max-height: 52vh; overflow: auto; margin-top: -4px; }
+    aside.hist-open #jobs { display: block; animation: stepIn .35s var(--ease) both; }
+    main { padding: 18px 14px 60px; }
+    /* Formulir: satu kolom penuh (beberapa kolom punya span 2 bawaan, jadi ditimpa semua) */
+    .grid { grid-template-columns: 1fr; gap: 14px; } .grid > * { grid-column: 1 / -1 !important; }
+    .seg button { flex: 1; }
+    label .opt { display: inline; }
+    /* Kartu akun: penuh, nama kiri, tombol kanan */
+    .top-row { justify-content: stretch; } .me { flex: 1; } .me .who { flex: 1; min-width: 0; } .me .nm { min-width: 0; } .me .nm b { max-width: 100%; }
+    /* Bar status: chip bergeser mendatar dalam satu baris, platform di baris sendiri dengan label */
+    .top-bar { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 8px; }
+    .top-bar .grp { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); padding-right: 24px; }
+    .top-bar .grp::-webkit-scrollbar { display: none; }
+    .top-bar .grp .chip { flex: none; }
+    .top-bar .plats { margin: 0; padding: 4px 4px 2px 8px; justify-content: flex-end; }
+    .top-bar .plats::before { content: "Platform"; margin-right: auto; font-size: 12.5px; color: var(--muted); }
     .two, .result { grid-template-columns: 1fr; }
     .hint, .biaya { margin-left: 0; }
     .step { padding: 20px 18px; }
     .hello { grid-template-columns: 1fr; } .art { display: none; }
     .stepper { overflow-x: auto; border-radius: 18px; } .stepper button span { display: none; } .stepper button.cur span { display: inline; }
-    .top-bar, .top-bar .grp { flex-wrap: wrap; } .top-bar .sep { display: none; }
-    .flow { display: none; } .top-row { justify-content: flex-end; } .me .nm b { max-width: 120px; }
+    .top-bar .sep { display: none; }
+    .flow { display: none; }
     .stage { font-size: 11px; } .stage .n { width: 38px; height: 38px; border-radius: 13px; } .stage::before { top: 18px; }
     .step.locked::after { position: static; display: inline-block; margin: 0 0 10px; }
   }
@@ -350,7 +377,7 @@
       <a href="/" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h16v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM4 9l1.5-4.2h14.3L20 9M9.5 5l-1.5 4M15 5l-1.5 4"/></svg>Studio</a>
       <a href="/dasbor"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Token &amp; biaya</a>
     </nav>
-    <div class="side-title">Riwayat</div>
+    <button class="side-title" id="histToggle" type="button" aria-expanded="false">Riwayat<span class="cnt" id="histCount"></span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
     <div id="jobs"></div>
   </aside>
 
@@ -875,9 +902,13 @@ async function loadJobs() {
   const play = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>`;
   $("#jobs").innerHTML = jobs.map((j, n) => `<button class="job" data-id="${j.id}"><span class="th ${j.rasio === "16:9" ? "h" : ""} ${j.hasVideo ? "" : "no"}" style="--h1:${TH[n % 5][0]};--h2:${TH[n % 5][1]}">${play}</span><div class="t">${j.judul.replace(/</g,"&lt;")}</div>
     <div class="s">${new Date(j.created).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })} · ${j.rasio}${j.hasVideo ? "" : " · tanpa video"}${Object.keys(j.uploads).length ? " · terupload" : ""}${j.biaya ? " · " + (j.biaya.partial ? "≥ " : "") + usd(j.biaya.usd) : ""}</div></button>`).join("") || `<div class="job empty"><span class="th">${play}</span><b>Belum ada video</b>Tulis gagasan pertama Anda di langkah 1.</div>`;
-  document.querySelectorAll(".job[data-id]").forEach(b => b.onclick = () => openJob(b.dataset.id, true).catch(e => showError(e.message)));
+  document.querySelectorAll(".job[data-id]").forEach(b => b.onclick = () => { setHist(false); openJob(b.dataset.id, true).catch(e => showError(e.message)); });
+  $("#histCount").textContent = jobs.length ? ` · ${jobs.length} video` : "";
 }
 
+/* Riwayat bisa dibuka-tutup di ponsel (di desktop selalu tampil). */
+function setHist(open) { const a = document.querySelector("aside"); a.classList.toggle("hist-open", open); $("#histToggle").setAttribute("aria-expanded", String(open)); }
+$("#histToggle").onclick = () => { if (matchMedia("(max-width: 900px)").matches) setHist(!document.querySelector("aside").classList.contains("hist-open")); };
 $("#newBtn").onclick = () => {
   currentJob = null; plan = null; $("#prompt").value = ""; $("#scenes").innerHTML = ""; setConfig({ ...status.defaults, topik: "", judul: "", catatan: "" });
   for (const id of ["pJudul","pCaption","pDesk","pTags"]) $("#"+id).value = "";

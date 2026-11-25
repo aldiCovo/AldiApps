@@ -85,7 +85,7 @@
   .pf .tt { position: absolute; top: calc(100% + 8px); left: 50%; translate: -50% 0; padding: 6px 10px; border-radius: 9px; background: var(--ink); color: #fff; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .15s; z-index: 30; }
   .pf:hover .tt { opacity: 1; }
   /* Baris paling atas: animasi alur kerja di kiri, kartu akun di pojok kanan */
-  .top-row { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+  .top-row { position: relative; z-index: 30; display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
   .flow { position: relative; flex: 1; min-width: 0; height: 56px; border-radius: 18px; overflow: hidden; display: flex; align-items: center; background: rgba(255,255,255,0.45); box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), inset 0 0 0 1px rgba(28,20,70,0.05); -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }
   .flow::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: linear-gradient(90deg, transparent, rgba(123,77,255,0.35), transparent); }
   .flow::after { content: ""; position: absolute; top: 50%; width: 120px; height: 2px; margin-top: -1px; border-radius: 2px; background: linear-gradient(90deg, transparent, var(--accent), #ff8fb1, transparent); filter: drop-shadow(0 0 6px rgba(123,77,255,0.8)); animation: beam 4.5s var(--ease) infinite; }
@@ -115,8 +115,19 @@
   .ibtn:hover { transform: translateY(-1px); }
   .ibtn.admin { background: var(--accent-soft); color: #5b30e0; }
   .ibtn.admin:hover { background: var(--accent); color: #fff; }
-  .ibtn.out { color: var(--muted); padding: 0; }
-  .ibtn.out:hover { background: #fdebe7; color: #c53030; }
+  /* Tombol keluar: pintu yang terbuka dan panah yang melangkah keluar saat disorot */
+  .ibtn.out { width: 42px; min-width: 42px; padding: 0; border-radius: 13px; color: var(--ink-2, #4a4668); background: linear-gradient(145deg, #fff, #f1eef9); box-shadow: inset 0 1px 0 #fff, inset 0 0 0 1px var(--line); overflow: visible; }
+  .ibtn.out svg { width: 22px; height: 22px; overflow: visible; }
+  .ibtn.out .frame { opacity: .55; }
+  .ibtn.out .leaf { fill: currentColor; fill-opacity: .14; transform-box: fill-box; transform-origin: left center; transition: transform .45s var(--ease), fill-opacity .3s; }
+  .ibtn.out .knob { transition: transform .45s var(--ease); transform-box: fill-box; }
+  .ibtn.out .go { transition: transform .45s var(--ease), opacity .3s; }
+  .ibtn.out:hover { color: #fff; background: linear-gradient(145deg, #ff7a6b, #e0365a); box-shadow: 0 10px 22px -10px rgba(224,54,90,0.8); }
+  .ibtn.out:hover .frame { opacity: .9; }
+  .ibtn.out:hover .leaf { transform: perspective(40px) rotateY(-55deg); fill-opacity: .35; }
+  .ibtn.out:hover .knob { transform: translateX(-2px); }
+  .ibtn.out:hover .go { transform: translateX(3px); }
+  .ibtn.out:active { transform: scale(.94); }
   .ibtn[data-tip]::after { content: attr(data-tip); position: absolute; top: calc(100% + 8px); left: 50%; translate: -50% 0; padding: 6px 10px; border-radius: 9px; background: var(--ink); color: #fff; font-size: 12px; font-weight: 500; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .15s; z-index: 40; }
   .ibtn[data-tip]:hover::after, .ibtn[data-tip]:focus-visible::after { opacity: 1; }
   .me .ibtn[data-tip]::after { left: auto; right: 0; translate: none; }
@@ -350,7 +361,7 @@
         <div class="me hidden" id="me">
           <div class="who"><span class="pic"><span class="av hidden" id="meInit"></span><img id="meAvatar" alt="" referrerpolicy="no-referrer"></span><span class="nm"><b id="meName"></b><small id="meRole">Kreator</small></span></div>
           <a class="ibtn admin hidden" id="adminLink" href="/admin" data-tip="Kelola kreator, undangan &amp; batas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>Admin</a>
-          <form method="post" action="/keluar"><button class="ibtn out" type="submit" data-tip="Keluar" aria-label="Keluar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H4"/></svg></button></form>
+          <form method="post" action="/keluar"><button class="ibtn out" type="submit" data-tip="Keluar" aria-label="Keluar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="frame" d="M4 21V4a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v3M15 17v3a1 1 0 0 1-1 1H3"/><path class="leaf" d="M4 3.6l6.5 2.2a1 1 0 0 1 .7 1V20a1 1 0 0 1-1.3 1L4 19z"/><circle class="knob" cx="8.6" cy="12.4" r=".6" fill="currentColor"/><g class="go"><path d="M14 12h7.5M18.5 9l3 3-3 3"/></g></svg></button></form>
         </div>
       </div>
       <div class="top-bar">

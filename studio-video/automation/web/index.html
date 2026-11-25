@@ -36,7 +36,8 @@
   @keyframes spin { to { transform: rotate(1turn); } }
   @keyframes drift { to { transform: translate(6vw, -8vh) scale(1.15); } }
 
-  .app { display: grid; grid-template-columns: 300px 1fr; min-height: 100vh; }
+  .app { display: grid; grid-template-columns: 300px minmax(0, 1fr); min-height: 100vh; }
+  .app > main { min-width: 0; }
 
   /* Sidebar gelap */
   aside { background: var(--side); color: var(--side-ink); padding: 22px 14px; position: sticky; top: 0; height: 100vh; overflow: auto; isolation: isolate; }
@@ -60,16 +61,19 @@
   main { padding: 30px clamp(18px, 3vw, 44px) 90px; max-width: 1120px; width: 100%; }
   /* Kepala halaman: status, sapaan, ilustrasi */
   /* Bar status: satu baris rapi, kiri status, tengah platform, kanan akun */
-  .top-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 18px; padding: 7px; border-radius: 20px; background: rgba(255,255,255,0.6); backdrop-filter: blur(14px) saturate(1.3); -webkit-backdrop-filter: blur(14px) saturate(1.3); box-shadow: inset 0 1px 0 #fff, 0 14px 34px -24px rgba(28,20,70,0.35); animation: stepIn .6s var(--ease) both; }
-  .top-bar .grp { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .top-bar { display: flex; flex-wrap: nowrap; align-items: center; gap: 10px; margin-bottom: 18px; padding: 7px; border-radius: 20px; background: rgba(255,255,255,0.6); backdrop-filter: blur(14px) saturate(1.3); -webkit-backdrop-filter: blur(14px) saturate(1.3); box-shadow: inset 0 1px 0 #fff, 0 14px 34px -24px rgba(28,20,70,0.35); animation: stepIn .6s var(--ease) both; }
+  .top-bar .grp { display: flex; flex-wrap: nowrap; align-items: center; gap: 6px; flex: 1 1 auto; min-width: 0; }
+  .top-bar .grp .chip { min-width: 0; flex: 0 1 auto; }
+  .top-bar .plats { flex: none; }
   .top-bar .sep { width: 1px; height: 26px; background: var(--line); flex: none; }
   .top-bar .chip { height: 36px; padding: 0 13px; border: 0; background: rgba(255,255,255,0.85); box-shadow: inset 0 0 0 1px var(--line); white-space: nowrap; text-decoration: none; color: var(--ink); }
   .top-bar .chip svg { width: 15px; height: 15px; flex: none; color: var(--accent); }
   .top-bar .chip.ok { background: var(--ok-soft); box-shadow: none; } .top-bar .chip.ok svg { color: var(--ok); }
   .top-bar .chip.off { color: var(--muted); } .top-bar .chip.off svg { color: var(--muted); }
   .top-bar a.chip:hover { background: var(--ink); color: #fff; box-shadow: none; } .top-bar a.chip:hover svg { color: #fff; }
-  .top-bar .chip .t { overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
-  .plats { display: flex; align-items: center; gap: 4px; padding: 0 4px; }
+  .top-bar .chip .t { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .plats { display: flex; align-items: center; gap: 6px; padding: 0 4px; margin-left: auto; }
+  .top-bar .sep { display: none; }
   .plats .lb { font-size: 12px; color: var(--muted); margin-right: 4px; white-space: nowrap; }
   .pf { position: relative; width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; background: rgba(255,255,255,0.85); box-shadow: inset 0 0 0 1px var(--line); color: var(--muted); transition: transform .25s var(--ease); }
   .pf:hover { transform: translateY(-2px); }
@@ -80,8 +84,53 @@
   .pf.ok::after { background: var(--ok) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'><path d='M6 12.5l4 4 8-9'/></svg>") center / 9px no-repeat; }
   .pf .tt { position: absolute; top: calc(100% + 8px); left: 50%; translate: -50% 0; padding: 6px 10px; border-radius: 9px; background: var(--ink); color: #fff; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .15s; z-index: 30; }
   .pf:hover .tt { opacity: 1; }
-  .top-bar .me { margin-left: auto; height: 36px; border: 0; background: rgba(255,255,255,0.85); box-shadow: inset 0 0 0 1px var(--line); white-space: nowrap; }
-  .me .av { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: #fff; font: 600 13px var(--display); }
+  /* Baris paling atas: animasi alur kerja di kiri, kartu akun di pojok kanan */
+  .top-row { position: relative; z-index: 30; display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+  .flow { position: relative; flex: 1; min-width: 0; height: 56px; border-radius: 18px; overflow: hidden; display: flex; align-items: center; background: rgba(255,255,255,0.45); box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), inset 0 0 0 1px rgba(28,20,70,0.05); -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }
+  .flow::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: linear-gradient(90deg, transparent, rgba(123,77,255,0.35), transparent); }
+  .flow::after { content: ""; position: absolute; top: 50%; width: 120px; height: 2px; margin-top: -1px; border-radius: 2px; background: linear-gradient(90deg, transparent, var(--accent), #ff8fb1, transparent); filter: drop-shadow(0 0 6px rgba(123,77,255,0.8)); animation: beam 4.5s var(--ease) infinite; }
+  @keyframes beam { from { left: -140px; } to { left: 100%; } }
+  .flow-track { display: flex; gap: 12px; padding-left: 12px; width: max-content; animation: marquee 38s linear infinite; }
+  .flow:hover .flow-track { animation-play-state: paused; }
+  @keyframes marquee { to { transform: translateX(-50%); } }
+  .flow-item { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 14px 0 6px; border-radius: 999px; background: rgba(255,255,255,0.9); box-shadow: 0 6px 16px -10px rgba(28,20,70,0.35); font-size: 13px; font-weight: 500; color: var(--ink); white-space: nowrap; }
+  .flow-item i { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-style: normal; }
+  .flow-item i svg { width: 13px; height: 13px; }
+  .flow-item:nth-child(5n+1) i { background: #7b4dff; } .flow-item:nth-child(5n+2) i { background: #2a78d6; } .flow-item:nth-child(5n+3) i { background: #1baf7a; }
+  .flow-item:nth-child(5n+4) i { background: #eb6834; } .flow-item:nth-child(5n) i { background: #e0559a; }
+  .flow-item .ar { color: var(--faint, #a7a4bd); margin-left: 2px; }
+
+  .me { flex: none; display: inline-flex; align-items: center; gap: 4px; height: 56px; padding: 0 8px 0 8px; border-radius: 18px; background: rgba(255,255,255,0.85); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: inset 0 1px 0 #fff, 0 14px 34px -22px rgba(28,20,70,0.45); animation: stepIn .6s var(--ease) both; }
+  .me .who { display: flex; align-items: center; gap: 10px; padding: 0 12px 0 0; margin-right: 4px; border-right: 1px solid var(--line); height: 34px; }
+  .me .pic { position: relative; width: 40px; height: 40px; padding: 2px; isolation: isolate; }
+  .me .pic::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: 50%; background: conic-gradient(from 0deg, #7b4dff, #ff8fb1, #ffd23f, #7b4dff); animation: spin 6s linear infinite; }
+  .me .pic img, .me .av { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; display: grid; place-items: center; background: var(--accent); color: #fff; font: 600 15px var(--display); box-shadow: 0 0 0 2px #fff; }
+  .me .pic::after { content: ""; position: absolute; right: 0; bottom: 0; width: 11px; height: 11px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 0 2px #fff; }
+  .me .nm { display: grid; line-height: 1.2; }
+  .me .nm b { font: 600 14.5px var(--display); letter-spacing: -0.01em; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .me .nm small { font-size: 12px; color: var(--muted); }
+  .me form { margin: 0; }
+  .ibtn { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 38px; min-width: 38px; padding: 0 10px; border: 0; border-radius: 12px; background: transparent; color: var(--ink); cursor: pointer; text-decoration: none; font-size: 13.5px; font-weight: 500; transition: background .2s, color .2s, transform .2s var(--ease); }
+  .ibtn svg { width: 18px; height: 18px; flex: none; }
+  .ibtn:hover { transform: translateY(-1px); }
+  .ibtn.admin { background: var(--accent-soft); color: #5b30e0; }
+  .ibtn.admin:hover { background: var(--accent); color: #fff; }
+  /* Tombol keluar: pintu yang terbuka dan panah yang melangkah keluar saat disorot */
+  .ibtn.out { width: 42px; min-width: 42px; padding: 0; border-radius: 13px; color: var(--ink-2, #4a4668); background: linear-gradient(145deg, #fff, #f1eef9); box-shadow: inset 0 1px 0 #fff, inset 0 0 0 1px var(--line); overflow: visible; }
+  .ibtn.out svg { width: 22px; height: 22px; overflow: visible; }
+  .ibtn.out .frame { opacity: .55; }
+  .ibtn.out .leaf { fill: currentColor; fill-opacity: .14; transform-box: fill-box; transform-origin: left center; transition: transform .45s var(--ease), fill-opacity .3s; }
+  .ibtn.out .knob { transition: transform .45s var(--ease); transform-box: fill-box; }
+  .ibtn.out .go { transition: transform .45s var(--ease), opacity .3s; }
+  .ibtn.out:hover { color: #fff; background: linear-gradient(145deg, #ff7a6b, #e0365a); box-shadow: 0 10px 22px -10px rgba(224,54,90,0.8); }
+  .ibtn.out:hover .frame { opacity: .9; }
+  .ibtn.out:hover .leaf { transform: perspective(40px) rotateY(-55deg); fill-opacity: .35; }
+  .ibtn.out:hover .knob { transform: translateX(-2px); }
+  .ibtn.out:hover .go { transform: translateX(3px); }
+  .ibtn.out:active { transform: scale(.94); }
+  .ibtn[data-tip]::after { content: attr(data-tip); position: absolute; top: calc(100% + 8px); left: 50%; translate: -50% 0; padding: 6px 10px; border-radius: 9px; background: var(--ink); color: #fff; font-size: 12px; font-weight: 500; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .15s; z-index: 40; }
+  .ibtn[data-tip]:hover::after, .ibtn[data-tip]:focus-visible::after { opacity: 1; }
+  .me .ibtn[data-tip]::after { left: auto; right: 0; translate: none; }
   /* Navigasi sidebar */
   .side-nav { display: grid; gap: 2px; margin: 16px 0 4px; }
   .side-nav a { display: flex; align-items: center; gap: 11px; padding: 10px 12px; border-radius: 12px; text-decoration: none; color: var(--side-muted); font-weight: 500; font-size: 14.5px; transition: background .2s, color .2s; }
@@ -274,9 +323,6 @@
   label.off { color: var(--muted); }
   .tt-field { margin-top: 12px; }
   .hidden { display: none !important; }
-  .me { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border-radius: 999px; background: rgba(255,255,255,0.7); border: 1px solid var(--line); }
-  .me img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: #ddd; }
-  .me form { margin: 0; }
   ::selection { background: var(--accent); color: #fff; }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
   @media (max-width: 900px) {
@@ -287,7 +333,8 @@
     .step { padding: 20px 18px; }
     .hello { grid-template-columns: 1fr; } .art { display: none; }
     .stepper { overflow-x: auto; border-radius: 18px; } .stepper button span { display: none; } .stepper button.cur span { display: inline; }
-    .top-bar { flex-wrap: wrap; } .top-bar .sep { display: none; } .top-bar .me { margin-left: 0; }
+    .top-bar, .top-bar .grp { flex-wrap: wrap; } .top-bar .sep { display: none; }
+    .flow { display: none; } .top-row { justify-content: flex-end; } .me .nm b { max-width: 120px; }
     .stage { font-size: 11px; } .stage .n { width: 38px; height: 38px; border-radius: 13px; } .stage::before { top: 18px; }
     .step.locked::after { position: static; display: inline-block; margin: 0 0 10px; }
   }
@@ -309,6 +356,14 @@
 
   <main>
     <header>
+      <div class="top-row">
+        <div class="flow" aria-hidden="true"><div class="flow-track"><span class="flow-item"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></i>Tulis gagasan</span><span class="flow-item"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/></svg></i>Master prompt</span><span class="flow-item"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="8" height="7" rx="2"/><rect x="13" y="4" width="8" height="7" rx="2"/><rect x="3" y="13" width="8" height="7" rx="2"/><rect x="13" y="13" width="8" height="7" rx="2"/></svg></i>Storyboard</span><span class="flow-item"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3"/></svg></i>Narasi suara AI</span><span class="flow-item"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h16v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM4 9l1.5-4.2h14.3L20 9"/></svg></i>Animasi per scene</span><span class="flow-item"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 8.6v6.8l5.6-3.4z" fill="currentColor"/></svg></i>Render video</span><span class="flow-item"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></i>Posting ke TikTok</span><span class="flow-item"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 0 1 14-5.3M20 4v4h-4M20 12a8 8 0 0 1-14 5.3M4 20v-4h4"/></svg></i>Revisi dengan kata-kata</span><span class="flow-item"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></i>Biaya transparan</span><span class="flow-item"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 14h4M13 14h4M7 10h10"/></svg></i>Subtitle otomatis</span><span class="flow-item"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></i>Tulis gagasan</span><span class="flow-item"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/></svg></i>Master prompt</span><span class="flow-item"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="8" height="7" rx="2"/><rect x="13" y="4" width="8" height="7" rx="2"/><rect x="3" y="13" width="8" height="7" rx="2"/><rect x="13" y="13" width="8" height="7" rx="2"/></svg></i>Storyboard</span><span class="flow-item"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3"/></svg></i>Narasi suara AI</span><span class="flow-item"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h16v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM4 9l1.5-4.2h14.3L20 9"/></svg></i>Animasi per scene</span><span class="flow-item"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 8.6v6.8l5.6-3.4z" fill="currentColor"/></svg></i>Render video</span><span class="flow-item"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></i>Posting ke TikTok</span><span class="flow-item"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 0 1 14-5.3M20 4v4h-4M20 12a8 8 0 0 1-14 5.3M4 20v-4h4"/></svg></i>Revisi dengan kata-kata</span><span class="flow-item"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></i>Biaya transparan</span><span class="flow-item"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 14h4M13 14h4M7 10h10"/></svg></i>Subtitle otomatis</span></div></div>
+        <div class="me hidden" id="me">
+          <div class="who"><span class="pic"><span class="av hidden" id="meInit"></span><img id="meAvatar" alt="" referrerpolicy="no-referrer"></span><span class="nm"><b id="meName"></b><small id="meRole">Kreator</small></span></div>
+          <a class="ibtn admin hidden" id="adminLink" href="/admin" data-tip="Kelola kreator, undangan &amp; batas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>Admin</a>
+          <form method="post" action="/keluar"><button class="ibtn out" type="submit" data-tip="Keluar" aria-label="Keluar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="frame" d="M4 21V4a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v3M15 17v3a1 1 0 0 1-1 1H3"/><path class="leaf" d="M4 3.6l6.5 2.2a1 1 0 0 1 .7 1V20a1 1 0 0 1-1.3 1L4 19z"/><circle class="knob" cx="8.6" cy="12.4" r=".6" fill="currentColor"/><g class="go"><path d="M14 12h7.5M18.5 9l3 3-3 3"/></g></svg></button></form>
+        </div>
+      </div>
       <div class="top-bar">
         <div class="grp">
           <span class="chip" title="Mode AI"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg><span class="t" id="modeChip">…</span></span>
@@ -317,7 +372,6 @@
         </div>
         <span class="sep"></span>
         <div class="plats" id="platChips"></div>
-        <span class="me hidden" id="me"><span class="av hidden" id="meInit"></span><img id="meAvatar" alt="" referrerpolicy="no-referrer"><b id="meName"></b><a class="link hidden" id="adminLink" href="/admin">Admin</a><form method="post" action="/keluar"><button class="link" type="submit">Keluar</button></form></span>
       </div>
       <div class="hello">
         <div>
@@ -648,10 +702,10 @@ function lockActions(on) { $("#s4").classList.toggle("running", on); ["#toProduc
 async function refreshRender() {
   try {
     const s = await api("/api/status"); const r = s.render; const chip = $("#renderChip");
-    if (r.mode !== "remote") { chip.className = "chip"; chip.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="11" rx="2"/><path d="M2 19h20"/></svg>Render: komputer ini`; return; }
+    if (r.mode !== "remote") { chip.className = "chip"; chip.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="11" rx="2"/><path d="M2 19h20"/></svg><span class="t">Render: komputer ini</span>`; return; }
     const on = r.workers.filter(w => w.online).map(w => w.name);
     chip.className = "chip " + (on.length ? "ok" : "off");
-    chip.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="11" rx="2"/><path d="M2 19h20"/></svg>${on.length ? "Laptop render: " + on.join(", ").replace(/</g, "&lt;") : "Laptop render offline"}`;
+    chip.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="11" rx="2"/><path d="M2 19h20"/></svg><span class="t">${on.length ? "Laptop render: " + on.join(", ").replace(/</g, "&lt;") : "Laptop render offline"}</span>`;
     chip.title = r.queue.length ? `${r.queue.length} pekerjaan di antrean` : "";
   } catch {}
 }
@@ -808,10 +862,10 @@ function showUsage(u) {
   if (!u) return;
   c.classList.remove("hidden");
   const ic = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>`;
-  if (u.limitUsd == null) { c.innerHTML = `${ic}Bulan ini: ${u.videos} video · ${usd(u.usd)}`; c.title = "Setara harga Claude API; dengan langganan tidak ditagih per token."; return; }
+  if (u.limitUsd == null) { c.innerHTML = `${ic}<span class="t">Bulan ini: ${u.videos} video · ${usd(u.usd)}</span>`; c.title = "Setara harga Claude API; dengan langganan tidak ditagih per token."; return; }
   const full = u.usd >= u.limitUsd;
   c.className = "chip" + (full ? " off" : "");
-  c.innerHTML = `${ic}Bulan ini: ${usd(u.usd)} dari ${usd(u.limitUsd)}`;
+  c.innerHTML = `${ic}<span class="t">Bulan ini: ${usd(u.usd)} dari ${usd(u.limitUsd)}</span>`;
   c.title = full ? "Batas tercapai. Hubungi studio@aldiab.ai.id untuk menaikkan batas." : `${u.videos} video · render ${(u.renderSeconds / 3600).toFixed(1)} jam`;
 }
 
@@ -836,7 +890,9 @@ $("#newBtn").onclick = () => {
 (async function init() {
   try {
     status = await api("/api/status");
-    $("#modeChip").textContent = status.mode.replace(/^AI:\s*/, "");
+    const modeFull = status.mode.replace(/^AI:\s*/, "");
+    $("#modeChip").textContent = /Langganan/i.test(modeFull) ? "Langganan Claude" : /API/i.test(modeFull) ? "Claude API" : modeFull;
+    $("#modeChip").parentElement.title = "Mode AI: " + modeFull;
     showUsage(status.usage);
     const plats = [...(status.tiktokPost ? [{ name: "TikTok", ready: !!status.tiktokLinked, ket: status.tiktokLinked ? "terhubung, siap posting" : "belum terhubung" }] : []), ...status.platforms];
     $("#platChips").innerHTML = plats.map(p => `<span class="pf ${p.ready ? "ok" : ""}" aria-label="${p.name}: ${p.ready ? "siap" : "belum disetel"}">${PLAT_ICON[p.name] || ""}<span class="tt">${p.name} · ${p.ket || (p.ready ? "siap" : "belum disetel")}</span></span>`).join("");
@@ -845,7 +901,7 @@ $("#newBtn").onclick = () => {
       const h = new Date().getHours(), waktu = h < 11 ? "pagi" : h < 15 ? "siang" : h < 19 ? "sore" : "malam";
       $("#hiText").textContent = `Selamat ${waktu}, ${String(status.me.nama || "").split(" ")[0] || "kreator"}`;
       if (status.me.avatar) $("#meAvatar").src = status.me.avatar; else { $("#meAvatar").classList.add("hidden"); $("#meInit").textContent = (status.me.nama || "?").trim().charAt(0).toUpperCase(); $("#meInit").classList.remove("hidden"); }
-      if (status.me.role === "owner") $("#adminLink").classList.remove("hidden");
+      if (status.me.role === "owner") { $("#adminLink").classList.remove("hidden"); $("#meRole").textContent = "Pemilik Studio"; }
     }
     $("#upBox").classList.toggle("hidden", !status.platforms.length);
     $("#plats").innerHTML = status.platforms.map(p => `<label class="plat"><input type="checkbox" value="${p.name}" ${p.ready ? "" : "disabled"}> ${p.name} ${p.ready ? "" : "<small>— belum disetel (lihat README)</small>"}</label>`).join("");

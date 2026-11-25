@@ -194,9 +194,7 @@
   .steps .track i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--purple-2), var(--purple)); transition: width 2.2s var(--ease) .3s; }
   .steps.in .track i { width: 100%; }
   .step { position: relative; padding: 24px; border-radius: 24px; background: var(--soft); border: 1px solid var(--line); transition: transform .4s var(--ease), box-shadow .4s, background .3s; }
-  .step:hover { transform: translateY(-6px); background: #fff; box-shadow: var(--shadow); }
   .step .ic { margin-bottom: 26px; transition: transform .5s var(--spring); }
-  .step:hover .ic { transform: rotate(-8deg) scale(1.08); }
   .step .n { position: absolute; right: 22px; top: 24px; font: 600 14px var(--display); color: var(--faint); }
   .step b { display: block; font: 600 22px/1.15 var(--display); letter-spacing: -0.02em; margin-bottom: 8px; }
   .step p { margin: 0; color: var(--muted); font-size: 14.5px; }
@@ -204,7 +202,6 @@
   /* ---------- Bento ---------- */
   .bento { display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px; margin-top: clamp(36px, 5vw, 56px); }
   .bento > div { position: relative; overflow: hidden; padding: 28px; border-radius: 24px; background: var(--soft); border: 1px solid var(--line); min-height: 280px; transition: transform .45s var(--ease), box-shadow .45s, background .3s; }
-  .bento > div:hover { transform: translateY(-4px); background: #fff; box-shadow: var(--shadow); }
   .bento > div::after { content: ""; position: absolute; width: 640px; height: 640px; right: -320px; top: -320px; border-radius: 50%; background: repeating-radial-gradient(circle, transparent 0 79px, rgba(28,20,70,0.06) 79px 80px); -webkit-mask-image: radial-gradient(circle, #000 30%, transparent 70%); mask-image: radial-gradient(circle, #000 30%, transparent 70%); pointer-events: none; }
   .b-stat { grid-column: span 3; display: flex; flex-direction: column; align-items: center; justify-content: space-between; text-align: center; }
   .b-stat .k { font: 600 22px var(--display); }
@@ -256,6 +253,29 @@
   .cost-chip { position: absolute; z-index: 2; right: 22px; top: 22px; padding: 10px 12px; border-radius: 14px; background: #fff; box-shadow: var(--shadow); font-size: 12px; color: var(--muted); }
   .cost-chip b { display: block; font: 700 20px var(--display); color: var(--ink); }
 
+  /* ---------- Efek hover kartu: miring 3D, sorotan, tepi bercahaya, kilau ---------- */
+  .fx { position: relative; overflow: hidden; --mx: 50%; --my: 50%; will-change: transform; }
+  .fx.hot { background: radial-gradient(420px circle at var(--mx) var(--my), rgba(160,132,255,0.28), rgba(255,143,177,0.10) 35%, transparent 60%), rgba(255,255,255,0.9) !important; box-shadow: 0 34px 70px -24px rgba(123,77,255,0.45), 0 12px 24px -12px rgba(28,20,70,0.18) !important; border-color: transparent !important; z-index: 2; }
+  .fx-edge { position: absolute; inset: 0; z-index: 3; border-radius: inherit; padding: 1.5px; pointer-events: none; opacity: 0; transition: opacity .35s; background: radial-gradient(240px circle at var(--mx) var(--my), #7b4dff, #ff8fb1 45%, rgba(123,77,255,0.15) 75%); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); }
+  .fx.hot .fx-edge { opacity: 1; }
+  .fx-shine { position: absolute; inset: 0; z-index: 3; pointer-events: none; border-radius: inherit; background: linear-gradient(115deg, transparent 35%, rgba(255,255,255,0.55) 50%, transparent 65%); background-size: 250% 100%; background-position: 150% 0; opacity: 0; }
+  .fx.hot .fx-shine { animation: shineOnce .9s var(--ease) forwards; }
+  @keyframes shineOnce { 0% { opacity: 1; background-position: 150% 0; } 100% { opacity: 1; background-position: -60% 0; } }
+  .fx .ic { transition: transform .6s var(--spring), box-shadow .4s, background .3s; }
+  .fx.hot .ic { transform: translateY(-6px) rotate(-10deg) scale(1.16); box-shadow: 0 18px 34px -10px rgba(123,77,255,0.55); }
+  .fx b { transition: color .3s, letter-spacing .4s var(--ease); }
+  .fx.hot > b, .fx.hot .b-head > b, .fx.hot span > b, .fx.hot .step-t { color: var(--purple); }
+  .fx.hot .bubble { transform: translateY(-4px); }
+  .bubble { transition: transform .5s var(--spring); }
+  .fx.hot .bars i { filter: saturate(1.25) brightness(1.05); }
+  .fx.hot .mock { transform: translateY(-10px) rotate(-1.5deg); }
+  .mock { transition: transform .7s var(--spring); }
+  .fx.hot .cost-chip, .fx.hot .done { transform: scale(1.08) rotate(3deg); }
+  .cost-chip { transition: transform .5s var(--spring); }
+  .fx.hot .big { text-shadow: 0 10px 30px rgba(123,77,255,0.35); }
+  .fx.hot .q { color: var(--purple-2); transform: scale(1.3) rotate(-8deg); }
+  .idea .q { display: inline-block; transform-origin: left center; transition: transform .5s var(--spring), color .3s; }
+
   /* ---------- Showcase ---------- */
   .showcase { position: relative; overflow: hidden; overflow: clip; isolation: isolate; padding: clamp(40px, 6vw, 88px) clamp(20px, 4vw, 56px); border-radius: 28px; background: var(--ink); color: #fff; display: grid; grid-template-columns: 1fr auto; gap: clamp(28px, 5vw, 72px); align-items: center; }
   .showcase .rings { position: absolute; z-index: -1; right: -300px; top: 50%; width: 1100px; height: 1100px; translate: 0 -50%; }
@@ -286,7 +306,6 @@
   .ideas::-webkit-scrollbar { display: none; }
   .idea { flex: 0 0 clamp(260px, 30%, 360px); scroll-snap-align: start; display: flex; flex-direction: column; padding: 26px; border-radius: 24px; background: var(--soft); border: 1px solid var(--line); min-height: 250px; transition: transform .4s var(--ease), background .3s, box-shadow .4s; }
   .idea:nth-child(even) { margin-top: 28px; }
-  .idea:hover { transform: translateY(-6px); background: #fff; box-shadow: var(--shadow); }
   .idea .q { font: 700 46px/0.6 var(--display); color: #d9d6ea; height: 26px; }
   .idea p { font: 600 19px/1.35 var(--display); letter-spacing: -0.01em; margin: 10px 0 auto; }
   .idea .meta { display: flex; align-items: center; gap: 12px; margin-top: 22px; }
@@ -751,6 +770,27 @@
     if (drag) return;
     tiltY = (e.clientX / innerWidth - 0.5) * 14; tiltX = -(e.clientY / innerHeight - 0.5) * 8;
   }, { passive: true });
+
+  // Kartu: miring 3D mengikuti kursor, sorotan cahaya, tepi bercahaya, dan kilau saat disentuh.
+  if (matchMedia("(hover: hover)").matches) {
+    document.querySelectorAll(".step, .bento > div, .idea, .access li").forEach((el) => {
+      el.classList.add("fx");
+      el.insertAdjacentHTML("beforeend", '<span class="fx-edge" aria-hidden="true"></span><span class="fx-shine" aria-hidden="true"></span>');
+      const big = el.offsetWidth > 520, max = big ? 5 : 10;
+      el.addEventListener("pointerenter", () => { el.classList.add("hot"); });
+      el.addEventListener("pointermove", (e) => {
+        const r = el.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+        el.style.setProperty("--mx", x * 100 + "%"); el.style.setProperty("--my", y * 100 + "%");
+        el.style.transition = "transform .15s ease-out, box-shadow .4s, background .3s";
+        el.style.transform = `perspective(1000px) rotateX(${(0.5 - y) * max}deg) rotateY(${(x - 0.5) * max}deg) translateY(-10px) scale(${big ? 1.012 : 1.035})`;
+      });
+      el.addEventListener("pointerleave", () => {
+        el.classList.remove("hot");
+        el.style.transition = "transform .8s cubic-bezier(.34,1.56,.64,1), box-shadow .4s, background .3s";
+        el.style.transform = "";
+      });
+    });
+  }
 
   // Ubin mengambang bergerak sedikit mengikuti kursor.
   const tiles = [...document.querySelectorAll("[data-depth]")];

@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dasbor · Aldi Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Dasbor Aldi Studio: gaya sama dengan halaman Studio. */
+  :root {
+    --bg: #f3f3f8; --ink: #1c1446; --ink-2: #4a4668; --muted: #6f6b8c; --line: rgba(28,20,70,0.08);
+    --accent: #7b4dff; --accent-soft: #eee9ff; --ok: #1f8a4c; --ok-soft: #dff3e6; --warn: #b4540a; --bad: #c53030;
+    --side: #1c1446; --side-ink: #f3f3f8; --side-muted: rgba(243,243,248,0.55);
+    --display: "Urbanist", system-ui, sans-serif; --text: "Inter", system-ui, sans-serif;
+    --ease: cubic-bezier(.2,.7,.1,1);
+    /* Warna seri per langkah AI (urutan tetap, divalidasi untuk buta warna) */
+    --s-prompt: #2a78d6; --s-storyboard: #eb6834; --s-kode: #1baf7a; --s-perbaikan: #eda100; --s-revisi: #e87ba4;
+    /* Komposisi token (urutan sama, lolos uji buta warna) */
+    --t-input: #2a78d6; --t-output: #eb6834; --t-cacheRead: #1baf7a; --t-cacheWrite: #eda100;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; color: var(--ink); font: 15px/1.5 var(--text); -webkit-font-smoothing: antialiased; }
+  html, body { overflow-x: clip; }
+  button, input, select { font: inherit; color: inherit; }
+  a { color: inherit; }
+  .bg { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+  .bg i { position: absolute; border-radius: 50%; filter: blur(90px); opacity: .45; }
+  .bg i:nth-child(1) { width: 46vw; height: 46vw; right: -12vw; top: -18vw; background: #c9b8ff; animation: drift 24s ease-in-out infinite alternate; }
+  .bg i:nth-child(2) { width: 34vw; height: 34vw; left: 18vw; bottom: -16vw; background: #ffd6e4; animation: drift 20s ease-in-out infinite alternate-reverse; }
+  .bg i:nth-child(3) { width: 26vw; height: 26vw; right: 20vw; top: 50vh; background: #cfe0ff; animation: drift 28s ease-in-out infinite alternate; }
+  @keyframes drift { to { transform: translate(5vw, -6vh) scale(1.12); } }
+
+  .app { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+  aside { background: var(--side); color: var(--side-ink); padding: 22px 14px; position: sticky; top: 0; height: 100vh; overflow: hidden; isolation: isolate; }
+  aside::before { content: ""; position: absolute; z-index: -1; inset: -30% -60% auto -20%; height: 60%; background: radial-gradient(circle at 30% 30%, rgba(123,77,255,0.35), transparent 60%); filter: blur(40px); }
+  .brand { display: flex; align-items: center; gap: 10px; font: 600 17px var(--display); letter-spacing: -0.02em; margin: 2px 8px 26px; text-decoration: none; }
+  .brand svg { width: 32px; height: 32px; border-radius: 9px; box-shadow: 0 0 0 1px rgba(243,243,248,0.18); }
+  .side-nav { display: grid; gap: 4px; }
+  .side-nav a { display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 12px; text-decoration: none; color: var(--side-muted); font-weight: 500; transition: background .2s, color .2s; }
+  .side-nav a svg { width: 19px; height: 19px; flex: none; }
+  .side-nav a:hover { background: rgba(243,243,248,0.06); color: var(--side-ink); }
+  .side-nav a.on { background: rgba(243,243,248,0.1); color: var(--side-ink); box-shadow: inset 3px 0 0 var(--accent); }
+  .side-nav .soon { margin-left: auto; font-size: 11px; padding: 2px 8px; border-radius: 999px; background: rgba(243,243,248,0.1); }
+  .side-nav span.dis { display: flex; align-items: center; gap: 12px; padding: 11px 12px; color: rgba(243,243,248,0.35); font-weight: 500; cursor: default; }
+  .side-nav span.dis svg { width: 19px; height: 19px; }
+
+  main { padding: 30px clamp(18px, 3vw, 44px) 80px; max-width: 1240px; width: 100%; }
+  .head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px; margin-bottom: 22px; }
+  .head h1 { font: 600 clamp(30px, 3.6vw, 44px)/1 var(--display); letter-spacing: -0.04em; margin: 0; }
+  .head p { margin: 8px 0 0; color: var(--muted); }
+  .head .tools { margin-left: auto; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .seg { display: inline-flex; padding: 4px; border-radius: 999px; background: rgba(255,255,255,0.75); box-shadow: inset 0 1px 0 #fff, 0 10px 26px -18px rgba(28,20,70,0.35); }
+  .seg button { border: 0; background: none; padding: 8px 15px; border-radius: 999px; cursor: pointer; font-size: 13.5px; font-weight: 500; color: var(--muted); white-space: nowrap; transition: background .25s, color .25s; }
+  .seg button:hover { color: var(--ink); }
+  .seg button.on { background: var(--ink); color: #fff; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; border: 0; border-radius: 999px; padding: 9px 16px; cursor: pointer; font-size: 13.5px; font-weight: 500; background: rgba(255,255,255,0.75); color: var(--ink); box-shadow: inset 0 1px 0 #fff, 0 10px 26px -18px rgba(28,20,70,0.35); transition: background .25s, color .25s, transform .25s var(--ease); }
+  .btn:hover { background: var(--ink); color: #fff; transform: translateY(-1px); }
+  .btn svg { width: 16px; height: 16px; }
+
+  .note { display: flex; gap: 10px; align-items: center; padding: 11px 16px; border-radius: 14px; background: rgba(123,77,255,0.08); color: var(--ink-2); font-size: 13.5px; margin-bottom: 18px; }
+  .note svg { width: 18px; height: 18px; flex: none; color: var(--accent); }
+
+  .card { position: relative; background: rgba(255,255,255,0.72); backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2); border-radius: 24px; padding: 22px 24px; box-shadow: inset 0 1px 0 #fff, 0 20px 50px -32px rgba(28,20,70,0.3); animation: up .6s var(--ease) both; }
+  @keyframes up { from { opacity: 0; transform: translateY(14px); } }
+  .card h2 { font: 600 17px/1.2 var(--display); letter-spacing: -0.02em; margin: 0; }
+  .card .sub { color: var(--muted); font-size: 13px; margin: 3px 0 0; }
+  .card-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
+  .card-head .r { margin-left: auto; }
+  .link { border: 0; background: none; padding: 0; color: var(--muted); font-size: 13px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+  .link:hover { color: var(--ink); }
+
+  /* Angka utama */
+  .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 14px; }
+  .kpi { padding: 18px 20px; }
+  .kpi .lbl { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); font-weight: 500; }
+  .kpi .lbl i { width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+  .kpi .lbl i svg { width: 15px; height: 15px; }
+  .kpi .val { font: 600 clamp(24px, 2.4vw, 32px)/1.1 var(--display); letter-spacing: -0.03em; margin-top: 12px; font-variant-numeric: tabular-nums; }
+  .kpi .foot { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+  .kpi.hero { background: linear-gradient(150deg, #7b4dff, #4a2fc0 55%, #2a1d77); color: #fff; }
+  .kpi.hero .lbl, .kpi.hero .foot { color: rgba(255,255,255,0.75); }
+  .kpi.hero .lbl i { background: rgba(255,255,255,0.16); color: #fff; }
+  .meter { height: 6px; border-radius: 6px; background: rgba(255,255,255,0.2); margin-top: 10px; overflow: hidden; }
+  .meter > b { display: block; height: 100%; border-radius: 6px; background: #fff; transition: width .8s var(--ease); }
+
+  .grid2 { display: grid; grid-template-columns: 1.7fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .grid2b { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .grid2 > *, .grid2b > *, .kpis > * { min-width: 0; }
+
+  /* Grafik batang per hari */
+  .chart { position: relative; }
+  .chart svg { display: block; width: 100%; height: 260px; overflow: visible; }
+  .chart .grid line { stroke: rgba(28,20,70,0.07); }
+  .chart .axis text { fill: var(--muted); font-size: 11px; font-family: var(--text); }
+  .chart .hit { fill: transparent; cursor: default; }
+  .chart .col.dim rect.seg { opacity: .35; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 12px; font-size: 12.5px; color: var(--ink-2); }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; }
+  .legend i { width: 10px; height: 10px; border-radius: 3px; }
+  .tip { position: absolute; z-index: 5; pointer-events: none; min-width: 180px; padding: 10px 12px; border-radius: 12px; background: var(--ink); color: #fff; font-size: 12.5px; box-shadow: 0 16px 30px -12px rgba(28,20,70,0.6); opacity: 0; transform: translateY(4px); transition: opacity .15s, transform .15s; }
+  .tip.on { opacity: 1; transform: none; }
+  .tip b { display: block; font: 600 13px var(--display); margin-bottom: 6px; }
+  .tip .r { display: flex; align-items: center; gap: 7px; justify-content: space-between; font-variant-numeric: tabular-nums; }
+  .tip .r span { display: inline-flex; align-items: center; gap: 6px; color: rgba(255,255,255,0.8); }
+  .tip .r i { width: 8px; height: 8px; border-radius: 2px; }
+  .tip .tot { border-top: 1px solid rgba(255,255,255,0.15); margin-top: 6px; padding-top: 6px; font-weight: 600; }
+  .empty { display: grid; place-items: center; height: 220px; color: var(--muted); font-size: 14px; text-align: center; }
+
+  /* Batang mendatar per langkah */
+  .hbars { display: grid; gap: 14px; }
+  .hb .top { display: flex; align-items: baseline; gap: 8px; font-size: 13.5px; }
+  .hb .top .nm { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; }
+  .hb .top .nm i { width: 10px; height: 10px; border-radius: 3px; }
+  .hb .top .v { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .hb .top .pc { color: var(--muted); font-size: 12px; width: 40px; text-align: right; font-variant-numeric: tabular-nums; }
+  .hb .track { height: 10px; border-radius: 6px; background: rgba(28,20,70,0.06); margin-top: 7px; overflow: hidden; }
+  .hb .track b { display: block; height: 100%; border-radius: 0 4px 4px 0; width: 0; transition: width .9s var(--ease); }
+  .hb .meta { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  /* Komposisi token: satu batang bersegmen */
+  .stack { display: flex; gap: 2px; height: 22px; border-radius: 8px; overflow: hidden; margin: 6px 0 16px; }
+  .stack b { height: 100%; transition: flex-grow .9s var(--ease); min-width: 2px; }
+  .tok-rows { display: grid; gap: 10px; }
+  .tok-rows .r { display: grid; grid-template-columns: auto 1fr auto auto; gap: 10px; align-items: center; font-size: 13.5px; }
+  .tok-rows i { width: 10px; height: 10px; border-radius: 3px; }
+  .tok-rows .v { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .tok-rows .pc { color: var(--muted); font-size: 12px; width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
+  .tok-rows small { display: block; color: var(--muted); font-size: 12px; }
+
+  /* Tabel */
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12.5px; padding: 10px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th.n, td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  th[data-k] { cursor: pointer; user-select: none; }
+  th[data-k]:hover { color: var(--ink); }
+  th .ar { opacity: .6; font-size: 10px; margin-left: 3px; }
+  td { padding: 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  tbody tr { transition: background .15s; }
+  tbody tr.go { cursor: pointer; }
+  tbody tr:hover { background: rgba(123,77,255,0.05); }
+  tbody tr:last-child td { border-bottom: 0; }
+  .vt { display: flex; align-items: center; gap: 12px; min-width: 220px; }
+  .vt .th { flex: none; width: 30px; height: 40px; border-radius: 8px; display: grid; place-items: center; color: #fff; background: linear-gradient(160deg, #8b5dff, #ff8fb1); }
+  .vt .th.h { width: 40px; height: 26px; }
+  .vt .th.no { background: rgba(28,20,70,0.08); color: var(--muted); }
+  .vt .th svg { width: 12px; height: 12px; }
+  .vt b { font-weight: 500; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 500; background: rgba(28,20,70,0.06); color: var(--muted); margin: 1px 4px 1px 0; }
+  .pill.ok { background: var(--ok-soft); color: var(--ok); }
+  .tbl-wrap { overflow-x: auto; margin: 0 -12px; }
+
+  .skel { border-radius: 10px; background: linear-gradient(90deg, rgba(28,20,70,0.05), rgba(28,20,70,0.1), rgba(28,20,70,0.05)); background-size: 200% 100%; animation: sk 1.2s linear infinite; }
+  @keyframes sk { to { background-position: -200% 0; } }
+  .err { padding: 14px 18px; border-radius: 14px; background: #fdebe7; color: #8a2a12; margin-bottom: 16px; }
+  .hidden { display: none !important; }
+
+  @media (max-width: 1100px) { .kpis { grid-template-columns: repeat(3, 1fr); } .grid2, .grid2b { grid-template-columns: 1fr; } }
+  @media (max-width: 760px) {
+    .app { grid-template-columns: minmax(0, 1fr); }
+    main { min-width: 0; }
+    .kpi { min-width: 0; }
+    .kpi .val { font-size: 24px; }
+    .head .tools { width: 100%; }
+    aside { position: static; height: auto; padding: 14px; }
+    .brand { margin-bottom: 12px; }
+    aside { min-width: 0; }
+    .side-nav { grid-auto-flow: column; justify-content: start; overflow-x: auto; min-width: 0; scrollbar-width: none; }
+    .side-nav a, .side-nav span.dis { white-space: nowrap; }
+    main { padding: 20px 14px 60px; }
+    .kpis { grid-template-columns: 1fr 1fr; }
+    .kpi.hero { grid-column: span 2; }
+    .head .tools { margin-left: 0; }
+    .seg { overflow-x: auto; max-width: 100%; }
+  }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="bg" aria-hidden="true"><i></i><i></i><i></i></div>
+<div class="app">
+  <aside>
+    <a class="brand" href="/"><svg viewBox="0 0 1024 1024" aria-hidden="true"><rect width="1024" height="1024" fill="#1c1446"/><text x="512" y="610" text-anchor="middle" font-family="Inter, Helvetica, sans-serif" font-weight="600" font-size="400" letter-spacing="-20" fill="#f3f3f8">AB</text><path d="M220 690 L220 750 L272 720 Z" fill="#7b4dff"/></svg> Aldi Studio</a>
+    <nav class="side-nav">
+      <a href="/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h16v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM4 9l1.5-4.2h14.3L20 9M9.5 5l-1.5 4M15 5l-1.5 4"/></svg>Studio</a>
+      <a href="/dasbor" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Token &amp; biaya</a>
+      <span class="dis" title="Tersedia setelah akses TikTok produksi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9.5v5l4.5-2.5z"/></svg>Video &amp; upload<em class="soon" style="font-style:normal">Segera</em></span>
+    </nav>
+  </aside>
+
+  <main>
+    <div class="head">
+      <div>
+        <h1>Token &amp; biaya</h1>
+        <p id="headSub">Pemakaian AI dan render untuk video Anda.</p>
+      </div>
+      <div class="tools">
+        <div class="seg" id="period" role="tablist" aria-label="Periode">
+          <button data-p="bulan" class="on">Bulan ini</button>
+          <button data-p="lalu">Bulan lalu</button>
+          <button data-p="30">30 hari</button>
+          <button data-p="semua">Semua</button>
+        </div>
+        <button class="btn" id="csv" title="Unduh catatan periode ini sebagai CSV"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>CSV</button>
+      </div>
+    </div>
+
+    <div class="err hidden" id="err"></div>
+    <div class="note hidden" id="note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg><span id="noteText"></span></div>
+
+    <section class="kpis" id="kpis">
+      <div class="card kpi hero"><div class="lbl"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M16.5 7.5c-.8-1.3-2.4-2-4.5-2-2.7 0-4.5 1.3-4.5 3.2 0 4.6 9.5 2.1 9.5 6.8 0 2-1.9 3.4-5 3.4-2.3 0-4.1-.8-5-2.3"/></svg></i>Total biaya</div><div class="val" id="kUsd"><span class="skel" style="display:block;height:34px;width:60%"></span></div><div class="foot" id="kUsdFoot">&nbsp;</div><div class="meter hidden" id="kLimit"><b></b></div></div>
+      <div class="card kpi"><div class="lbl"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M9 12h6M12 9v6"/></svg></i>Token</div><div class="val" id="kTok">–</div><div class="foot" id="kTokFoot">&nbsp;</div></div>
+      <div class="card kpi"><div class="lbl"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9.5v5l4.5-2.5z"/></svg></i>Video dibuat</div><div class="val" id="kVid">–</div><div class="foot" id="kVidFoot">&nbsp;</div></div>
+      <div class="card kpi"><div class="lbl"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 18l6-6 4 4 6-8"/></svg></i>Rata-rata per video</div><div class="val" id="kAvg">–</div><div class="foot">biaya AI per video</div></div>
+      <div class="card kpi"><div class="lbl"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></svg></i>Waktu render</div><div class="val" id="kRen">–</div><div class="foot" id="kRenFoot">&nbsp;</div></div>
+    </section>
+
+    <section class="grid2">
+      <div class="card">
+        <div class="card-head"><div><h2 id="dailyTitle">Biaya per hari</h2><p class="sub">Dirinci per langkah AI. Arahkan kursor ke batang untuk detail.</p></div><button class="link r" id="tblToggle">Lihat tabel</button></div>
+        <div class="chart" id="daily"><div class="skel" style="height:240px"></div></div>
+        <div class="legend" id="legend"></div>
+        <div class="tbl-wrap hidden" id="dailyTbl"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div><h2>Biaya per langkah</h2><p class="sub">Bagian mana yang paling banyak memakai AI.</p></div></div>
+        <div class="hbars" id="steps"></div>
+      </div>
+    </section>
+
+    <section class="grid2b">
+      <div class="card">
+        <div class="card-head"><div><h2>Komposisi token</h2><p class="sub">Cache baca jauh lebih murah dari input biasa.</p></div></div>
+        <div class="stack" id="tokStack"></div>
+        <div class="tok-rows" id="tokRows"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div><h2>Per model</h2><p class="sub">Model Claude yang dipakai pada periode ini.</p></div></div>
+        <div class="tbl-wrap"><table><thead><tr><th>Model</th><th class="n">Panggilan</th><th class="n">Token</th><th class="n">Biaya</th></tr></thead><tbody id="models"></tbody></table></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><div><h2>Per video</h2><p class="sub">Klik baris untuk membuka video di Studio.</p></div><span class="r sub" id="vidCount"></span></div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th data-k="judul">Video<span class="ar"></span></th><th data-k="t">Dibuat<span class="ar"></span></th><th class="n" data-k="tokens">Token<span class="ar"></span></th><th class="n" data-k="render">Render<span class="ar"></span></th><th class="n" data-k="usd">Biaya<span class="ar"></span></th><th>Upload</th></tr></thead>
+        <tbody id="vids"></tbody>
+      </table></div>
+    </section>
+  </main>
+</div>
+
+<div class="tip" id="tip"></div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const LANGKAH = [["prompt", "Master prompt"], ["storyboard", "Storyboard"], ["kode", "Kode animasi"], ["perbaikan", "Perbaikan kode"], ["revisi", "Revisi"]];
+const TOK = [["input", "Input", "token yang dikirim ke AI"], ["output", "Output", "jawaban AI, termasuk berpikir"], ["cacheRead", "Cache baca", "konteks yang dipakai ulang, murah"], ["cacheWrite", "Cache tulis", "konteks yang disimpan untuk dipakai ulang"]];
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const usd = (v) => "$" + (v > 0 && v < 0.01 ? v.toFixed(4) : v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+const tok = (v) => v >= 1e6 ? (v / 1e6).toLocaleString("id-ID", { maximumFractionDigits: 1 }) + " jt" : v >= 1e3 ? (v / 1e3).toLocaleString("id-ID", { maximumFractionDigits: 0 }) + " rb" : String(Math.round(v));
+const dur = (s) => s >= 3600 ? (s / 3600).toLocaleString("id-ID", { maximumFractionDigits: 1 }) + " jam" : Math.max(0, Math.round(s / 60)) + " mnt";
+// Semua tanggal memakai WIB (UTC+7), sama dengan batas bulanan di server.
+const wib = (iso) => new Date(Date.parse(iso) + 7 * 3600e3).toISOString();
+const dayOf = (iso) => wib(iso).slice(0, 10);
+const monthOf = (iso) => wib(iso).slice(0, 7);
+const fmtDay = (d) => new Date(d + "T00:00:00Z").toLocaleDateString("id-ID", { day: "numeric", month: "short", timeZone: "UTC" });
+const fmtMonth = (m) => new Date(m + "-01T00:00:00Z").toLocaleDateString("id-ID", { month: "long", year: "numeric", timeZone: "UTC" });
+
+let data = null, period = "bulan", sortK = "t", sortDir = -1;
+
+function range() {
+  const now = wib(new Date().toISOString());
+  const m = now.slice(0, 7);
+  if (period === "bulan") return { test: (e) => monthOf(e.at) === m, label: fmtMonth(m), from: m + "-01", to: now.slice(0, 10) };
+  if (period === "lalu") {
+    const d = new Date(m + "-01T00:00:00Z"); d.setUTCMonth(d.getUTCMonth() - 1);
+    const lm = d.toISOString().slice(0, 7);
+    const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
+    return { test: (e) => monthOf(e.at) === lm, label: fmtMonth(lm), from: lm + "-01", to: last };
+  }
+  if (period === "30") {
+    const from = new Date(Date.parse(now.slice(0, 10)) - 29 * 864e5).toISOString().slice(0, 10);
+    return { test: (e) => dayOf(e.at) >= from, label: "30 hari terakhir", from, to: now.slice(0, 10) };
+  }
+  const first = data.entries.length ? dayOf(data.entries[0].at) : now.slice(0, 10);
+  return { test: () => true, label: "Semua waktu", from: first, to: now.slice(0, 10) };
+}
+
+function sum(entries) {
+  const t = { calls: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, tokens: 0, usd: 0, partial: false, render: 0, per: {}, models: {}, videos: new Set() };
+  for (const e of entries) {
+    if (e.langkah === "render") { t.render += e.seconds || 0; continue; }
+    const k = e.input + e.output + e.cacheRead + e.cacheWrite;
+    t.calls++; t.input += e.input; t.output += e.output; t.cacheRead += e.cacheRead; t.cacheWrite += e.cacheWrite; t.tokens += k;
+    t.usd += e.usd ?? 0; if (e.usd === null) t.partial = true;
+    const p = (t.per[e.langkah] ??= { calls: 0, tokens: 0, usd: 0 }); p.calls++; p.tokens += k; p.usd += e.usd ?? 0;
+    const md = (t.models[e.model || "lainnya"] ??= { calls: 0, tokens: 0, usd: 0 }); md.calls++; md.tokens += k; md.usd += e.usd ?? 0;
+    if (e.langkah === "kode" && e.jobId) t.videos.add(e.jobId);
+  }
+  return t;
+}
+
+/* ---------- Angka utama ---------- */
+function renderKpis(t, r) {
+  const pre = t.partial ? "≥ " : "";
+  $("#kUsd").textContent = pre + usd(t.usd);
+  $("#kUsdFoot").textContent = `${t.calls.toLocaleString("id-ID")} panggilan AI · ${r.label}`;
+  const lim = $("#kLimit");
+  if (data.limitUsd != null && period === "bulan") {
+    lim.classList.remove("hidden");
+    lim.firstElementChild.style.width = Math.min(100, t.usd / data.limitUsd * 100) + "%";
+    $("#kUsdFoot").textContent = `${Math.round(t.usd / data.limitUsd * 100)}% dari batas ${usd(data.limitUsd)} bulan ini`;
+  } else lim.classList.add("hidden");
+  $("#kTok").textContent = tok(t.tokens);
+  $("#kTokFoot").textContent = t.tokens ? `${Math.round(t.cacheRead / t.tokens * 100)}% dari cache` : "belum ada";
+  $("#kVid").textContent = t.videos.size.toLocaleString("id-ID");
+  $("#kVidFoot").textContent = t.videos.size ? "video dengan kode animasi" : "belum ada video";
+  $("#kAvg").textContent = t.videos.size ? usd(t.usd / t.videos.size) : "–";
+  $("#kRen").textContent = t.render ? dur(t.render) : "0 mnt";
+  $("#kRenFoot").textContent = "di laptop render";
+}
+
+/* ---------- Grafik biaya per hari (batang bertumpuk per langkah) ---------- */
+function buckets(entries, r) {
+  const days = [];
+  for (let d = Date.parse(r.from); d <= Date.parse(r.to); d += 864e5) days.push(new Date(d).toISOString().slice(0, 10));
+  const byMonth = days.length > 62;
+  const keys = byMonth ? [...new Set(days.map((d) => d.slice(0, 7)))] : days;
+  const map = new Map(keys.map((k) => [k, { key: k, per: {}, usd: 0, tokens: 0 }]));
+  for (const e of entries) {
+    if (e.langkah === "render") continue;
+    const b = map.get(byMonth ? monthOf(e.at) : dayOf(e.at)); if (!b) continue;
+    b.per[e.langkah] = (b.per[e.langkah] || 0) + (e.usd ?? 0); b.usd += e.usd ?? 0; b.tokens += e.input + e.output + e.cacheRead + e.cacheWrite;
+  }
+  return { byMonth, list: [...map.values()] };
+}
+
+/** Sumbu rapi: langkah 1/2/2,5/5 x 10^n, paling banyak 5 garis di atas nol. */
+function niceAxis(v) {
+  if (v <= 0) return { max: 1, ticks: [0, .25, .5, .75, 1] };
+  const p = Math.pow(10, Math.floor(Math.log10(v / 5)));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * p).find((st) => Math.ceil(v / st - 1e-9) <= 5);
+  const n = Math.ceil(v / step - 1e-9);
+  return { max: n * step, ticks: Array.from({ length: n + 1 }, (_, i) => +(i * step).toFixed(6)) };
+}
+
+function renderDaily(entries, r) {
+  const { byMonth, list } = buckets(entries, r);
+  $("#dailyTitle").textContent = byMonth ? "Biaya per bulan" : "Biaya per hari";
+  const el = $("#daily");
+  const used = LANGKAH.filter(([k]) => list.some((b) => b.per[k]));
+  $("#legend").innerHTML = used.map(([k, l]) => `<span><i style="background:var(--s-${k})"></i>${l}</span>`).join("");
+  if (!list.some((b) => b.usd > 0)) { el.innerHTML = `<div class="empty">Belum ada pemakaian AI pada periode ini.</div>`; $("#dailyTbl").innerHTML = ""; return; }
+  const W = el.clientWidth || 700, H = 260, L = 46, R = 6, T = 10, B = 26;
+  const { max, ticks } = niceAxis(Math.max(...list.map((b) => b.usd)));
+  const step = (W - L - R) / list.length, bw = Math.max(3, Math.min(34, step * 0.62));
+  const y = (v) => T + (H - T - B) * (1 - v / max);
+  const every = Math.ceil(list.length / Math.max(2, Math.floor((W - L) / 64)));
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${byMonth ? "Biaya per bulan" : "Biaya per hari"}">`;
+  svg += `<g class="grid">${ticks.map((v) => `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/>`).join("")}</g>`;
+  svg += `<g class="axis">${ticks.map((v) => `<text x="${L - 8}" y="${y(v) + 4}" text-anchor="end">${"$" + +v.toFixed(3)}</text>`).join("")}`;
+  svg += list.map((b, i) => i % every ? "" : `<text x="${L + step * i + step / 2}" y="${H - 6}" text-anchor="middle">${byMonth ? new Date(b.key + "-01T00:00:00Z").toLocaleDateString("id-ID", { month: "short", timeZone: "UTC" }) : fmtDay(b.key)}</text>`).join("") + `</g>`;
+  list.forEach((b, i) => {
+    const x = L + step * i + (step - bw) / 2;
+    let acc = 0, segs = "";
+    const parts = LANGKAH.filter(([k]) => b.per[k] > 0);
+    parts.forEach(([k], j) => {
+      const v = b.per[k], y1 = y(acc + v), y0 = y(acc);
+      const h = Math.max(0, y0 - y1 - (j < parts.length - 1 ? 2 : 0)); // celah 2px antar segmen
+      const top = j === parts.length - 1, r = Math.min(4, bw / 2, h);
+      segs += top
+        ? `<path class="seg" fill="var(--s-${k})" d="M${x},${y0} V${y1 + r} Q${x},${y1} ${x + r},${y1} H${x + bw - r} Q${x + bw},${y1} ${x + bw},${y1 + r} V${y0} Z"/>`
+        : `<rect class="seg" x="${x}" y="${y0 - h}" width="${bw}" height="${h}" fill="var(--s-${k})"/>`;
+      acc += v;
+    });
+    svg += `<g class="col" data-i="${i}">${segs}<rect class="hit" x="${L + step * i}" y="${T}" width="${step}" height="${H - T - B}"/></g>`;
+  });
+  svg += `</svg>`;
+  el.innerHTML = svg;
+  const tip = $("#tip");
+  el.querySelectorAll(".col").forEach((g) => {
+    const b = list[+g.dataset.i];
+    g.addEventListener("pointerenter", () => {
+      el.querySelectorAll(".col").forEach((o) => o.classList.toggle("dim", o !== g));
+      const rows = LANGKAH.filter(([k]) => b.per[k] > 0).reverse().map(([k, l]) => `<div class="r"><span><i style="background:var(--s-${k})"></i>${l}</span>${usd(b.per[k])}</div>`).join("");
+      tip.innerHTML = `<b>${byMonth ? fmtMonth(b.key) : new Date(b.key + "T00:00:00Z").toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })}</b>${rows || `<div class="r"><span>Tidak ada pemakaian</span></div>`}<div class="r tot"><span>Total · ${tok(b.tokens)} token</span>${usd(b.usd)}</div>`;
+      tip.classList.add("on");
+    });
+    g.addEventListener("pointermove", (ev) => {
+      const w = tip.offsetWidth, h = tip.offsetHeight;
+      let x = ev.clientX + 16, yy = ev.clientY - h - 12;
+      if (x + w > innerWidth - 8) x = ev.clientX - w - 16;
+      if (yy < 8) yy = ev.clientY + 16;
+      tip.style.left = x + scrollX + "px"; tip.style.top = yy + scrollY + "px";
+    });
+    g.addEventListener("pointerleave", () => { tip.classList.remove("on"); el.querySelectorAll(".col").forEach((o) => o.classList.remove("dim")); });
+  });
+  // Tampilan tabel (aksesibilitas)
+  $("#dailyTbl").innerHTML = `<table><thead><tr><th>${byMonth ? "Bulan" : "Tanggal"}</th>${used.map(([, l]) => `<th class="n">${l}</th>`).join("")}<th class="n">Total</th></tr></thead><tbody>${
+    list.filter((b) => b.usd > 0).map((b) => `<tr><td>${byMonth ? fmtMonth(b.key) : fmtDay(b.key)}</td>${used.map(([k]) => `<td class="n">${b.per[k] ? usd(b.per[k]) : "–"}</td>`).join("")}<td class="n"><b>${usd(b.usd)}</b></td></tr>`).join("")}</tbody></table>`;
+}
+
+/* ---------- Per langkah, token, model ---------- */
+function renderSteps(t) {
+  const max = Math.max(0.000001, ...LANGKAH.map(([k]) => t.per[k]?.usd || 0));
+  const rows = LANGKAH.filter(([k]) => t.per[k]).sort((a, b) => t.per[b[0]].usd - t.per[a[0]].usd);
+  $("#steps").innerHTML = rows.length ? rows.map(([k, l]) => { const p = t.per[k];
+    return `<div class="hb"><div class="top"><span class="nm"><i style="background:var(--s-${k})"></i>${l}</span><span class="v">${usd(p.usd)}</span><span class="pc">${t.usd ? Math.round(p.usd / t.usd * 100) : 0}%</span></div>
+      <div class="track"><b data-w="${p.usd / max * 100}" style="background:var(--s-${k})"></b></div><div class="meta">${p.calls}× panggilan · ${tok(p.tokens)} token</div></div>`; }).join("")
+    : `<div class="empty" style="height:160px">Belum ada data.</div>`;
+  requestAnimationFrame(() => $("#steps").querySelectorAll("b[data-w]").forEach((b) => b.style.width = b.dataset.w + "%"));
+}
+
+function renderTokens(t) {
+  const total = t.tokens || 1;
+  $("#tokStack").innerHTML = t.tokens ? TOK.filter(([k]) => t[k] > 0).map(([k, l]) => `<b title="${l}: ${tok(t[k])}" style="flex-grow:${t[k]};background:var(--t-${k})"></b>`).join("") : `<b style="flex-grow:1;background:rgba(28,20,70,0.06)"></b>`;
+  $("#tokRows").innerHTML = TOK.map(([k, l, d]) => `<div class="r"><i style="background:var(--t-${k})"></i><span>${l}<small>${d}</small></span><span class="v">${tok(t[k])}</span><span class="pc">${Math.round(t[k] / total * 100)}%</span></div>`).join("");
+}
+
+function renderModels(t) {
+  const rows = Object.entries(t.models).sort((a, b) => b[1].usd - a[1].usd);
+  $("#models").innerHTML = rows.length ? rows.map(([m, v]) => `<tr><td><span class="pill">${esc(m)}</span></td><td class="n">${v.calls}</td><td class="n">${tok(v.tokens)}</td><td class="n"><b>${usd(v.usd)}</b></td></tr>`).join("")
+    : `<tr><td colspan="4" style="color:var(--muted)">Belum ada panggilan AI.</td></tr>`;
+}
+
+/* ---------- Per video ---------- */
+function renderVideos(entries) {
+  const per = {};
+  for (const e of entries) if (e.jobId) { const p = (per[e.jobId] ??= { usd: 0, tokens: 0, render: 0, partial: false });
+    if (e.langkah === "render") p.render += e.seconds || 0; else { p.usd += e.usd ?? 0; p.tokens += e.input + e.output + e.cacheRead + e.cacheWrite; if (e.usd === null) p.partial = true; } }
+  const rows = data.jobs.filter((j) => per[j.id]).map((j) => ({ ...j, t: j.created, ...per[j.id] }));
+  rows.sort((a, b) => { const x = a[sortK], y = b[sortK]; return (typeof x === "string" ? x.localeCompare(y) : x - y) * sortDir; });
+  document.querySelectorAll("th[data-k] .ar").forEach((s) => s.textContent = s.parentElement.dataset.k === sortK ? (sortDir > 0 ? "▲" : "▼") : "");
+  $("#vidCount").textContent = rows.length ? `${rows.length} video` : "";
+  const play = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10.5-6.5z"/></svg>`;
+  const ups = (u) => { const k = Object.keys(u || {}); return k.length ? k.map((n) => `<span class="pill ok">✓ ${esc(n)}</span>`).join("") : `<span class="pill">Belum</span>`; };
+  $("#vids").innerHTML = rows.length ? rows.map((j) => `<tr class="go" data-id="${esc(j.id)}">
+      <td><div class="vt"><span class="th ${j.rasio === "16:9" ? "h" : ""} ${j.hasVideo ? "" : "no"}">${play}</span><b>${esc(j.judul)}</b></div></td>
+      <td>${new Date(j.created).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</td>
+      <td class="n">${tok(j.tokens)}</td><td class="n">${j.render ? dur(j.render) : "–"}</td><td class="n"><b>${j.partial ? "≥ " : ""}${usd(j.usd)}</b></td><td>${ups(j.uploads)}</td></tr>`).join("")
+    : `<tr><td colspan="6"><div class="empty" style="height:120px">Belum ada video pada periode ini.</div></td></tr>`;
+  document.querySelectorAll("#vids tr.go").forEach((tr) => tr.onclick = () => location.href = "/?job=" + encodeURIComponent(tr.dataset.id));
+}
+document.querySelectorAll("th[data-k]").forEach((th) => th.onclick = () => { const k = th.dataset.k; sortDir = sortK === k ? -sortDir : (k === "judul" ? 1 : -1); sortK = k; draw(); });
+
+function draw() {
+  if (!data) return;
+  const r = range();
+  const entries = data.entries.filter(r.test);
+  const t = sum(entries);
+  $("#headSub").textContent = `${r.label} · ${data.mode}`;
+  renderKpis(t, r); renderDaily(entries, r); renderSteps(t); renderTokens(t); renderModels(t); renderVideos(entries);
+}
+
+document.querySelectorAll("#period button").forEach((b) => b.onclick = () => {
+  period = b.dataset.p; document.querySelectorAll("#period button").forEach((o) => o.classList.toggle("on", o === b)); draw();
+});
+$("#tblToggle").onclick = () => { const t = $("#dailyTbl"); t.classList.toggle("hidden"); $("#tblToggle").textContent = t.classList.contains("hidden") ? "Lihat tabel" : "Sembunyikan tabel"; };
+$("#csv").onclick = () => {
+  if (!data) return;
+  const r = range(), judul = Object.fromEntries(data.jobs.map((j) => [j.id, j.judul]));
+  const cell = (v) => /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v);
+  const lines = [["waktu_wib", "langkah", "model", "video", "input", "output", "cache_baca", "cache_tulis", "usd", "detik_render"].join(",")]
+    .concat(data.entries.filter(r.test).map((e) => [wib(e.at).slice(0, 19).replace("T", " "), e.langkah, e.model, e.jobId ? judul[e.jobId] || e.jobId : "", e.input, e.output, e.cacheRead, e.cacheWrite, e.usd ?? "", e.seconds ?? ""].map(cell).join(",")));
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([lines.join("\n") + "\n"], { type: "text/csv" }));
+  a.download = `aldi-studio-biaya-${r.from}-${r.to}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(draw, 150); });
+
+(async function init() {
+  try {
+    const res = await fetch("/api/usage");
+    if (res.status === 401) { location.href = "/"; return; }
+    data = await res.json();
+    if (!res.ok) throw new Error(data.error || "HTTP " + res.status);
+    if (/Langganan/.test(data.mode)) { $("#note").classList.remove("hidden"); $("#noteText").textContent = "Anda memakai langganan Claude, jadi biaya di sini adalah perkiraan setara harga Claude API. Langganan tidak ditagih per token."; }
+    draw();
+  } catch (e) { $("#err").textContent = "Gagal memuat data: " + e.message; $("#err").classList.remove("hidden"); }
+})();
+</script>
+</body>
+</html>

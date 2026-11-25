@@ -8,7 +8,7 @@ import path from "node:path";
 import { apiKeyReady, makeMasterPrompt, makePlan, MODE_LABEL, PlanSchema, type AiMode } from "./claude";
 import { DEFAULT_CONFIG, GAYA_LABEL, normalizeConfig, SUARA } from "./config";
 import { env, ROOT } from "./env";
-import { jobDirOf, jobOwner, listJobs, loadJob, monthlyUsage, PLATFORMS, produce, rerender, revise, uploadJob, type Reporter, type Stage } from "./pipeline";
+import { jobDirOf, jobOwner, listJobs, loadJob, monthlyUsage, PLATFORMS, usageEntries, produce, rerender, revise, uploadJob, type Reporter, type Stage } from "./pipeline";
 import { appendLedger, cleanEntries, PRE_LANGKAH, thisMonth, type UsageEntry } from "./usage";
 import { clearCookie, sameOrigin, sessionCookie, sessionUser } from "./session";
 import { tiktokAuthorizeUrl, tiktokExchangeCode, tiktokKeys, tiktokProfile } from "./upload/tiktok";
@@ -430,6 +430,7 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
       // Di server TikTok punya kotak posting sendiri (akun masing-masing). Di laptop tetap lewat .env.
       platforms: PLATFORMS.filter((x) => (localOnly() ? true : isOwner && x.name !== "TikTok")).map((x) => ({ name: x.name, ready: x.ready() })),
       tiktokPost: !localOnly(),
+      tiktokLinked: Boolean(me.tiktok),
       tiktokKeys: tiktokKeys(),
       defaults: DEFAULT_CONFIG,
       gaya: GAYA_LABEL,
@@ -439,6 +440,17 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
       task: t,
       queuePosition: queuePosition(me.openId),
     });
+  }
+
+  if (m === "GET" && p === "/dasbor") return sendFile(req, res, path.join(WEB, "dasbor.html"));
+
+  // Dasbor: semua catatan token/biaya milik pengguna ini, plus ringkasan per video. Sumber sama dengan batas bulanan.
+  if (m === "GET" && p === "/api/usage") {
+    const entries = isOwner
+      ? [...usageEntries(null, LOCAL_ID), ...(me.openId === LOCAL_ID ? [] : usageEntries(me.openId, me.openId))].sort((a, b) => a.at.localeCompare(b.at))
+      : usageEntries(me.openId, me.openId);
+    const jobs = listJobs((o) => o === me.openId || (o === null && isOwner)).map((j) => ({ ...j, rinci: loadJob(j.id)?.biaya ?? null }));
+    return json(res, 200, { month: thisMonth(), mode: MODE_LABEL[modeFor(me)], limitUsd: isOwner ? null : me.limitUsd, entries, jobs });
   }
 
   if (m === "GET" && p === "/api/events") {

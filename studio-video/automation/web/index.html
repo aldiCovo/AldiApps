@@ -21,6 +21,7 @@
   * { box-sizing: border-box; }
   html { background: var(--bg); }
   body { margin: 0; color: var(--ink); font: 15px/1.55 var(--text); -webkit-font-smoothing: antialiased; }
+  html, body { overflow-x: clip; }
   button, input, select, textarea { font: inherit; color: inherit; }
   a { color: inherit; }
 
@@ -58,8 +59,35 @@
   /* Area kerja */
   main { padding: 30px clamp(18px, 3vw, 44px) 90px; max-width: 1120px; width: 100%; }
   /* Kepala halaman: status, sapaan, ilustrasi */
-  .top-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; margin-bottom: 18px; }
-  .top-bar .me { margin-left: 6px; }
+  /* Bar status: satu baris rapi, kiri status, tengah platform, kanan akun */
+  .top-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 18px; padding: 7px; border-radius: 20px; background: rgba(255,255,255,0.6); backdrop-filter: blur(14px) saturate(1.3); -webkit-backdrop-filter: blur(14px) saturate(1.3); box-shadow: inset 0 1px 0 #fff, 0 14px 34px -24px rgba(28,20,70,0.35); animation: stepIn .6s var(--ease) both; }
+  .top-bar .grp { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .top-bar .sep { width: 1px; height: 26px; background: var(--line); flex: none; }
+  .top-bar .chip { height: 36px; padding: 0 13px; border: 0; background: rgba(255,255,255,0.85); box-shadow: inset 0 0 0 1px var(--line); white-space: nowrap; text-decoration: none; color: var(--ink); }
+  .top-bar .chip svg { width: 15px; height: 15px; flex: none; color: var(--accent); }
+  .top-bar .chip.ok { background: var(--ok-soft); box-shadow: none; } .top-bar .chip.ok svg { color: var(--ok); }
+  .top-bar .chip.off { color: var(--muted); } .top-bar .chip.off svg { color: var(--muted); }
+  .top-bar a.chip:hover { background: var(--ink); color: #fff; box-shadow: none; } .top-bar a.chip:hover svg { color: #fff; }
+  .top-bar .chip .t { overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+  .plats { display: flex; align-items: center; gap: 4px; padding: 0 4px; }
+  .plats .lb { font-size: 12px; color: var(--muted); margin-right: 4px; white-space: nowrap; }
+  .pf { position: relative; width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; background: rgba(255,255,255,0.85); box-shadow: inset 0 0 0 1px var(--line); color: var(--muted); transition: transform .25s var(--ease); }
+  .pf:hover { transform: translateY(-2px); }
+  .pf svg { width: 17px; height: 17px; opacity: .55; }
+  .pf::after { content: ""; position: absolute; right: -2px; bottom: -2px; width: 13px; height: 13px; border-radius: 50%; background: #c9c6d8; box-shadow: 0 0 0 2px #fff; }
+  .pf.ok { background: #fff; color: var(--ink); }
+  .pf.ok svg { opacity: 1; }
+  .pf.ok::after { background: var(--ok) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'><path d='M6 12.5l4 4 8-9'/></svg>") center / 9px no-repeat; }
+  .pf .tt { position: absolute; top: calc(100% + 8px); left: 50%; translate: -50% 0; padding: 6px 10px; border-radius: 9px; background: var(--ink); color: #fff; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .15s; z-index: 30; }
+  .pf:hover .tt { opacity: 1; }
+  .top-bar .me { margin-left: auto; height: 36px; border: 0; background: rgba(255,255,255,0.85); box-shadow: inset 0 0 0 1px var(--line); white-space: nowrap; }
+  .me .av { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: #fff; font: 600 13px var(--display); }
+  /* Navigasi sidebar */
+  .side-nav { display: grid; gap: 2px; margin: 16px 0 4px; }
+  .side-nav a { display: flex; align-items: center; gap: 11px; padding: 10px 12px; border-radius: 12px; text-decoration: none; color: var(--side-muted); font-weight: 500; font-size: 14.5px; transition: background .2s, color .2s; }
+  .side-nav a svg { width: 18px; height: 18px; flex: none; }
+  .side-nav a:hover { background: rgba(243,243,248,0.06); color: var(--side-ink); }
+  .side-nav a.on { background: rgba(243,243,248,0.1); color: var(--side-ink); box-shadow: inset 3px 0 0 var(--accent); }
   .hello { position: relative; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 24px; padding: clamp(24px, 3vw, 36px) clamp(22px, 3vw, 40px); border-radius: 28px; overflow: hidden; isolation: isolate; color: #fff; background: radial-gradient(120% 140% at 100% 0%, #7b4dff 0%, #4a2fc0 38%, #1c1446 78%); box-shadow: 0 30px 70px -36px rgba(60,30,180,0.7); animation: stepIn .8s var(--ease) both; }
   .hello::before { content: ""; position: absolute; inset: 0; z-index: -1; background-image: linear-gradient(rgba(255,255,255,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.07) 1px, transparent 1px); background-size: 44px 44px; -webkit-mask-image: linear-gradient(90deg, transparent, #000 60%); mask-image: linear-gradient(90deg, transparent, #000 60%); }
   .hello::after { content: ""; position: absolute; z-index: -1; width: 380px; height: 380px; left: -120px; bottom: -220px; border-radius: 50%; background: radial-gradient(circle, rgba(255,143,177,0.55), transparent 65%); filter: blur(10px); animation: drift 14s ease-in-out infinite alternate; }
@@ -252,14 +280,14 @@
   ::selection { background: var(--accent); color: #fff; }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
   @media (max-width: 900px) {
-    .app { grid-template-columns: 1fr; } aside { position: static; height: auto; }
+    .app { grid-template-columns: minmax(0, 1fr); } main { min-width: 0; } aside { position: static; height: auto; }
     main { padding: 20px 16px 60px; } .grid { grid-template-columns: 1fr; } .grid .wide { grid-column: auto; }
     .two, .result { grid-template-columns: 1fr; }
     .hint, .biaya { margin-left: 0; }
     .step { padding: 20px 18px; }
     .hello { grid-template-columns: 1fr; } .art { display: none; }
     .stepper { overflow-x: auto; border-radius: 18px; } .stepper button span { display: none; } .stepper button.cur span { display: inline; }
-    .top-bar { justify-content: flex-start; }
+    .top-bar { flex-wrap: wrap; } .top-bar .sep { display: none; } .top-bar .me { margin-left: 0; }
     .stage { font-size: 11px; } .stage .n { width: 38px; height: 38px; border-radius: 13px; } .stage::before { top: 18px; }
     .step.locked::after { position: static; display: inline-block; margin: 0 0 10px; }
   }
@@ -271,6 +299,10 @@
   <aside>
     <a class="brand" href="/"><svg viewBox="0 0 1024 1024" aria-hidden="true"><rect width="1024" height="1024" fill="#1c1446"/><text x="512" y="610" text-anchor="middle" font-family="Inter, Helvetica, sans-serif" font-weight="600" font-size="400" letter-spacing="-20" fill="#f3f3f8">AB</text><path d="M220 690 L220 750 L272 720 Z" fill="#7b4dff"/></svg> Aldi Studio</a>
     <button class="new-btn" id="newBtn">+ Video baru</button>
+    <nav class="side-nav">
+      <a href="/" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h16v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM4 9l1.5-4.2h14.3L20 9M9.5 5l-1.5 4M15 5l-1.5 4"/></svg>Studio</a>
+      <a href="/dasbor"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Token &amp; biaya</a>
+    </nav>
     <div class="side-title">Riwayat</div>
     <div id="jobs"></div>
   </aside>
@@ -278,11 +310,14 @@
   <main>
     <header>
       <div class="top-bar">
-      <span class="chip" id="modeChip">…</span>
-        <span class="chip hidden" id="usageChip"></span>
-        <span class="chip" id="renderChip">…</span>
-        <span id="platChips"></span>
-        <span class="me hidden" id="me"><img id="meAvatar" alt="" referrerpolicy="no-referrer"><b id="meName"></b><a class="link hidden" id="adminLink" href="/admin">Admin</a><form method="post" action="/keluar"><button class="link" type="submit">Keluar</button></form></span>
+        <div class="grp">
+          <span class="chip" title="Mode AI"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg><span class="t" id="modeChip">…</span></span>
+          <a class="chip hidden" id="usageChip" href="/dasbor" title="Buka dasbor token &amp; biaya"></a>
+          <span class="chip" id="renderChip">…</span>
+        </div>
+        <span class="sep"></span>
+        <div class="plats" id="platChips"></div>
+        <span class="me hidden" id="me"><span class="av hidden" id="meInit"></span><img id="meAvatar" alt="" referrerpolicy="no-referrer"><b id="meName"></b><a class="link hidden" id="adminLink" href="/admin">Admin</a><form method="post" action="/keluar"><button class="link" type="submit">Keluar</button></form></span>
       </div>
       <div class="hello">
         <div>
@@ -451,6 +486,7 @@
 
 <script>
 const $ = (s) => document.querySelector(s);
+const PLAT_ICON = { TikTok: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path fill="currentColor" stroke="none" d="M16.6 5.82A4.28 4.28 0 0 1 15.54 3h-3.09v12.4a2.59 2.59 0 0 1-2.59 2.5 2.6 2.6 0 0 1 0-5.2c.27 0 .53.04.77.12V9.66a5.7 5.7 0 0 0-.77-.05 5.69 5.69 0 1 0 5.69 5.69V9.01a7.35 7.35 0 0 0 4.3 1.38V7.3a4.3 4.3 0 0 1-3.25-1.48z"/></svg>`, YouTube: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5.5" width="19" height="13" rx="4"/><path d="M10 9.3v5.4l4.6-2.7z" fill="currentColor"/></svg>`, Instagram: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.2" cy="6.8" r=".8" fill="currentColor"/></svg>`, Facebook: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 21v-7.5h2.6l.4-3H14V8.7c0-.9.3-1.5 1.6-1.5H17V4.6c-.3 0-1.2-.1-2.3-.1-2.3 0-3.8 1.4-3.8 3.9v2.1H8.3v3H11V21"/></svg>` };
 const STAGE_ICON = { suara: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3"/></svg>`, kode: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 8l-5 4 5 4M16 8l5 4-5 4M13.5 5l-3 14"/></svg>`, cek: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>`, render: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h16v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM4 9l1.5-4.2 14.3 0L20 9M9.5 5l-1.5 4M15 5l-1.5 4"/></svg>`, selesai: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>` };
 const STAGES = [["suara","Suara"],["kode","Kode AI"],["cek","Cek kode"],["render","Render"],["selesai","Selesai"]];
 let status = null, currentJob = null, cfgRasio = "9:16";
@@ -612,10 +648,10 @@ function lockActions(on) { $("#s4").classList.toggle("running", on); ["#toProduc
 async function refreshRender() {
   try {
     const s = await api("/api/status"); const r = s.render; const chip = $("#renderChip");
-    if (r.mode !== "remote") { chip.className = "chip"; chip.textContent = "Render: komputer ini"; return; }
+    if (r.mode !== "remote") { chip.className = "chip"; chip.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="11" rx="2"/><path d="M2 19h20"/></svg>Render: komputer ini`; return; }
     const on = r.workers.filter(w => w.online).map(w => w.name);
     chip.className = "chip " + (on.length ? "ok" : "off");
-    chip.textContent = on.length ? `✓ Laptop render: ${on.join(", ")}` : "○ Laptop render offline";
+    chip.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="11" rx="2"/><path d="M2 19h20"/></svg>${on.length ? "Laptop render: " + on.join(", ").replace(/</g, "&lt;") : "Laptop render offline"}`;
     chip.title = r.queue.length ? `${r.queue.length} pekerjaan di antrean` : "";
   } catch {}
 }
@@ -771,10 +807,11 @@ function showUsage(u) {
   const c = $("#usageChip");
   if (!u) return;
   c.classList.remove("hidden");
-  if (u.limitUsd == null) { c.textContent = `Bulan ini: ${u.videos} video · ${usd(u.usd)}`; c.title = "Setara harga Claude API; dengan langganan tidak ditagih per token."; return; }
+  const ic = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>`;
+  if (u.limitUsd == null) { c.innerHTML = `${ic}Bulan ini: ${u.videos} video · ${usd(u.usd)}`; c.title = "Setara harga Claude API; dengan langganan tidak ditagih per token."; return; }
   const full = u.usd >= u.limitUsd;
   c.className = "chip" + (full ? " off" : "");
-  c.textContent = `Pemakaian bulan ini: ${usd(u.usd)} dari ${usd(u.limitUsd)}`;
+  c.innerHTML = `${ic}Bulan ini: ${usd(u.usd)} dari ${usd(u.limitUsd)}`;
   c.title = full ? "Batas tercapai. Hubungi studio@aldiab.ai.id untuk menaikkan batas." : `${u.videos} video · render ${(u.renderSeconds / 3600).toFixed(1)} jam`;
 }
 
@@ -799,14 +836,15 @@ $("#newBtn").onclick = () => {
 (async function init() {
   try {
     status = await api("/api/status");
-    $("#modeChip").textContent = "AI: " + status.mode;
+    $("#modeChip").textContent = status.mode.replace(/^AI:\s*/, "");
     showUsage(status.usage);
-    $("#platChips").innerHTML = status.platforms.map(p => `<span class="chip ${p.ready ? "ok" : "off"}">${p.ready ? "✓" : "○"} ${p.name}</span>`).join(" ");
+    const plats = [...(status.tiktokPost ? [{ name: "TikTok", ready: !!status.tiktokLinked, ket: status.tiktokLinked ? "terhubung, siap posting" : "belum terhubung" }] : []), ...status.platforms];
+    $("#platChips").innerHTML = plats.map(p => `<span class="pf ${p.ready ? "ok" : ""}" aria-label="${p.name}: ${p.ready ? "siap" : "belum disetel"}">${PLAT_ICON[p.name] || ""}<span class="tt">${p.name} · ${p.ket || (p.ready ? "siap" : "belum disetel")}</span></span>`).join("");
     if (status.me && status.me.openId !== "lokal") {
       $("#me").classList.remove("hidden"); $("#meName").textContent = status.me.nama;
       const h = new Date().getHours(), waktu = h < 11 ? "pagi" : h < 15 ? "siang" : h < 19 ? "sore" : "malam";
       $("#hiText").textContent = `Selamat ${waktu}, ${String(status.me.nama || "").split(" ")[0] || "kreator"}`;
-      if (status.me.avatar) $("#meAvatar").src = status.me.avatar; else $("#meAvatar").classList.add("hidden");
+      if (status.me.avatar) $("#meAvatar").src = status.me.avatar; else { $("#meAvatar").classList.add("hidden"); $("#meInit").textContent = (status.me.nama || "?").trim().charAt(0).toUpperCase(); $("#meInit").classList.remove("hidden"); }
       if (status.me.role === "owner") $("#adminLink").classList.remove("hidden");
     }
     $("#upBox").classList.toggle("hidden", !status.platforms.length);
@@ -821,6 +859,8 @@ $("#newBtn").onclick = () => {
       status.task.logs.forEach(appendLog); setStage(status.task.stage); setBar(status.task.progress);
       if (!status.task.done) { unlock(4); lockActions(true); info(status.queuePosition ? `Menunggu giliran render (antrean ke-${status.queuePosition}).` : "Ada proses yang sedang berjalan. Progresnya tampil di langkah 4."); }
     }
+    const jobQ = new URLSearchParams(location.search).get("job");
+    if (jobQ) { history.replaceState(null, "", "/"); openJob(jobQ, true).catch(e => showError(e.message)); }
     const pesan = new URLSearchParams(location.search).get("masuk");
     if (pesan) { history.replaceState(null, "", "/"); showError(pesan); }
     connect(); updStepper();

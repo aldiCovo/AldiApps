@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #f3f3f8; --card: #fff; --soft: #f7f7fb;
+    --bg: #efecfa; --card: rgba(255,255,255,0.5); --soft: rgba(255,255,255,0.6);
     --ink: #1c1446; --ink-2: #2d2366; --muted: #6f6b8c; --faint: #a7a4bd; --line: rgba(28,20,70,0.08);
     --purple: #7b4dff; --purple-2: #a084ff; --lilac: #eee9ff;
     --orange: #ff7a2f; --green: #1fc98e; --yellow: #ffd23f; --blue: #3d7bff; --red: #ff4d5e; --pink: #ff8fb1;
@@ -23,7 +23,25 @@
   body { margin: 0; color: var(--ink); font: 16px/1.6 var(--text); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
   a { color: inherit; }
   .wrap { max-width: 1240px; margin: 0 auto; padding: 0 clamp(14px, 2.6vw, 32px); }
-  .card { background: var(--card); border-radius: 28px; box-shadow: var(--shadow); }
+  .card { background: var(--card); border-radius: 28px; box-shadow: var(--shadow), inset 0 0 0 1px rgba(255,255,255,0.7); backdrop-filter: blur(18px) saturate(1.3); -webkit-backdrop-filter: blur(18px) saturate(1.3); }
+
+  /* ---------- Latar: gradasi warna yang bergerak, titik-titik, dan grain ---------- */
+  .bg { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; background: linear-gradient(160deg, #f0eaff 0%, #f8f1fb 45%, #eaf1ff 100%); }
+  .bg .blob { position: absolute; border-radius: 50%; filter: blur(80px); will-change: transform; }
+  .bg .a { width: 52vw; height: 52vw; left: -14vw; top: -18vw; background: radial-gradient(circle, #9b7bff, transparent 66%); opacity: .85; animation: blobA 24s ease-in-out infinite alternate; }
+  .bg .b { width: 42vw; height: 42vw; right: -10vw; top: 18vh; background: radial-gradient(circle, #ff8fb1, transparent 66%); opacity: .75; animation: blobB 28s ease-in-out infinite alternate; }
+  .bg .c { width: 50vw; height: 50vw; left: 18vw; bottom: -26vw; background: radial-gradient(circle, #7cc6ff, transparent 66%); opacity: .75; animation: blobC 32s ease-in-out infinite alternate; }
+  .bg .d { width: 30vw; height: 30vw; right: 14vw; bottom: 6vh; background: radial-gradient(circle, #ffb48a, transparent 66%); opacity: .65; animation: blobB 22s ease-in-out infinite alternate-reverse; }
+  .bg .e { width: 36vw; height: 36vw; left: 30vw; top: 30vh; background: radial-gradient(circle, #c9b8ff, transparent 66%); opacity: .7; animation: blobA 30s ease-in-out infinite alternate-reverse; }
+  @keyframes blobA { to { transform: translate(18vw, 14vh) scale(1.2); } }
+  @keyframes blobB { to { transform: translate(-16vw, 12vh) scale(.85); } }
+  @keyframes blobC { to { transform: translate(-10vw, -18vh) scale(1.15); } }
+  .bg .dots { position: absolute; inset: 0; background-image: radial-gradient(rgba(28,20,70,0.16) 1px, transparent 1.4px); background-size: 24px 24px; -webkit-mask-image: radial-gradient(ellipse 90% 70% at 50% 30%, #000 10%, transparent 75%); mask-image: radial-gradient(ellipse 90% 70% at 50% 30%, #000 10%, transparent 75%); opacity: .7; }
+  .bg .grain { position: absolute; inset: -50%; opacity: .06; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+  #cara { background: linear-gradient(135deg, rgba(255,241,232,0.7), rgba(255,255,255,0.5) 60%); }
+  #fitur { background: linear-gradient(135deg, rgba(236,228,255,0.72), rgba(255,232,242,0.66)); }
+  #akses { background: linear-gradient(135deg, rgba(226,247,239,0.66), rgba(234,240,255,0.6)); }
+  .ideas-sec { background: linear-gradient(135deg, rgba(226,238,255,0.72), rgba(243,236,255,0.66)); }
 
   /* ---------- Navigasi ---------- */
   nav { position: sticky; top: 12px; z-index: 40; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; padding: 10px 12px 10px 16px; margin-top: 12px; border-radius: 20px; transition: background .35s, box-shadow .35s; }
@@ -57,6 +75,7 @@
   .js .in .pw.pop, .js .pw.pop.in { transform: rotate(-4deg); opacity: 1; }
 
   /* ---------- Hero ---------- */
+  .hero { background: radial-gradient(120% 80% at 50% 100%, rgba(160,132,255,0.35), transparent 60%), linear-gradient(180deg, rgba(255,255,255,0.62), rgba(236,226,255,0.5)); }
   .hero { position: relative; margin-top: 14px; padding: clamp(40px, 6vw, 80px) clamp(20px, 4vw, 56px) 0; overflow: hidden; overflow: clip; isolation: isolate; }
   .hero .rings { position: absolute; z-index: -1; left: 50%; top: 58%; width: 1500px; height: 1500px; translate: -50% -50%; pointer-events: none; }
   .hero .rings circle { fill: none; stroke: rgba(28,20,70,0.07); stroke-width: 1.2; }
@@ -290,39 +309,24 @@
   .en-box .lbl { display: inline-block; padding: 5px 12px; border-radius: 999px; background: #fff; font-size: 12.5px; font-weight: 600; color: var(--purple); margin-bottom: 16px; }
   .en-box p { margin: 0; color: var(--ink-2); font-size: 16px; line-height: 1.65; }
 
-  /* ---------- Penutup ---------- */
-  .closing { position: relative; overflow: hidden; overflow: clip; isolation: isolate; text-align: center; }
-  .closing h2 { font-size: clamp(46px, 7.4vw, 110px); line-height: 1.02; }
-  .closing h2 .l { display: block; }
-  .closing .ftile { position: absolute; z-index: 1; }
-  .closing .f1 { left: 10%; top: 26%; rotate: -12deg; }
-  .closing .f2 { right: 12%; top: 18%; rotate: 10deg; }
-  .closing .f3 { right: 7%; bottom: 30%; rotate: -6deg; }
-  .closing .f4 { left: 16%; bottom: 20%; rotate: 8deg; }
-  .closing .ic { width: 72px; height: 72px; border-radius: 22px; animation: bob 6s ease-in-out infinite; }
-  .closing .ic svg { width: 34px; height: 34px; }
-  .closing .face { font-size: 38px; background: linear-gradient(140deg, #ffb48a, var(--orange)); }
-  .closing .actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; margin-top: 40px; }
-
-  /* ---------- Footer ---------- */
-  footer.card { margin: 16px 0; padding: clamp(32px, 5vw, 56px) clamp(20px, 4vw, 56px) 28px; }
-  .f-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; padding-bottom: 28px; border-bottom: 1px solid var(--line); }
-  .f-top b { font: 600 clamp(26px, 3vw, 38px) var(--display); letter-spacing: -0.02em; }
-  .f-top a { font: 500 clamp(22px, 2.8vw, 36px) var(--display); letter-spacing: -0.02em; text-decoration: none; transition: color .2s; }
-  .f-top a:hover { color: var(--purple); }
-  .f-mid { display: grid; grid-template-columns: repeat(3, auto) 1fr; gap: clamp(24px, 5vw, 72px); padding: 28px 0; }
-  .f-mid h4 { margin: 0 0 12px; font: 600 15px var(--display); }
-  .f-mid a { display: block; color: var(--muted); text-decoration: none; font-size: 14px; padding: 3px 0; transition: color .2s; }
-  .f-mid a:hover { color: var(--ink); }
-  .f-app { justify-self: end; display: flex; align-items: center; gap: 18px; padding: 20px 22px; border-radius: 22px; background: var(--soft); border: 1px solid var(--line); max-width: 380px; }
-  .f-app b { font: 600 19px/1.2 var(--display); }
-  .f-app a.sq { flex: none; width: 56px; height: 56px; border-radius: 16px; background: var(--ink); color: #fff; display: grid; place-items: center; transition: background .25s, transform .3s var(--spring); }
-  .f-app a.sq:hover { background: var(--purple); transform: rotate(-6deg) scale(1.06); }
-  .f-app a.sq svg { width: 24px; height: 24px; }
-  .f-bot { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 16px; }
-  .wordmark { font: 600 clamp(64px, 12vw, 168px)/.85 var(--display); letter-spacing: -0.045em; margin: 0; }
-  .wordmark span { color: var(--purple); }
-  .f-bot small { color: var(--faint); font-size: 13px; }
+  /* ---------- Penutup gelap (seperti versi sebelumnya) ---------- */
+  .closing { position: relative; overflow: hidden; overflow: clip; isolation: isolate; margin: 16px 0; background: var(--ink); color: #fff; border-radius: 28px; padding: clamp(36px, 6vw, 88px) clamp(22px, 4vw, 56px) 28px; }
+  .closing .glow { position: absolute; z-index: -1; width: 70%; aspect-ratio: 1; right: -15%; top: -40%; border-radius: 50%; background: radial-gradient(circle, rgba(123,77,255,0.65), transparent 60%); filter: blur(60px); animation: glowA 16s ease-in-out infinite alternate; }
+  .closing .glow.b { left: -20%; right: auto; top: 30%; background: radial-gradient(circle, rgba(255,143,177,0.4), transparent 60%); animation: glowB 20s ease-in-out infinite alternate; }
+  @keyframes glowA { to { transform: translate(-12vw, 10vh) scale(1.15); } }
+  @keyframes glowB { to { transform: translate(14vw, -6vh) scale(.9); } }
+  .closing .lines { position: absolute; inset: 0; z-index: -1; background-image: linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px); background-size: 72px 72px; -webkit-mask-image: radial-gradient(ellipse at 30% 30%, #000, transparent 70%); mask-image: radial-gradient(ellipse at 30% 30%, #000, transparent 70%); opacity: .6; }
+  .closing h2 { font-size: clamp(46px, 8vw, 120px); line-height: .98; }
+  .closing h2 .soft { color: rgba(255,255,255,0.32); }
+  .closing .actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 36px 0 clamp(48px, 7vw, 96px); }
+  .btn.ghost { background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,0.22); }
+  .btn.ghost:hover { border-color: #fff; transform: translateY(-2px); }
+  .big-word { font: 700 clamp(80px, 19vw, 290px)/.8 var(--display); letter-spacing: -0.05em; color: transparent; -webkit-text-stroke: 1px rgba(255,255,255,0.22); white-space: nowrap; margin: 0 0 24px; user-select: none; background: linear-gradient(90deg, transparent 0 40%, rgba(160,132,255,0.35) 50%, transparent 60% 100%); background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; animation: sweep 7s ease-in-out infinite; }
+  @keyframes sweep { 0% { background-position: 100% 0; } 60%, 100% { background-position: 0 0; } }
+  .closing footer { display: flex; flex-wrap: wrap; gap: 10px 28px; padding-top: 24px; border-top: 1px solid rgba(255,255,255,0.14); font-size: 14px; color: rgba(255,255,255,0.6); }
+  .closing footer a { color: #fff; text-decoration: none; }
+  .closing footer a:hover { text-decoration: underline; }
+  .closing footer .sp { flex: 1; }
 
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
@@ -338,7 +342,6 @@
     .b-stat { grid-column: span 4; } .b-post { grid-column: span 8; grid-template-columns: 1fr; }
     .b-rev, .b-voice, .b-cost, .b-ctrl { grid-column: span 6; }
     .b-cost { grid-column: span 12; }
-    .closing .ftile { display: none; }
   }
   @media (max-width: 820px) {
     nav { grid-template-columns: 1fr auto; } .links { display: none; }
@@ -346,7 +349,6 @@
     .steps { grid-template-columns: 1fr 1fr; } .steps .track { display: none; }
     .showcase { grid-template-columns: 1fr; } .reels { justify-content: center; }
     .access { grid-template-columns: 1fr; }
-    .f-mid { grid-template-columns: repeat(3, 1fr); } .f-app { grid-column: 1 / -1; justify-self: stretch; max-width: none; }
     .bento > div { grid-column: 1 / -1 !important; min-height: 0; }
   }
   @media (max-width: 560px) {
@@ -358,11 +360,11 @@
     .reel figcaption b { font-size: 14px; }
     .ideas-head { flex-direction: column; align-items: flex-start; }
     .idea { flex-basis: 82%; } .idea:nth-child(even) { margin-top: 0; }
-    .f-mid { grid-template-columns: 1fr 1fr; }
   }
 </style>
 </head>
 <body>
+<div class="bg" aria-hidden="true"><div class="blob a"></div><div class="blob b"></div><div class="blob c"></div><div class="blob d"></div><div class="blob e"></div><div class="dots"></div><div class="grain"></div></div>
 
 <div class="wrap">
   <nav id="nav">
@@ -528,7 +530,7 @@
   </section>
 
   <!-- ---------- Contoh gagasan ---------- -->
-  <section class="card panel reveal">
+  <section class="card panel reveal ideas-sec">
     <div class="ideas-head">
       <h2 class="split">Mulai dari <span class="pw pop">satu</span> kalimat</h2>
       <div class="arrows"><button type="button" id="prev" aria-label="Sebelumnya">‹</button><button type="button" id="next" aria-label="Berikutnya">›</button></div>
@@ -561,28 +563,22 @@
   </section>
 
   <!-- ---------- Penutup ---------- -->
-  <section class="card panel closing reveal">
-    <span class="ftile f1" aria-hidden="true"><span class="ic face">🐱</span></span>
-    <span class="ftile f2" aria-hidden="true"><span class="ic"><svg viewBox="0 0 24 24"><path fill="#1c1446" d="M16.6 5.82A4.28 4.28 0 0 1 15.54 3h-3.09v12.4a2.59 2.59 0 0 1-2.59 2.5 2.6 2.6 0 0 1 0-5.2c.27 0 .53.04.77.12V9.66a5.7 5.7 0 0 0-.77-.05 5.69 5.69 0 1 0 5.69 5.69V9.01a7.35 7.35 0 0 0 4.3 1.38V7.3a4.3 4.3 0 0 1-3.25-1.48z"/></svg></span></span>
-    <span class="ftile f3" aria-hidden="true"><span class="ic"><svg viewBox="0 0 24 24" fill="#ff7a2f"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></span></span>
-    <span class="ftile f4" aria-hidden="true"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#7b4dff" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span></span>
-    <h2 class="split"><span class="l">Video</span><span class="l"><span class="pw pop">berikutnya</span></span><span class="l">dimulai hari ini.</span></h2>
+  <div class="closing reveal">
+    <div class="glow" aria-hidden="true"></div><div class="glow b" aria-hidden="true"></div><div class="lines" aria-hidden="true"></div>
+    <h2 class="split">Buat video berikutnya. <span class="soft">Hari ini.</span></h2>
     <div class="actions">
-      <a class="btn ink" href="/api/tiktok/login">Masuk dengan TikTok <span class="arr">→</span></a>
-      <a class="btn line" href="mailto:studio@aldiab.ai.id">Minta undangan</a>
+      <a class="btn white" href="/api/tiktok/login">Masuk dengan TikTok <span class="arr">→</span></a>
+      <a class="btn ghost" href="mailto:studio@aldiab.ai.id">Minta undangan</a>
     </div>
-  </section>
-
-  <footer class="card">
-    <div class="f-top"><b>Hubungi kami</b><a href="mailto:studio@aldiab.ai.id">studio@aldiab.ai.id</a></div>
-    <div class="f-mid">
-      <div><h4>Halaman</h4><a href="#contoh">Contoh</a><a href="#cara">Cara kerja</a><a href="#fitur">Fitur</a><a href="#akses">Akses &amp; biaya</a></div>
-      <div><h4>Legal</h4><a href="/terms">Terms of Service</a><a href="/privacy">Privacy Policy</a></div>
-      <div><h4>Akun</h4><a href="/api/tiktok/login">Masuk</a><a href="mailto:studio@aldiab.ai.id">Minta undangan</a></div>
-      <div class="f-app"><b>Mulai dengan akun TikTok Anda</b><a class="sq" href="/api/tiktok/login" aria-label="Masuk dengan TikTok"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M16.6 5.82A4.28 4.28 0 0 1 15.54 3h-3.09v12.4a2.59 2.59 0 0 1-2.59 2.5 2.6 2.6 0 0 1 0-5.2c.27 0 .53.04.77.12V9.66a5.7 5.7 0 0 0-.77-.05 5.69 5.69 0 1 0 5.69 5.69V9.01a7.35 7.35 0 0 0 4.3 1.38V7.3a4.3 4.3 0 0 1-3.25-1.48z"/></svg></a></div>
-    </div>
-    <div class="f-bot"><p class="wordmark">Aldi Studio<span>.</span></p><small>© 2026 Aldi AB</small></div>
-  </footer>
+    <div class="big-word" aria-hidden="true">Aldi Studio</div>
+    <footer>
+      <span>© 2026 Aldi AB</span>
+      <span class="sp"></span>
+      <a href="/terms">Terms of Service</a>
+      <a href="/privacy">Privacy Policy</a>
+      <a href="mailto:studio@aldiab.ai.id">studio@aldiab.ai.id</a>
+    </footer>
+  </div>
 </div>
 
 <script>
